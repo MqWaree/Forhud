@@ -1,6 +1,11 @@
 import type { NextFunction, Request, Response } from "express";
 import { prisma } from "./db.js";
-import { createSecret, generateReadableId, hashToken } from "./auth.js";
+import {
+  createSecret,
+  generateReadableId,
+  hashToken,
+  isSecureScannerId,
+} from "./auth.js";
 
 export type ExtensionContext = {
   id: string;
@@ -15,8 +20,11 @@ export async function pairExtension(input: {
   instanceId?: string;
   name?: string;
 }) {
+  const scannerId = input.scannerId.trim().toUpperCase();
+  if (!isSecureScannerId(scannerId))
+    throw Object.assign(new Error("Invalid Scanner ID"), { statusCode: 401 });
   const workspace = await prisma.workspace.findUnique({
-    where: { scannerId: input.scannerId.trim().toUpperCase() },
+    where: { scannerId },
     include: {
       users: {
         where: { role: "ADMIN", status: "ACTIVE" },

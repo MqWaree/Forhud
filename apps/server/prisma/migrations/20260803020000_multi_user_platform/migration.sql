@@ -1,7 +1,9 @@
 -- @foreign_keys_off
 CREATE TABLE "Workspace" ("id" TEXT NOT NULL PRIMARY KEY,"name" TEXT NOT NULL,"scannerId" TEXT NOT NULL,"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE UNIQUE INDEX "Workspace_scannerId_key" ON "Workspace"("scannerId");
-INSERT INTO "Workspace" ("id","name","scannerId") VALUES ('legacy-workspace','Default Workspace','A7K9-X2P4');
+-- The temporary bootstrap value is random per database. The server replaces
+-- this non-pairable value with a human-readable 80-bit Scanner ID on startup.
+INSERT INTO "Workspace" ("id","name","scannerId") VALUES ('legacy-workspace','Default Workspace','bootstrap-' || lower(hex(randomblob(16))));
 
 CREATE TABLE "User" ("id" TEXT NOT NULL PRIMARY KEY,"workspaceId" TEXT NOT NULL,"name" TEXT NOT NULL,"email" TEXT NOT NULL,"passwordHash" TEXT NOT NULL,"role" TEXT NOT NULL DEFAULT 'RESEARCHER',"status" TEXT NOT NULL DEFAULT 'ACTIVE',"requirePasswordChange" BOOLEAN NOT NULL DEFAULT false,"lastLoginAt" DATETIME,"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "User_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE);
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");

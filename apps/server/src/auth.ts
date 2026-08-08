@@ -6,7 +6,6 @@ import { prisma } from "./db.js";
 const scryptAsync = promisify(scrypt);
 export const SESSION_COOKIE = "aether_session";
 export const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-export const PASSWORD_MIN_LENGTH = 12;
 export const roles = ["ADMIN", "MANAGER", "RESEARCHER"] as const;
 export type Role = (typeof roles)[number];
 export type AuthContext = {
@@ -69,6 +68,17 @@ export function generateScannerId() {
   // Four 4-character groups from a 32-character alphabet provide 80 bits of
   // entropy while remaining practical to type into the Chrome extension.
   return generateReadableId(4, 4);
+}
+
+export const SCANNER_ID_PATTERN = /^[A-Z2-9]{4}(?:-[A-Z2-9]{4}){3}$/;
+const KNOWN_INSECURE_SCANNER_IDS = new Set(["A7K9-X2P4"]);
+
+export function isSecureScannerId(value: string) {
+  const normalized = value.trim().toUpperCase();
+  return (
+    SCANNER_ID_PATTERN.test(normalized) &&
+    !KNOWN_INSECURE_SCANNER_IDS.has(normalized)
+  );
 }
 
 function cookieValue(req: Request, name: string) {

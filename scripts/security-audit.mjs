@@ -7,6 +7,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const online = process.argv.includes("--online");
 const ignoredDirectories = new Set([
   ".git",
+  ".pnpm-store",
   ".venv",
   "dist",
   "generated",
@@ -66,7 +67,18 @@ const requiredSecurityText = [
   ["apps/server/src/index.ts", 'process.env.HOST || "127.0.0.1"'],
   ["apps/server/src/auth.ts", "httpOnly: true"],
   ["apps/server/src/auth.ts", 'sameSite: "strict"'],
-  ["apps/server/src/auth.ts", "PASSWORD_MIN_LENGTH = 12"],
+  ["apps/server/src/auth.ts", "KNOWN_INSECURE_SCANNER_IDS"],
+  ["apps/server/src/app.ts", "password: z.string().min(1).max(200)"],
+  ["apps/server/src/app.ts", "unsafeWorkspaces.length === 0"],
+  ["apps/server/src/extension-auth.ts", "!isSecureScannerId(scannerId)"],
+  [
+    "apps/server/prisma/migrations/20260803020000_multi_user_platform/migration.sql",
+    "randomblob(16)",
+  ],
+  [
+    "apps/server/prisma/migrations/20260809010000_rotate_predictable_scanner_id/migration.sql",
+    "SET \"revokedAt\" = CURRENT_TIMESTAMP",
+  ],
   ["apps/server/src/setup-security.ts", "INITIAL_SETUP_TOKEN"],
   ["apps/server/prisma/schema.prisma", "model SecurityRateLimit"],
   [
@@ -110,7 +122,14 @@ if (online) {
       : join(root, "apps", "scraper", ".venv", "bin", "python");
   const pythonAudit = spawnSync(
     python,
-    ["-m", "pip_audit", "--progress-spinner", "off"],
+    [
+      "-m",
+      "pip_audit",
+      "--progress-spinner",
+      "off",
+      "--cache-dir",
+      join(root, "outputs", "pip-audit-cache"),
+    ],
     { cwd: root, stdio: "inherit" },
   );
   if (pythonAudit.status !== 0) process.exitCode = 1;
