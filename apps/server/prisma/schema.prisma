@@ -66,6 +66,15 @@ model AuthSession {
   @@index([expiresAt])
 }
 
+model SecurityRateLimit {
+  keyHash   String   @id
+  count     Int
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}
+
 model ExtensionInstance {
   id                String          @id @default(cuid())
   instanceId        String          @unique

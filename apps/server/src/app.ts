@@ -20,7 +20,7 @@ import {
   audit,
   clearSessionCookie,
   createSession,
-  generateReadableId,
+  generateScannerId,
   hashPassword,
   PASSWORD_MIN_LENGTH,
   publicUser,
@@ -31,6 +31,17 @@ import {
   type AuthRequest,
   verifyPassword,
 } from "./auth.js";
+import {
+  cleanupExpiredRateLimits,
+  clearRateLimit,
+  rateLimitKey,
+  recordRateLimitAttempt,
+  retryAfterRateLimit,
+} from "./rate-limit.js";
+import {
+  assertInitialSetupAuthorized,
+  initialSetupProtection,
+} from "./setup-security.js";
 import {
   pairExtension,
   requireExtension,
@@ -99,6 +110,7 @@ async function getSettings(workspaceId?: string) {
   };
 }
 const SECURITY_POLICY_MARKER = "security.password-policy-v2";
+const SECURITY_POLICY_V3_MARKER = "security.scanner-id-v3";
 
 export async function applySecurityPolicyV2() {
   if ((await prisma.user.count()) === 0) return;
@@ -121,7 +133,52 @@ export async function applySecurityPolicyV2() {
   });
 }
 
-export const scannerReady = bootstrapScanner().then(applySecurityPolicyV2);
+export async function applySecurityPolicyV3() {
+  if (
+    await prisma.setting.findUnique({
+      where: { id: SECURITY_POLICY_V3_MARKER },
+    })
+  )
+    return;
+  const workspaces = await prisma.workspace.findMany({
+    select: { id: true, scannerId: true },
+  });
+  const used = new Set(workspaces.map((workspace) => workspace.scannerId));
+  await prisma.$transaction(async (tx) => {
+    for (const workspace of workspaces) {
+      if (/^[A-Z2-9]{4}(?:-[A-Z2-9]{4}){3}$/.test(workspace.scannerId))
+        continue;
+      let scannerId = generateScannerId();
+      while (used.has(scannerId)) scannerId = generateScannerId();
+      used.add(scannerId);
+      await tx.workspace.update({
+        where: { id: workspace.id },
+        data: { scannerId },
+      });
+      await tx.extensionInstance.updateMany({
+        where: { workspaceId: workspace.id, revokedAt: null },
+        data: { revokedAt: new Date(), scannerState: "STOPPED" },
+      });
+      await tx.auditLog.create({
+        data: {
+          workspaceId: workspace.id,
+          action: "SCANNER_ID_HARDENED",
+          targetType: "Workspace",
+          targetId: workspace.id,
+        },
+      });
+    }
+    await tx.setting.create({
+      data: { id: SECURITY_POLICY_V3_MARKER, value: JSON.stringify(true) },
+    });
+  });
+}
+
+export const scannerReady = bootstrapScanner().then(async () => {
+  await applySecurityPolicyV2();
+  await applySecurityPolicyV3();
+  await cleanupExpiredRateLimits();
+});
 const app = express();
 app.set("trust proxy", "loopback");
 app.use(helmet({ crossOriginResourcePolicy: false }));
@@ -175,52 +232,20 @@ const accountSchema = z.object({
   username: usernameSchema,
   password: z.string().min(PASSWORD_MIN_LENGTH).max(200),
 });
-type RateBucket = { count: number; resetAt: number };
-const loginAttempts = new Map<string, RateBucket>();
-const loginIpAttempts = new Map<string, RateBucket>();
-const pairingAttempts = new Map<string, RateBucket>();
-const RATE_WINDOW_MS = 15 * 60 * 1000;
-
-function retryAfter(
-  buckets: Map<string, RateBucket>,
-  key: string,
-  limit: number,
-  now: number,
-) {
-  const bucket = buckets.get(key);
-  if (!bucket || bucket.resetAt <= now) {
-    if (bucket) buckets.delete(key);
-    return 0;
-  }
-  return bucket.count >= limit
-    ? Math.max(1, Math.ceil((bucket.resetAt - now) / 1000))
-    : 0;
-}
-
-function recordAttempt(
-  buckets: Map<string, RateBucket>,
-  key: string,
-  now: number,
-) {
-  const current = buckets.get(key);
-  buckets.set(key, {
-    count: current && current.resetAt > now ? current.count + 1 : 1,
-    resetAt:
-      current && current.resetAt > now ? current.resetAt : now + RATE_WINDOW_MS,
-  });
-  if (buckets.size > 10_000)
-    for (const [candidate, bucket] of buckets)
-      if (bucket.resetAt <= now) buckets.delete(candidate);
-}
 
 const dummyPasswordHash = await hashPassword(
   "FGP timing-safe password verification placeholder",
 );
 let setupInProgress = false;
 
-app.get("/api/auth/setup-status", async (_req, res) =>
-  res.json({ required: (await prisma.user.count()) === 0 }),
-);
+app.get("/api/auth/setup-status", async (_req, res) => {
+  const protection = initialSetupProtection();
+  res.json({
+    required: (await prisma.user.count()) === 0,
+    protected: protection.required,
+    configured: protection.configured,
+  });
+});
 app.post("/api/auth/setup", async (req, res, next) => {
   if (setupInProgress)
     return res
@@ -232,14 +257,17 @@ app.post("/api/auth/setup", async (req, res, next) => {
       return res
         .status(409)
         .json({ error: "Initial setup is already complete" });
-    const input = accountSchema.parse(req.body);
+    const input = accountSchema
+      .extend({ setupToken: z.string().trim().max(200).optional() })
+      .parse(req.body);
+    assertInitialSetupAuthorized(input.setupToken);
     let workspace = await prisma.workspace.findFirst({
       orderBy: { createdAt: "asc" },
     });
     if (!workspace) {
-      let scannerId = generateReadableId();
+      let scannerId = generateScannerId();
       while (await prisma.workspace.findUnique({ where: { scannerId } }))
-        scannerId = generateReadableId();
+        scannerId = generateScannerId();
       workspace = await prisma.workspace.create({
         data: { name: `${input.username}'s Workspace`, scannerId },
       });
@@ -291,10 +319,13 @@ app.post("/api/auth/login", async (req, res, next) => {
       })
       .parse(req.body);
     const ipKey = req.ip || req.socket.remoteAddress || "unknown";
-    const key = `${ipKey}:${input.username}`;
+    const accountKey = rateLimitKey("login-account", ipKey, input.username);
+    const ipRateKey = rateLimitKey("login-ip", ipKey);
     const now = Date.now();
-    const accountRetry = retryAfter(loginAttempts, key, 5, now);
-    const ipRetry = retryAfter(loginIpAttempts, ipKey, 25, now);
+    const [accountRetry, ipRetry] = await Promise.all([
+      retryAfterRateLimit(accountKey, 5, now),
+      retryAfterRateLimit(ipRateKey, 25, now),
+    ]);
     const blockedFor = Math.max(accountRetry, ipRetry);
     if (blockedFor) {
       res.set("Retry-After", String(blockedFor));
@@ -312,12 +343,16 @@ app.post("/api/auth/login", async (req, res, next) => {
     );
     const valid = user?.status === "ACTIVE" && passwordMatches;
     if (!user || !valid) {
-      recordAttempt(loginAttempts, key, now);
-      recordAttempt(loginIpAttempts, ipKey, now);
+      await Promise.all([
+        recordRateLimitAttempt(accountKey, now),
+        recordRateLimitAttempt(ipRateKey, now),
+      ]);
       return res.status(401).json({ error: "Invalid username or password." });
     }
-    loginAttempts.delete(key);
-    loginIpAttempts.delete(ipKey);
+    // A successful account login clears only that account bucket. Keep the
+    // global IP spray counter until its window expires so one valid credential
+    // cannot reset distributed username guessing from the same source.
+    await clearRateLimit(accountKey);
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
@@ -344,15 +379,16 @@ app.get("/api/auth/me", requireAuth, (req, res) =>
 app.post("/api/extension/pair", async (req, res, next) => {
   try {
     const now = Date.now();
-    const key = req.ip || req.socket.remoteAddress || "unknown";
-    const blockedFor = retryAfter(pairingAttempts, key, 10, now);
+    const ipKey = req.ip || req.socket.remoteAddress || "unknown";
+    const key = rateLimitKey("extension-pair", ipKey);
+    const blockedFor = await retryAfterRateLimit(key, 10, now);
     if (blockedFor) {
       res.set("Retry-After", String(blockedFor));
       return res
         .status(429)
         .json({ error: "Too many pairing attempts. Try again later." });
     }
-    recordAttempt(pairingAttempts, key, now);
+    await recordRateLimitAttempt(key, now);
     const input = z
       .object({
         scannerId: z.string().trim().min(4).max(32),
@@ -361,7 +397,7 @@ app.post("/api/extension/pair", async (req, res, next) => {
       })
       .parse(req.body);
     const paired = await pairExtension(input);
-    pairingAttempts.delete(key);
+    await clearRateLimit(key);
     res.status(201).json(paired);
   } catch (error) {
     next(error);
@@ -1735,9 +1771,9 @@ app.post(
         .object({ confirm: z.literal("REGENERATE") })
         .parse(req.body);
       void confirmation;
-      let scannerId = generateReadableId();
+      let scannerId = generateScannerId();
       while (await prisma.workspace.findUnique({ where: { scannerId } }))
-        scannerId = generateReadableId();
+        scannerId = generateScannerId();
       const workspace = await prisma.workspace.update({
         where: { id: auth.workspaceId },
         data: { scannerId },

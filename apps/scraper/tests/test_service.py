@@ -2,13 +2,25 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import socket
 import threading
 import time
 import unittest
+from unittest.mock import AsyncMock, patch
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from apps.scraper.src.service import extract_page, normalize_discord, scrape_url, validate_public_url
+from curl_cffi.const import CurlOpt
+
+from apps.scraper.src.service import (
+    ScraperError,
+    _curl_resolve_entry,
+    configured_scraper_token,
+    extract_page,
+    normalize_discord,
+    scrape_url,
+    validate_public_url,
+)
 from scrapling.parser import Selector
 
 
@@ -80,6 +92,57 @@ class FixtureHandler(BaseHTTPRequestHandler):
 
 
 class ExtractionTests(unittest.TestCase):
+    def test_dns_pin_entries_preserve_hostname_and_port(self):
+        self.assertEqual(
+            _curl_resolve_entry(
+                "https://example.com/contact",
+                ["1.1.1.1", "2606:4700:4700::1111"],
+            ),
+            "example.com:443:1.1.1.1,[2606:4700:4700::1111]",
+        )
+
+    def test_production_worker_requires_a_unique_strong_token(self):
+        with patch.dict("os.environ", {"NODE_ENV": "production"}, clear=True):
+            with self.assertRaises(ScraperError):
+                configured_scraper_token()
+        with patch.dict(
+            "os.environ",
+            {
+                "NODE_ENV": "production",
+                "SCRAPER_TOKEN": "production-scraper-secret-123456789",
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                configured_scraper_token(),
+                "production-scraper-secret-123456789",
+            )
+
+    def test_static_fetch_is_pinned_to_the_validated_dns_answer(self):
+        page = parsed("<html><title>Pinned</title></html>", "https://example.com/")
+        page.status = 200
+        page.headers = {"content-type": "text/html"}
+        dns_answer = [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+        ]
+        fetch = AsyncMock(return_value=page)
+        with (
+            patch("apps.scraper.src.service.socket.getaddrinfo", return_value=dns_answer),
+            patch("apps.scraper.src.service.AsyncFetcher.get", fetch),
+        ):
+            result = asyncio.run(
+                scrape_url(
+                    "https://example.com/",
+                    dynamic_fallback=False,
+                )
+            )
+        self.assertEqual(result["title"], "Pinned")
+        curl_options = fetch.await_args.kwargs["curl_options"]
+        self.assertEqual(
+            curl_options[CurlOpt.RESOLVE],
+            ["example.com:443:93.184.216.34"],
+        )
+
     def test_static_contact_and_metadata_extraction(self):
         html = """<html><head><title>Acme</title><meta name="description" content="Widgets">
         <link rel="canonical" href="/home"><link rel="icon" href="/favicon.ico"></head><body>

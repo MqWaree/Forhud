@@ -27,6 +27,12 @@ export function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
+export function secretMatches(provided: string, expected: string) {
+  const providedHash = Buffer.from(hashToken(provided), "hex");
+  const expectedHash = Buffer.from(hashToken(expected), "hex");
+  return timingSafeEqual(providedHash, expectedHash);
+}
+
 export async function hashPassword(password: string) {
   const salt = randomBytes(16);
   const derived = (await scryptAsync(password, salt, 64)) as Buffer;
@@ -57,6 +63,12 @@ export function generateReadableId(groups = 2, size = 4) {
       () => alphabet[randomBytes(1)[0]! % alphabet.length],
     ).join(""),
   ).join("-");
+}
+
+export function generateScannerId() {
+  // Four 4-character groups from a 32-character alphabet provide 80 bits of
+  // entropy while remaining practical to type into the Chrome extension.
+  return generateReadableId(4, 4);
 }
 
 function cookieValue(req: Request, name: string) {
