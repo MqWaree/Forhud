@@ -1,0 +1,72 @@
+{
+  "manifest_version": 3,
+  "name": "FGP Searcher",
+  "version": "1.4.0",
+  "description": "Pair with FGP and capture unique results from manually viewed Google pages to a target or until stopped.",
+  "icons": {
+    "16": "fgp-logo.png",
+    "32": "fgp-logo.png",
+    "48": "fgp-logo.png",
+    "128": "fgp-logo.png"
+  },
+  "permissions": ["activeTab", "storage", "tabs", "scripting", "alarms"],
+  "host_permissions": [
+    "https://forhud.shop/*",
+    "https://www.forhud.shop/*",
+    "https://www.google.com/*",
+    "https://www.google.co.uk/*",
+    "https://www.google.fr/*",
+    "https://www.google.de/*",
+    "https://www.google.ca/*",
+    "https://www.google.com.au/*",
+    "https://www.google.es/*",
+    "https://www.google.it/*",
+    "https://www.google.nl/*",
+    "https://www.google.be/*",
+    "https://www.google.se/*",
+    "https://www.google.no/*",
+    "https://www.google.dk/*",
+    "https://www.google.fi/*",
+    "https://www.google.pl/*",
+    "https://www.google.co.in/*",
+    "https://www.google.co.jp/*",
+    "https://www.google.com.br/*",
+    "https://www.google.com.mx/*"
+  ],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "FGP Searcher",
+    "default_icon": {
+      "16": "fgp-logo.png",
+      "32": "fgp-logo.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.google.com/search*",
+        "https://www.google.co.uk/search*",
+        "https://www.google.fr/search*",
+        "https://www.google.de/search*",
+        "https://www.google.ca/search*",
+        "https://www.google.com.au/search*",
+        "https://www.google.es/search*",
+        "https://www.google.it/search*",
+        "https://www.google.nl/search*",
+        "https://www.google.be/search*",
+        "https://www.google.se/search*",
+        "https://www.google.no/search*",
+        "https://www.google.dk/search*",
+        "https://www.google.fi/search*",
+        "https://www.google.pl/search*",
+        "https://www.google.co.in/search*",
+        "https://www.google.co.jp/search*",
+        "https://www.google.com.br/search*",
+        "https://www.google.com.mx/search*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

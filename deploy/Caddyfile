@@ -1,0 +1,23 @@
+forhud.shop, www.forhud.shop {
+    encode zstd gzip
+
+    handle /api/* {
+        reverse_proxy 127.0.0.1:3001
+    }
+
+    handle {
+        root * /opt/fgp/apps/dashboard/dist
+        try_files {path} /index.html
+        file_server
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests"
+        Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+}

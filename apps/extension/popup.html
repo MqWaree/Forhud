@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>FGP Searcher</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        width: 370px;
+        margin: 0;
+        background: #070a0f;
+        color: #edf4fc;
+        font:
+          12px Inter,
+          system-ui,
+          sans-serif;
+      }
+      .wrap {
+        padding: 18px;
+      }
+      .brand {
+        display: flex;
+        gap: 11px;
+        align-items: center;
+        border-bottom: 1px solid #1a202a;
+        padding-bottom: 15px;
+      }
+      .logo {
+        width: 36px;
+        height: 36px;
+        display: grid;
+        place-items: center;
+        border: 1px solid #18486e;
+        border-radius: 10px;
+        background: #10263a;
+        color: #54b4ff;
+        object-fit: cover;
+      }
+      .brand b {
+        display: block;
+        font-size: 13px;
+      }
+      small,
+      p,
+      .muted {
+        color: #728095;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+        margin: 12px 0;
+      }
+      .card,
+      .field,
+      .query {
+        border: 1px solid #1a222e;
+        background: #0c1119;
+        border-radius: 9px;
+        padding: 10px;
+      }
+      .field,
+      .query {
+        margin-bottom: 9px;
+      }
+      .card small,
+      .field small,
+      .query small {
+        display: block;
+        color: #687588;
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        margin-bottom: 6px;
+      }
+      .card b {
+        font-size: 11px;
+      }
+      .totals b {
+        font-size: 17px;
+      }
+      .green {
+        color: #42d7a2;
+      }
+      .error {
+        color: #fb8f93;
+      }
+      .mono {
+        font:
+          600 11px ui-monospace,
+          monospace;
+        letter-spacing: 0.05em;
+      }
+      input,
+      select {
+        width: 100%;
+        height: 34px;
+        border: 1px solid #263344;
+        background: #070b11;
+        color: #dce8f5;
+        border-radius: 7px;
+        padding: 0 10px;
+        font:
+          600 11px ui-monospace,
+          monospace;
+        outline: none;
+        color-scheme: dark;
+      }
+      select option {
+        background: #0b1119;
+        color: #dce8f5;
+      }
+      input:focus,
+      select:focus {
+        border-color: #3ca6ff;
+      }
+      input:disabled {
+        color: #8291a5;
+      }
+      .pair {
+        display: grid;
+        grid-template-columns: 1fr 90px;
+        gap: 8px;
+      }
+      .target-row {
+        display: grid;
+        grid-template-columns: 1fr 110px;
+        gap: 8px;
+      }
+      .target-row input[hidden] {
+        display: none;
+      }
+      button {
+        height: 36px;
+        border: 1px solid #4aacf6;
+        background: #2a98ee;
+        color: white;
+        font-weight: 700;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #121923;
+        border-color: #293442;
+        color: #b8c4d2;
+      }
+      button:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+      .buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+        margin-top: 12px;
+      }
+      .line {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 5px;
+      }
+      .query b {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: block;
+      }
+      .msg {
+        min-height: 30px;
+        color: #72cda9;
+        text-align: center;
+        margin-top: 10px;
+        font-size: 10px;
+        line-height: 1.5;
+      }
+      .hint {
+        color: #536174;
+        font-size: 9px;
+        line-height: 1.55;
+        margin: 7px 2px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="brand">
+        <img class="logo" src="/fgp-logo.png" alt="FGP" />
+        <div>
+          <b>FGP Extension Scanner</b
+          ><small>Secure persistent capture companion</small>
+        </div>
+      </header>
+      <section class="grid">
+        <div class="card">
+          <small>Local API</small><b id="api">Checking…</b>
+        </div>
+        <div class="card">
+          <small>Scanner</small><b id="runStatus">Checking…</b>
+        </div>
+      </section>
+      <section class="field">
+        <small>Scanner ID from dashboard</small>
+        <div class="pair">
+          <input id="scannerId" maxlength="32" placeholder="A7K9-X2P4" /><button
+            id="connect"
+          >
+            Connect</button
+          ><button id="disconnect" class="secondary" hidden>Disconnect</button>
+        </div>
+        <div class="line">
+          <span id="connection" class="muted">● Not paired</span
+          ><span id="workspace" class="muted">Not connected</span>
+        </div>
+      </section>
+      <section class="query">
+        <small>Extension instance ID</small
+        ><b id="instanceId" class="mono">—</b>
+      </section>
+      <section class="query">
+        <small>Current Google search</small><b id="query">Checking page…</b>
+      </section>
+      <section class="field">
+        <small>Target Results</small>
+        <div class="target-row">
+          <select id="targetMode" aria-label="Target Results">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="250">250</option>
+            <option value="500">500</option>
+            <option value="1000">1,000</option>
+            <option value="CUSTOM">Custom</option>
+            <option value="UNTIL_STOPPED">Until Stopped</option>
+          </select>
+          <input
+            id="customTarget"
+            type="number"
+            min="1"
+            max="5000"
+            step="1"
+            value="375"
+            aria-label="Custom Target Results"
+            hidden
+          />
+        </div>
+      </section>
+      <section class="grid totals">
+        <div class="card"><small>Pages captured</small><b id="pages">0</b></div>
+        <div class="card"><small>Results</small><b id="links">0</b></div>
+      </section>
+      <section class="query">
+        <small>Duplicates skipped</small><b id="duplicates">0</b>
+      </section>
+      <section class="query">
+        <small>Last activity</small
+        ><b id="lastCapture" class="muted">Checking…</b>
+      </section>
+      <section class="card">
+        <small>Organic results on this page</small><b id="count">0</b>
+      </section>
+      <div class="buttons">
+        <button id="start">Start Scanner</button
+        ><button id="stop" class="secondary" disabled>Stop Scanner</button>
+      </div>
+      <div id="msg" class="msg"></div>
+      <p class="hint">
+        Start on a Google results page. FGP collects unique qualifying results
+        until the target is reached, Google has no next page, or you press
+        Stop. Until Stopped has no numeric target.
+      </p>
+    </main>
+    <script type="module" src="/src/popup.ts"></script>
+  </body>
+</html>

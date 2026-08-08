@@ -1,0 +1,12 @@
+ALTER TABLE "ScannerResult" ADD COLUMN "scanEngine" TEXT NOT NULL DEFAULT 'Scrapling';
+ALTER TABLE "ScannerResult" ADD COLUMN "fetchMode" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "ScannerResult" ADD COLUMN "finalUrl" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "ScannerResult" ADD COLUMN "metaDescription" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "ScannerResult" ADD COLUMN "canonicalUrl" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "ScannerResult" ADD COLUMN "faviconUrl" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "ScannerResult" ADD COLUMN "contentType" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "ScannerResult" ADD COLUMN "pagesVisited" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "ScannerResult" ADD COLUMN "emailsJson" TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE "ScannerResult" ADD COLUMN "socialLinksJson" TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE "ScannerResult" ADD COLUMN "pagesJson" TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE "ScannerResult" ADD COLUMN "crawlCheckpoint" TEXT NOT NULL DEFAULT '';

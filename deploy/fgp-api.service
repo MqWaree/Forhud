@@ -1,0 +1,29 @@
+[Unit]
+Description=FGP API
+After=network-online.target fgp-scraper.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fgp
+Group=fgp
+WorkingDirectory=/opt/fgp/apps/server
+EnvironmentFile=/etc/fgp/fgp.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/fgp /var/backups/fgp
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

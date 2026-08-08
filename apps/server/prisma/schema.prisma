@@ -1,0 +1,397 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/client"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Workspace {
+  id             String              @id @default(cuid())
+  name           String
+  scannerId      String              @unique
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  users          User[]
+  searchSessions SearchSession[]
+  scannerResults ScannerResult[]
+  scannerState   ScannerState?
+  leads          Lead[]
+  tags           Tag[]
+  extensions     ExtensionInstance[]
+  settings       WorkspaceSetting[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+}
+
+model User {
+  id                    String         @id @default(cuid())
+  workspaceId           String
+  workspace             Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name                  String
+  username              String         @unique
+  passwordHash          String
+  role                  String         @default("RESEARCHER")
+  status                String         @default("ACTIVE")
+  requirePasswordChange Boolean        @default(false)
+  lastLoginAt           DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  sessions              AuthSession[]
+  assignedLeads         Lead[]         @relation("LeadAssignee")
+  activities            LeadActivity[] @relation("ActivityActor")
+  notifications         Notification[]
+  auditLogs             AuditLog[]     @relation("AuditActor")
+  extensionInstances    ExtensionInstance[] @relation("ExtensionOwner")
+
+  @@index([workspaceId])
+  @@index([role, status])
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  lastSeen  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model ExtensionInstance {
+  id                String          @id @default(cuid())
+  instanceId        String          @unique
+  workspaceId       String
+  workspace         Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ownerUserId       String?
+  ownerUser         User?           @relation("ExtensionOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  tokenHash         String          @unique
+  name              String          @default("Chrome Extension")
+  scannerState      String          @default("IDLE")
+  currentSearch     String          @default("")
+  currentPage       Int             @default(0)
+  pagesScanned      Int             @default(0)
+  resultsFound      Int             @default(0)
+  uniqueUrlsSent    Int             @default(0)
+  duplicatesSkipped Int            @default(0)
+  lastSeen          DateTime        @default(now())
+  revokedAt         DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  searchSessions    SearchSession[]
+
+  @@index([workspaceId, lastSeen])
+  @@index([ownerUserId])
+}
+
+model SearchSession {
+  id                  String             @id @default(cuid())
+  workspaceId         String
+  workspace           Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  extensionInstanceId String?
+  extensionInstance   ExtensionInstance? @relation(fields: [extensionInstanceId], references: [id], onDelete: SetNull)
+  query               String
+  source              String             @default("google")
+  clientId            String             @default("DEFAULT")
+  pageUrl             String
+  pages               Int                @default(1)
+  durationMs          Int?
+  status              String             @default("Captured")
+  createdAt           DateTime            @default(now())
+  completedAt         DateTime?
+  results             SearchResult[]
+  scannerSources      ScannerSource[]
+
+  @@index([workspaceId, createdAt])
+  @@index([extensionInstanceId])
+}
+
+model SearchResult {
+  id              String        @id @default(cuid())
+  searchSessionId String
+  searchSession   SearchSession @relation(fields: [searchSessionId], references: [id], onDelete: Cascade)
+  title           String
+  url             String
+  normalizedUrl   String
+  domainId        String
+  domain          Domain        @relation(fields: [domainId], references: [id])
+  position        Int
+  scanStatus      String        @default("Queued")
+  httpStatus      Int?
+  scanDuration    Int?
+  error           String?
+  scannedAt       DateTime?
+  createdAt       DateTime      @default(now())
+  discordLinks    DiscordLink[]
+  leads           Lead[]
+
+  @@unique([searchSessionId, normalizedUrl])
+}
+
+model DiscordLink {
+  id             String       @id @default(cuid())
+  searchResultId String
+  searchResult   SearchResult @relation(fields: [searchResultId], references: [id], onDelete: Cascade)
+  url            String
+  inviteCode     String
+  sourcePage     String
+  createdAt      DateTime     @default(now())
+
+  @@unique([searchResultId, url])
+}
+
+model Domain {
+  id             String            @id @default(cuid())
+  hostname       String            @unique
+  firstSeen      DateTime          @default(now())
+  lastSeen       DateTime          @updatedAt
+  results        SearchResult[]
+  location       HostingLocation?
+  leads          Lead[]
+  scannerResults ScannerResult[]
+}
+
+model HostingLocation {
+  id          String   @id @default(cuid())
+  domainId    String   @unique
+  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  ipAddress   String
+  country     String?
+  countryCode String?
+  region      String?
+  city        String?
+  asn         String?
+  provider    String?
+  status      String   @default("Completed")
+  checkedAt   DateTime @default(now())
+}
+
+model Lead {
+  id                String         @id @default(cuid())
+  workspaceId       String
+  workspace         Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  domainId          String
+  domain            Domain         @relation(fields: [domainId], references: [id])
+  searchResultId    String?
+  searchResult      SearchResult?  @relation(fields: [searchResultId], references: [id], onDelete: SetNull)
+  scannerResultId   String?
+  scannerResult     ScannerResult? @relation(fields: [scannerResultId], references: [id], onDelete: SetNull)
+  assignedToId      String?
+  assignedTo        User?          @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  status            String         @default("New")
+  priority          String         @default("Medium")
+  notes             String         @default("")
+  companyName       String         @default("")
+  contactName       String         @default("")
+  email             String         @default("")
+  discordUsername   String         @default("")
+  telegram          String         @default("")
+  otherContact      String         @default("")
+  website           String         @default("")
+  discordInvite     String         @default("")
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  activities        LeadActivity[]
+  tags              LeadTag[]
+
+  @@unique([workspaceId, domainId])
+  @@index([workspaceId, status])
+  @@index([assignedToId])
+  @@index([scannerResultId])
+}
+
+model LeadActivity {
+  id                 String   @id @default(cuid())
+  leadId             String
+  lead               Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  actorId            String?
+  actor              User?    @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  previousAssigneeId String?
+  newAssigneeId      String?
+  type               String
+  description        String
+  createdAt          DateTime @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([actorId])
+}
+
+model Setting {
+  id        String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model WorkspaceSetting {
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  key         String
+  value       String
+  updatedAt   DateTime  @updatedAt
+
+  @@id([workspaceId, key])
+}
+
+model ScannerState {
+  id              String    @id @default(cuid())
+  workspaceId     String    @unique
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  status          String    @default("IDLE")
+  stopRequested   Boolean   @default(false)
+  currentResultId String?
+  startedAt       DateTime?
+  stoppedAt       DateTime?
+  updatedAt       DateTime  @updatedAt
+}
+
+model ScannerResult {
+  id             String               @id @default(cuid())
+  workspaceId    String
+  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  url            String
+  normalizedUrl  String
+  title          String               @default("")
+  domainId       String
+  domain         Domain               @relation(fields: [domainId], references: [id])
+  scanStatus     String               @default("Pending")
+  scanEngine     String               @default("Scrapling")
+  fetchMode      String               @default("")
+  httpStatus     Int?
+  originalHttpStatus Int?
+  scanDuration   Int?
+  finalUrl       String               @default("")
+  fallbackUsed   Boolean              @default(false)
+  fallbackUrl    String               @default("")
+  fallbackHttpStatus Int?
+  discoveryFailureReason String       @default("")
+  robotsStatus   String               @default("")
+  metaDescription String              @default("")
+  canonicalUrl   String               @default("")
+  faviconUrl     String               @default("")
+  contentType    String               @default("")
+  pagesVisited   Int                  @default(0)
+  emailsJson     String               @default("[]")
+  socialLinksJson String              @default("[]")
+  pagesJson      String               @default("[]")
+  crawlCheckpoint String              @default("")
+  error          String?
+  scannedAt      DateTime?
+  firstSeen      DateTime             @default(now())
+  lastSeen       DateTime             @updatedAt
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  sources        ScannerSource[]
+  discordLinks   ScannerDiscordLink[]
+  leads          Lead[]
+
+  @@unique([workspaceId, normalizedUrl])
+  @@unique([workspaceId, domainId])
+  @@index([workspaceId, scanStatus])
+}
+
+model ScannerSource {
+  id              String        @id @default(cuid())
+  scannerResultId String
+  scannerResult   ScannerResult @relation(fields: [scannerResultId], references: [id], onDelete: Cascade)
+  searchSessionId String
+  searchSession   SearchSession @relation(fields: [searchSessionId], references: [id], onDelete: Cascade)
+  query           String
+  clientId        String        @default("DEFAULT")
+  position        Int
+  discoveredAt    DateTime      @default(now())
+
+  @@unique([scannerResultId, searchSessionId])
+  @@index([clientId])
+}
+
+model ScannerDiscordLink {
+  id              String        @id @default(cuid())
+  scannerResultId String
+  scannerResult   ScannerResult @relation(fields: [scannerResultId], references: [id], onDelete: Cascade)
+  url             String
+  inviteCode      String
+  sourcePage      String
+  discoveryMethod String        @default("unknown")
+  discoverySection String       @default("UNKNOWN")
+  interaction      String       @default("NONE")
+  fetchMode       String        @default("")
+  validationStatus String       @default("UNVALIDATED")
+  originalUrl     String        @default("")
+  createdAt       DateTime      @default(now())
+
+  @@unique([scannerResultId, url])
+}
+
+model Tag {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  createdAt   DateTime  @default(now())
+  leads       LeadTag[]
+
+  @@unique([workspaceId, name])
+}
+
+model LeadTag {
+  leadId    String
+  tagId     String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([leadId, tagId])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String
+  title       String
+  body        String
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  actorId     String?
+  actor       User?     @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action      String
+  targetType  String
+  targetId    String?
+  metadata    String    @default("{}")
+  ipAddress   String?
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([actorId])
+}
+
+model BackupMetadata {
+  id          String   @id @default(cuid())
+  filename    String   @unique
+  type        String   @default("MANUAL")
+  size        Int
+  status      String   @default("COMPLETED")
+  createdById String?
+  createdAt   DateTime @default(now())
+  manifest    String
+
+  @@index([createdAt])
+}

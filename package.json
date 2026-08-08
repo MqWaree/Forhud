@@ -1,0 +1,41 @@
+{
+  "name": "lead-intelligence-platform",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n scraper,api,web -c magenta,blue,cyan \"npm run scraper:dev\" \"npm run dev -w @lead/server\" \"npm run dev -w @lead/dashboard\"",
+    "build": "npm run build -w @lead/shared && npm run build -w @lead/server && npm run build -w @lead/dashboard && npm run build -w @lead/extension",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test:js && npm run scraper:test",
+    "test:js": "vitest run",
+    "test:discord-discovery": "npm run build -w @lead/server && node apps/server/scripts/discord-discovery-audit.mjs",
+    "audit:discord-discovery": "npm run build -w @lead/server && node apps/server/scripts/discord-discovery-audit.mjs",
+    "scraper:setup": "node apps/scraper/scripts/setup.mjs",
+    "scraper:dev": "node apps/scraper/scripts/start.mjs",
+    "scraper:test": "node apps/scraper/scripts/test.mjs",
+    "release:build": "node scripts/build-release.mjs",
+    "security:scan": "node scripts/security-audit.mjs",
+    "security:audit": "node scripts/security-audit.mjs --online",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "db:generate": "prisma generate --schema apps/server/prisma/schema.prisma",
+    "db:migrate": "node apps/server/scripts/migrate-local.mjs",
+    "db:push": "prisma db push --schema apps/server/prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "prisma": "^6.2.1",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@lead/extension",
+  "version": "1.4.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build --configLoader runner && node scripts/copy-manifest.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}
