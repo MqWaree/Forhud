@@ -46,6 +46,25 @@ afterEach(() => {
 });
 
 describe("Scrapling dynamic fast path", () => {
+  it("rejects absent, placeholder, and short scraper tokens in production", async () => {
+    const { configuredScraperToken } = await import("./scraper-client.js");
+    expect(() => configuredScraperToken({ NODE_ENV: "production" })).toThrow(
+      /SCRAPER_TOKEN/,
+    );
+    expect(() =>
+      configuredScraperToken({
+        NODE_ENV: "production",
+        SCRAPER_TOKEN: "aether-dev-local-worker",
+      }),
+    ).toThrow(/SCRAPER_TOKEN/);
+    expect(
+      configuredScraperToken({
+        NODE_ENV: "production",
+        SCRAPER_TOKEN: "production-scraper-secret-123456789",
+      }),
+    ).toBe("production-scraper-secret-123456789");
+  });
+
   it("does not launch Chromium when static extraction already found Discord", async () => {
     const fetchMock = vi.fn(() =>
       response(result(["https://discord.gg/static-fast-path"], "HTTP")),

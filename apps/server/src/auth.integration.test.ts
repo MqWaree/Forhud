@@ -38,6 +38,7 @@ beforeAll(async () => {
   });
   expect(setup.status).toBe(201);
   scannerId = setup.body.workspace.scannerId;
+  expect(scannerId).toMatch(/^[A-Z2-9]{4}(?:-[A-Z2-9]{4}){3}$/);
   await admin.post("/api/admin/users").send({
     username: "manager",
     password: "manager password 123",
@@ -155,6 +156,7 @@ describe("authentication, authorization, isolation, and recovery", () => {
       .send({ username: "rate-target", password: "wrong password" });
     expect(blocked.status).toBe(429);
     expect(Number(blocked.headers["retry-after"])).toBeGreaterThan(0);
+    expect(await prisma.securityRateLimit.count()).toBeGreaterThan(0);
   });
 
   it("enforces role permissions and assignment visibility", async () => {
@@ -428,5 +430,50 @@ describe("authentication, authorization, isolation, and recovery", () => {
       (await prisma.authSession.findUniqueOrThrow({ where: { id: legacy.id } }))
         .expiresAt,
     ).toEqual(updatedSession.expiresAt);
+  });
+
+  it("rotates legacy Scanner IDs once and revokes previously paired tokens", async () => {
+    await prisma.setting.deleteMany({
+      where: { id: "security.scanner-id-v3" },
+    });
+    const workspace = await prisma.workspace.create({
+      data: {
+        name: "Legacy Scanner Workspace",
+        scannerId: "ABCD-EFGH",
+        scannerState: { create: {} },
+      },
+    });
+    const owner = await prisma.user.create({
+      data: {
+        workspaceId: workspace.id,
+        name: "Legacy Owner",
+        username: `legacy-${Date.now()}`,
+        passwordHash: "not-used-by-this-migration-test",
+        role: "ADMIN",
+      },
+    });
+    const extension = await prisma.extensionInstance.create({
+      data: {
+        workspaceId: workspace.id,
+        ownerUserId: owner.id,
+        instanceId: `EXT-${Date.now().toString(36).slice(-8).toUpperCase()}`,
+        tokenHash: `legacy-token-${Date.now()}`,
+      },
+    });
+    const { applySecurityPolicyV3 } = await import("./app.js");
+    await applySecurityPolicyV3();
+    const [updatedWorkspace, updatedExtension, marker] = await Promise.all([
+      prisma.workspace.findUniqueOrThrow({ where: { id: workspace.id } }),
+      prisma.extensionInstance.findUniqueOrThrow({
+        where: { id: extension.id },
+      }),
+      prisma.setting.findUnique({ where: { id: "security.scanner-id-v3" } }),
+    ]);
+    expect(updatedWorkspace.scannerId).toMatch(
+      /^[A-Z2-9]{4}(?:-[A-Z2-9]{4}){3}$/,
+    );
+    expect(updatedWorkspace.scannerId).not.toBe("ABCD-EFGH");
+    expect(updatedExtension.revokedAt).not.toBeNull();
+    expect(marker).not.toBeNull();
   });
 });

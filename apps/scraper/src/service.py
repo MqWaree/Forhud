@@ -17,6 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import unquote, urljoin, urlparse, urlunparse
 
+from curl_cffi.const import CurlOpt
 from scrapling.fetchers import AsyncFetcher
 
 SERVICE_VERSION = "1.0.0"
@@ -76,10 +77,24 @@ DYNAMIC_SLOTS = threading.BoundedSemaphore(
 )
 HOST_LOCKS: dict[str, threading.Lock] = {}
 HOST_LOCKS_GUARD = threading.Lock()
+DEVELOPMENT_SCRAPER_TOKEN = "aether-dev-local-worker"
 
 
 class ScraperError(RuntimeError):
     pass
+
+
+def configured_scraper_token() -> str:
+    token = os.environ.get("SCRAPER_TOKEN", "").strip()
+    if os.environ.get("NODE_ENV") == "production" and (
+        len(token) < 24
+        or token == DEVELOPMENT_SCRAPER_TOKEN
+        or "REPLACE_WITH" in token
+    ):
+        raise ScraperError(
+            "SCRAPER_TOKEN must be a unique secret of at least 24 characters in production"
+        )
+    return token or DEVELOPMENT_SCRAPER_TOKEN
 
 
 def _is_private_ip(value: str) -> bool:
@@ -97,7 +112,7 @@ def _is_private_ip(value: str) -> bool:
     )
 
 
-def validate_public_url(value: str, *, allow_private: bool = False) -> str:
+def resolve_public_target(value: str, *, allow_private: bool = False) -> tuple[str, list[str]]:
     parsed = urlparse(value)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
         raise ScraperError("Only public HTTP(S) URLs are allowed")
@@ -106,7 +121,7 @@ def validate_public_url(value: str, *, allow_private: bool = False) -> str:
         if not allow_private:
             raise ScraperError("Internal host blocked")
     if allow_private:
-        return value
+        return value, []
     try:
         records = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
     except OSError as error:
@@ -114,7 +129,19 @@ def validate_public_url(value: str, *, allow_private: bool = False) -> str:
     addresses = {record[4][0] for record in records}
     if not addresses or any(_is_private_ip(address) for address in addresses):
         raise ScraperError("Private or internal address blocked")
-    return value
+    return value, sorted(addresses)
+
+
+def validate_public_url(value: str, *, allow_private: bool = False) -> str:
+    return resolve_public_target(value, allow_private=allow_private)[0]
+
+
+def _curl_resolve_entry(value: str, addresses: list[str]) -> str:
+    parsed = urlparse(value)
+    hostname = parsed.hostname or ""
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    encoded = [f"[{address}]" if ":" in address else address for address in addresses]
+    return f"{hostname}:{port}:{','.join(encoded)}"
 
 
 def normalize_discord(value: str, *, allow_root_destination: bool = False) -> str | None:
@@ -607,7 +634,13 @@ def _load_dynamic_fetcher() -> Any:
         fingerprints.generate_headers = original
 
 
-async def _dynamic_page(url: str, timeout_ms: int, *, allow_private: bool) -> Any:
+async def _dynamic_page(
+    url: str,
+    timeout_ms: int,
+    *,
+    allow_private: bool,
+    pinned_addresses: list[str],
+) -> Any:
     approved_host = (urlparse(url).hostname or "").lower()
     approved_public_hosts: dict[str, bool] = {approved_host: True}
     captured_main_redirects: list[str] = []
@@ -643,29 +676,29 @@ async def _dynamic_page(url: str, timeout_ms: int, *, allow_private: bool) -> An
                 await route.continue_()
                 return
             request_host = (parsed.hostname or "").lower()
-            # Keep the top-level document on the approved host. Public
-            # cross-origin scripts/XHR/iframes are allowed only after the same
-            # DNS/IP SSRF validation used for first-party requests. This is
-            # required for legitimate embedded chat and social widgets.
-            if (
-                request_host != approved_host
-                and request.resource_type == "document"
-                and request.frame == page.main_frame
-            ):
+            # Keep the renderer entirely on the approved, DNS-pinned host.
+            # Static extraction still records external social destinations,
+            # but the browser never contacts cross-origin scripts, XHR, images,
+            # or frames where DNS rebinding could target a private service.
+            if request_host != approved_host:
                 # A first-party `/discord` route often performs a client-side
                 # top-level navigation to the invite. Do not permit the browser
                 # to leave the approved site, but preserve a validated public
                 # destination as inert extraction evidence.
-                try:
-                    await asyncio.to_thread(
-                        validate_public_url,
-                        candidate,
-                        allow_private=allow_private,
-                    )
-                    if candidate not in captured_main_redirects:
-                        captured_main_redirects.append(candidate)
-                except ScraperError:
-                    pass
+                if (
+                    request.resource_type == "document"
+                    and request.frame == page.main_frame
+                ):
+                    try:
+                        await asyncio.to_thread(
+                            validate_public_url,
+                            candidate,
+                            allow_private=allow_private,
+                        )
+                        if candidate not in captured_main_redirects:
+                            captured_main_redirects.append(candidate)
+                    except ScraperError:
+                        pass
                 await route.abort()
                 return
             try:
@@ -918,6 +951,13 @@ async def _dynamic_page(url: str, timeout_ms: int, *, allow_private: bool) -> An
     browser_options: dict[str, Any] = {}
     if browser_executable:
         browser_options["executable_path"] = browser_executable
+    if pinned_addresses:
+        pinned_address = pinned_addresses[0]
+        if ":" in pinned_address:
+            pinned_address = f"[{pinned_address}]"
+        browser_options["extra_flags"] = [
+            f"--host-resolver-rules=MAP {approved_host} {pinned_address}, EXCLUDE localhost"
+        ]
 
     fetcher = _load_dynamic_fetcher()
     return await fetcher.async_fetch(
@@ -950,11 +990,16 @@ async def scrape_url(
     mode: str = "page",
     force_dynamic: bool = False,
 ) -> dict[str, Any]:
-    validate_public_url(url, allow_private=allow_private)
+    _, pinned_addresses = resolve_public_target(url, allow_private=allow_private)
     if force_dynamic:
         dynamic_started = time.perf_counter()
         with DYNAMIC_SLOTS:
-            rendered = await _dynamic_page(url, timeout_ms, allow_private=allow_private)
+            rendered = await _dynamic_page(
+                url,
+                timeout_ms,
+                allow_private=allow_private,
+                pinned_addresses=pinned_addresses,
+            )
         return extract_page(
             rendered,
             url,
@@ -962,6 +1007,11 @@ async def scrape_url(
             duration_ms=int((time.perf_counter() - dynamic_started) * 1000),
         )
     started = time.perf_counter()
+    static_options: dict[str, Any] = {}
+    if pinned_addresses:
+        static_options["curl_options"] = {
+            CurlOpt.RESOLVE: [_curl_resolve_entry(url, pinned_addresses)]
+        }
     page = await AsyncFetcher.get(
         url,
         timeout=max(1, timeout_ms / 1000),
@@ -969,6 +1019,7 @@ async def scrape_url(
         follow_redirects=False,
         stealthy_headers=False,
         headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9"},
+        **static_options,
     )
     elapsed = int((time.perf_counter() - started) * 1000)
     if mode == "robots":
@@ -1007,10 +1058,16 @@ async def scrape_url(
             # broadly in parallel, while Chromium work stays deliberately
             # bounded so a batch cannot exhaust RAM or starve easy domains.
             with DYNAMIC_SLOTS:
+                dynamic_url = str(result["finalUrl"])
+                _, dynamic_addresses = resolve_public_target(
+                    dynamic_url,
+                    allow_private=allow_private,
+                )
                 rendered = await _dynamic_page(
-                    str(result["finalUrl"]),
+                    dynamic_url,
                     timeout_ms,
                     allow_private=allow_private,
+                    pinned_addresses=dynamic_addresses,
                 )
             result = extract_page(
                 rendered,
@@ -1044,7 +1101,7 @@ class InternalHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _authorized(self) -> bool:
-        expected = os.environ.get("SCRAPER_TOKEN", "aether-dev-local-worker")
+        expected = configured_scraper_token()
         return self.client_address[0] in {"127.0.0.1", "::1"} and self.headers.get("Authorization") == f"Bearer {expected}"
 
     def do_GET(self) -> None:
@@ -1103,6 +1160,7 @@ def _package_version() -> str:
 
 
 def main() -> None:
+    configured_scraper_token()
     host = "127.0.0.1"
     port = int(os.environ.get("SCRAPER_PORT", "3011"))
     server = ThreadingHTTPServer((host, port), InternalHandler)

@@ -80,7 +80,25 @@ export type DiscordDetection = z.infer<typeof discordDetectionSchema>;
 export type RobotsResource = z.infer<typeof robotsResultSchema>;
 
 const baseUrl = process.env.SCRAPER_URL || "http://127.0.0.1:3011";
-const token = process.env.SCRAPER_TOKEN || "aether-dev-local-worker";
+const DEVELOPMENT_SCRAPER_TOKEN = "aether-dev-local-worker";
+export function configuredScraperToken(
+  environment: NodeJS.ProcessEnv = process.env,
+) {
+  const configured = String(environment.SCRAPER_TOKEN || "").trim();
+  if (environment.NODE_ENV === "production") {
+    if (
+      configured.length < 24 ||
+      configured === DEVELOPMENT_SCRAPER_TOKEN ||
+      configured.includes("REPLACE_WITH")
+    )
+      throw new Error(
+        "SCRAPER_TOKEN must be a unique secret of at least 24 characters in production",
+      );
+    return configured;
+  }
+  return configured || DEVELOPMENT_SCRAPER_TOKEN;
+}
+const token = configuredScraperToken();
 const dynamicConcurrency = Math.max(
   1,
   Math.min(4, Number(process.env.SCRAPER_DYNAMIC_CONCURRENCY || 3)),
