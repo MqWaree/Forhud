@@ -141,7 +141,7 @@ rm -f "$archive" /tmp/fgp-health-$stamp.json /tmp/fgp-public-health-$stamp.json
 echo "FGP_DEPLOYMENT_OK rollback=$previous database_backup=$backup_dir/pre-deploy-$stamp.db"
 '@
 
-$remote = $remoteTemplate.Replace("__REMOTE_ARCHIVE__", $remoteArchive).Replace("__ARCHIVE_HASH__", $archiveHash).Replace("__STAMP__", $stamp)
+$remote = $remoteTemplate.Replace("__REMOTE_ARCHIVE__", $remoteArchive).Replace("__ARCHIVE_HASH__", $archiveHash).Replace("__STAMP__", $stamp).Replace("`r", "")
 
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
