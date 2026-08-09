@@ -295,7 +295,8 @@ function AuthForm({
           )}
           {setup && (
             <small className="password-hint">
-              Passwords are stored as one-way hashes.
+              Avoid common or predictable passwords. Passwords are stored as
+              one-way hashes.
               {setupProtected && !setupConfigured
                 ? " The server operator must configure an initial setup code before this workspace can be created."
                 : ""}

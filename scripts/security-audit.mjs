@@ -68,7 +68,8 @@ const requiredSecurityText = [
   ["apps/server/src/auth.ts", "httpOnly: true"],
   ["apps/server/src/auth.ts", 'sameSite: "strict"'],
   ["apps/server/src/auth.ts", "KNOWN_INSECURE_SCANNER_IDS"],
-  ["apps/server/src/app.ts", "password: z.string().min(1).max(200)"],
+  ["apps/server/src/app.ts", "password: newPasswordSchema"],
+  ["apps/server/src/auth.ts", "passwordStrengthIssue"],
   ["apps/server/src/app.ts", "unsafeWorkspaces.length === 0"],
   ["apps/server/src/extension-auth.ts", "!isSecureScannerId(scannerId)"],
   [

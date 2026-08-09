@@ -139,22 +139,30 @@ describe("authentication, authorization, isolation, and recovery", () => {
       role: "RESEARCHER",
       requirePasswordChange: false,
     });
-    expect(shortAccount.status).toBe(201);
+    expect(shortAccount.status).toBe(400);
+
+    const strongAccount = await admin.post("/api/admin/users").send({
+      username: "x",
+      password: "N7!xQ2@p",
+      role: "RESEARCHER",
+      requirePasswordChange: false,
+    });
+    expect(strongAccount.status).toBe(201);
 
     const shortUser = request.agent(app);
     expect(
       (
         await shortUser
           .post("/api/auth/login")
-          .send({ username: "x", password: "y" })
+          .send({ username: "x", password: "N7!xQ2@p" })
       ).status,
     ).toBe(200);
     expect(
       (
         await shortUser.post("/api/auth/change-password").send({
-          currentPassword: "y",
-          newPassword: "z",
-          confirmPassword: "z",
+          currentPassword: "N7!xQ2@p",
+          newPassword: "M4#vR8!q",
+          confirmPassword: "M4#vR8!q",
         })
       ).status,
     ).toBe(200);
@@ -162,7 +170,7 @@ describe("authentication, authorization, isolation, and recovery", () => {
       (
         await request(app)
           .post("/api/auth/login")
-          .send({ username: "x", password: "z" })
+          .send({ username: "x", password: "M4#vR8!q" })
       ).status,
     ).toBe(200);
   });
