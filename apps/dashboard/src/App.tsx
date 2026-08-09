@@ -1820,11 +1820,9 @@ function AccountSettings() {
         <label>
           <span>
             <b>New password</b>
-            <small>Use at least 12 characters</small>
           </span>
           <input
             type="password"
-            minLength={12}
             value={newPassword}
             onChange={(event) => setNewPassword(event.target.value)}
           />
@@ -1835,7 +1833,6 @@ function AccountSettings() {
           </span>
           <input
             type="password"
-            minLength={12}
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
           />

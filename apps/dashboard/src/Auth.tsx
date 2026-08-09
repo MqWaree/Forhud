@@ -166,7 +166,6 @@ function RequiredPasswordChange({
             <input
               type="password"
               required
-              minLength={12}
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
             />
@@ -176,7 +175,6 @@ function RequiredPasswordChange({
             <input
               type="password"
               required
-              minLength={12}
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
             />
@@ -271,7 +269,6 @@ function AuthForm({
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                minLength={setup ? 12 : undefined}
                 autoComplete={setup ? "new-password" : "current-password"}
               />
               <button
@@ -298,8 +295,8 @@ function AuthForm({
           )}
           {setup && (
             <small className="password-hint">
-              Use at least 12 characters. Passwords are stored as one-way
-              hashes.
+              Avoid common or predictable passwords. Passwords are stored as
+              one-way hashes.
               {setupProtected && !setupConfigured
                 ? " The server operator must configure an initial setup code before this workspace can be created."
                 : ""}

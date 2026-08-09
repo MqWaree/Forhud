@@ -140,6 +140,56 @@ describe("authentication, authorization, isolation, and recovery", () => {
       requirePasswordChange: false,
     });
     expect(shortAccount.status).toBe(400);
+
+    const commonAccount = await admin.post("/api/admin/users").send({
+      username: "common-password",
+      password: "P@ssw0rd!",
+      role: "RESEARCHER",
+      requirePasswordChange: false,
+    });
+    expect(commonAccount.status).toBe(400);
+
+    const strongAccount = await admin.post("/api/admin/users").send({
+      username: "x",
+      password: "N7!xQ2@p",
+      role: "RESEARCHER",
+      requirePasswordChange: false,
+    });
+    expect(strongAccount.status).toBe(201);
+
+    const shortUser = request.agent(app);
+    expect(
+      (
+        await shortUser
+          .post("/api/auth/login")
+          .send({ username: "x", password: "N7!xQ2@p" })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await shortUser.post("/api/auth/change-password").send({
+          currentPassword: "N7!xQ2@p",
+          newPassword: "P@ssw0rd!",
+          confirmPassword: "P@ssw0rd!",
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await shortUser.post("/api/auth/change-password").send({
+          currentPassword: "N7!xQ2@p",
+          newPassword: "M4#vR8!q",
+          confirmPassword: "M4#vR8!q",
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await request(app)
+          .post("/api/auth/login")
+          .send({ username: "x", password: "M4#vR8!q" })
+      ).status,
+    ).toBe(200);
   });
 
   it("throttles repeated password guessing", async () => {
@@ -432,14 +482,17 @@ describe("authentication, authorization, isolation, and recovery", () => {
     ).toEqual(updatedSession.expiresAt);
   });
 
-  it("rotates legacy Scanner IDs once and revokes previously paired tokens", async () => {
+  it("rotates a known legacy Scanner ID even when the hardening marker already exists", async () => {
     await prisma.setting.deleteMany({
       where: { id: "security.scanner-id-v3" },
+    });
+    await prisma.setting.create({
+      data: { id: "security.scanner-id-v3", value: JSON.stringify(true) },
     });
     const workspace = await prisma.workspace.create({
       data: {
         name: "Legacy Scanner Workspace",
-        scannerId: "ABCD-EFGH",
+        scannerId: "A7K9-X2P4",
         scannerState: { create: {} },
       },
     });
@@ -461,6 +514,10 @@ describe("authentication, authorization, isolation, and recovery", () => {
       },
     });
     const { applySecurityPolicyV3 } = await import("./app.js");
+    const { pairExtension } = await import("./extension-auth.js");
+    await expect(
+      pairExtension({ scannerId: "A7K9-X2P4", instanceId: "EXT-LEGACY" }),
+    ).rejects.toMatchObject({ statusCode: 401 });
     await applySecurityPolicyV3();
     const [updatedWorkspace, updatedExtension, marker] = await Promise.all([
       prisma.workspace.findUniqueOrThrow({ where: { id: workspace.id } }),
@@ -472,7 +529,7 @@ describe("authentication, authorization, isolation, and recovery", () => {
     expect(updatedWorkspace.scannerId).toMatch(
       /^[A-Z2-9]{4}(?:-[A-Z2-9]{4}){3}$/,
     );
-    expect(updatedWorkspace.scannerId).not.toBe("ABCD-EFGH");
+    expect(updatedWorkspace.scannerId).not.toBe("A7K9-X2P4");
     expect(updatedExtension.revokedAt).not.toBeNull();
     expect(marker).not.toBeNull();
   });

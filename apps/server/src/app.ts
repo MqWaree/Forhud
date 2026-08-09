@@ -22,7 +22,8 @@ import {
   createSession,
   generateScannerId,
   hashPassword,
-  PASSWORD_MIN_LENGTH,
+  isSecureScannerId,
+  passwordStrengthIssue,
   publicUser,
   requireAuth,
   requireRole,
@@ -134,20 +135,22 @@ export async function applySecurityPolicyV2() {
 }
 
 export async function applySecurityPolicyV3() {
-  if (
-    await prisma.setting.findUnique({
-      where: { id: SECURITY_POLICY_V3_MARKER },
-    })
-  )
-    return;
   const workspaces = await prisma.workspace.findMany({
     select: { id: true, scannerId: true },
   });
+  const unsafeWorkspaces = workspaces.filter(
+    (workspace) => !isSecureScannerId(workspace.scannerId),
+  );
+  if (
+    unsafeWorkspaces.length === 0 &&
+    (await prisma.setting.findUnique({
+      where: { id: SECURITY_POLICY_V3_MARKER },
+    }))
+  )
+    return;
   const used = new Set(workspaces.map((workspace) => workspace.scannerId));
   await prisma.$transaction(async (tx) => {
-    for (const workspace of workspaces) {
-      if (/^[A-Z2-9]{4}(?:-[A-Z2-9]{4}){3}$/.test(workspace.scannerId))
-        continue;
+    for (const workspace of unsafeWorkspaces) {
       let scannerId = generateScannerId();
       while (used.has(scannerId)) scannerId = generateScannerId();
       used.add(scannerId);
@@ -168,8 +171,10 @@ export async function applySecurityPolicyV3() {
         },
       });
     }
-    await tx.setting.create({
-      data: { id: SECURITY_POLICY_V3_MARKER, value: JSON.stringify(true) },
+    await tx.setting.upsert({
+      where: { id: SECURITY_POLICY_V3_MARKER },
+      update: { value: JSON.stringify(true) },
+      create: { id: SECURITY_POLICY_V3_MARKER, value: JSON.stringify(true) },
     });
   });
 }
@@ -228,9 +233,16 @@ const usernameSchema = z
     "Username must start with a letter or number and use only letters, numbers, dots, dashes, or underscores",
   )
   .transform((value) => value.toLowerCase());
+const newPasswordSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((value) => !passwordStrengthIssue(value), {
+    message: "Choose a less predictable password",
+  });
 const accountSchema = z.object({
   username: usernameSchema,
-  password: z.string().min(PASSWORD_MIN_LENGTH).max(200),
+  password: newPasswordSchema,
 });
 
 const dummyPasswordHash = await hashPassword(
@@ -253,6 +265,7 @@ app.post("/api/auth/setup", async (req, res, next) => {
       .json({ error: "Initial setup is already in progress" });
   setupInProgress = true;
   try {
+    await scannerReady;
     if ((await prisma.user.count()) > 0)
       return res
         .status(409)
@@ -378,6 +391,7 @@ app.get("/api/auth/me", requireAuth, (req, res) =>
 
 app.post("/api/extension/pair", async (req, res, next) => {
   try {
+    await scannerReady;
     const now = Date.now();
     const ipKey = req.ip || req.socket.remoteAddress || "unknown";
     const key = rateLimitKey("extension-pair", ipKey);
@@ -1600,8 +1614,8 @@ app.post("/api/auth/change-password", async (req, res, next) => {
     const input = z
       .object({
         currentPassword: z.string().min(1).max(200),
-        newPassword: z.string().min(PASSWORD_MIN_LENGTH).max(200),
-        confirmPassword: z.string().min(PASSWORD_MIN_LENGTH).max(200),
+        newPassword: newPasswordSchema,
+        confirmPassword: z.string().min(1).max(200),
       })
       .refine((value) => value.newPassword === value.confirmPassword, {
         message: "New passwords do not match",
@@ -1774,10 +1788,16 @@ app.post(
       let scannerId = generateScannerId();
       while (await prisma.workspace.findUnique({ where: { scannerId } }))
         scannerId = generateScannerId();
-      const workspace = await prisma.workspace.update({
-        where: { id: auth.workspaceId },
-        data: { scannerId },
-      });
+      const [workspace] = await prisma.$transaction([
+        prisma.workspace.update({
+          where: { id: auth.workspaceId },
+          data: { scannerId },
+        }),
+        prisma.extensionInstance.updateMany({
+          where: { workspaceId: auth.workspaceId, revokedAt: null },
+          data: { revokedAt: new Date(), scannerState: "STOPPED" },
+        }),
+      ]);
       await audit(req, "SCANNER_ID_REGENERATED", "Workspace", auth.workspaceId);
       res.json({ scannerId: workspace.scannerId });
     } catch (error) {
@@ -1889,11 +1909,7 @@ app.patch(
           username: usernameSchema.optional(),
           role: z.enum(roles).optional(),
           status: z.enum(["ACTIVE", "DISABLED"]).optional(),
-          temporaryPassword: z
-            .string()
-            .min(PASSWORD_MIN_LENGTH)
-            .max(200)
-            .optional(),
+          temporaryPassword: newPasswordSchema.optional(),
         })
         .parse(req.body);
       if (target.id === auth.id && input.status === "DISABLED")

@@ -1,12 +1,16 @@
 import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import type { NextFunction, Request, Response } from "express";
+import { zxcvbn, zxcvbnOptions } from "@zxcvbn-ts/core";
+import {
+  adjacencyGraphs,
+  dictionary as commonPasswordDictionary,
+} from "@zxcvbn-ts/language-common";
 import { prisma } from "./db.js";
 
 const scryptAsync = promisify(scrypt);
 export const SESSION_COOKIE = "aether_session";
 export const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-export const PASSWORD_MIN_LENGTH = 12;
 export const roles = ["ADMIN", "MANAGER", "RESEARCHER"] as const;
 export type Role = (typeof roles)[number];
 export type AuthContext = {
@@ -51,6 +55,22 @@ export async function verifyPassword(password: string, stored: string) {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
+zxcvbnOptions.setOptions({
+  dictionary: commonPasswordDictionary,
+  graphs: adjacencyGraphs,
+});
+
+export function passwordStrengthIssue(password: string) {
+  const normalized = password.normalize("NFKC");
+  // A guess estimate avoids a fixed character-count rule while rejecting
+  // common words, l33t substitutions, dates, repeats, and keyboard patterns.
+  // 10^8 guesses is deliberately above the library's score-2 boundary and
+  // still permits compact randomly generated credentials.
+  if (zxcvbn(normalized).guessesLog10 < 8)
+    return "Choose a less predictable password";
+  return undefined;
+}
+
 export function createSecret(bytes = 32) {
   return randomBytes(bytes).toString("base64url");
 }
@@ -69,6 +89,17 @@ export function generateScannerId() {
   // Four 4-character groups from a 32-character alphabet provide 80 bits of
   // entropy while remaining practical to type into the Chrome extension.
   return generateReadableId(4, 4);
+}
+
+export const SCANNER_ID_PATTERN = /^[A-Z2-9]{4}(?:-[A-Z2-9]{4}){3}$/;
+const KNOWN_INSECURE_SCANNER_IDS = new Set(["A7K9-X2P4"]);
+
+export function isSecureScannerId(value: string) {
+  const normalized = value.trim().toUpperCase();
+  return (
+    SCANNER_ID_PATTERN.test(normalized) &&
+    !KNOWN_INSECURE_SCANNER_IDS.has(normalized)
+  );
 }
 
 function cookieValue(req: Request, name: string) {

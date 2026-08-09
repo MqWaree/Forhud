@@ -202,7 +202,6 @@ export default function AdminPage() {
             name="password"
             required
             type="password"
-            minLength={12}
             placeholder="Temporary password"
             aria-label="New member temporary password"
           />

@@ -9,6 +9,7 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/generated/**',
       '**/.venv/**',
+      'outputs/**',
     ],
   },
   js.configs.recommended,

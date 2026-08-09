@@ -11,7 +11,7 @@ FGP is a local-first, multi-user lead research platform. It combines a React/Vit
 - `apps/extension` — Chrome MV3 extension that pairs using the dashboard Scanner ID and reads organic URLs from a Google results page opened by the user.
 - `packages/shared` — validation, URL normalization, Discord detection, CSV, and splitter utilities shared across the platform.
 
-All workspace-owned records carry a workspace ID. Dashboard sessions use opaque HttpOnly, Secure, SameSite cookies with a rolling 30-day lifetime; passwords require at least 12 characters and use salted `scrypt` hashes. Extension bearer tokens are random, stored only as hashes on the server, and can be revoked independently.
+All workspace-owned records carry a workspace ID. Dashboard sessions use opaque HttpOnly, Secure, SameSite cookies with a rolling 30-day lifetime; passwords are required, capped at 200 characters, checked server-side for guess resistance without a fixed minimum length, and use salted `scrypt` hashes. Scanner IDs contain 80 bits of randomness; known legacy/bootstrap values are never accepted for pairing and are replaced automatically before setup or pairing can proceed. Extension bearer tokens are random, stored only as hashes on the server, and can be revoked independently. Rotating a Scanner ID revokes all existing extension tokens.
 
 The Node scanner is the source of truth. It owns authentication, the queue, persistence, stop/resume, concurrency, robots policy, deep-scan boundaries, and security. Before the loopback-only Python worker receives a URL, Node resolves and rejects local/private/link-local/metadata targets. It repeats that validation for every redirect and every deep-scan candidate.
 
@@ -27,7 +27,7 @@ npm run db:migrate
 npm run dev
 ```
 
-Open `http://localhost:5173`. On the first visit, create the initial administrator with a username and a password of at least 12 characters. Existing local leads and history are preserved and attached to that workspace.
+Open `http://localhost:5173`. On the first visit, create the initial administrator with a username and password. Existing local leads and history are preserved and attached to that workspace.
 
 The API listens on `http://localhost:3001`; `/api/health` reports database, extension, and Scrapling worker availability. `npm run dev` starts the Scrapling worker, API, and dashboard together.
 
