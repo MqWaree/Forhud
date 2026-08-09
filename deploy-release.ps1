@@ -1,7 +1,9 @@
 param(
   [string]$Server = "162.35.162.136",
   [string]$User = "root",
-  [string]$Archive = (Join-Path $PSScriptRoot "deploy\fgp-release.tar.gz")
+  [string]$Archive = (Join-Path $PSScriptRoot "deploy\fgp-release.tar.gz"),
+  [ValidateSet("unchanged", "enabled", "disabled")]
+  [string]$AuthBypass = "unchanged"
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,7 +30,9 @@ current="/opt/fgp"
 previous="/opt/fgp-rollback-$stamp"
 failed="/opt/fgp-failed-$stamp"
 preflight="/tmp/fgp-preflight-$stamp"
+env_backup="/tmp/fgp-env-$stamp"
 backup_dir="/var/backups/fgp"
+auth_bypass_mode="__AUTH_BYPASS_MODE__"
 services_stopped=0
 initial_services_healthy=0
 if systemctl is-active --quiet fgp-api.service && systemctl is-active --quiet fgp-scraper.service; then
@@ -42,6 +46,9 @@ rollback() {
   set +e
   if [ "$exit_code" -ne 0 ]; then
     rm -rf -- "$preflight"
+    if [ -f "$env_backup" ]; then
+      cp --preserve=mode,timestamps "$env_backup" /etc/fgp/fgp.env
+    fi
     echo "Deployment failed - restoring the previous release."
     systemctl stop fgp-api.service fgp-scraper.service || true
     if [ -d "$current" ]; then
@@ -88,6 +95,19 @@ rm -rf -- "$preflight"
 test -d "$current"
 test ! -e "$previous"
 install -d -m 0750 "$backup_dir"
+
+if [ "$auth_bypass_mode" != "unchanged" ]; then
+  cp --preserve=mode,timestamps /etc/fgp/fgp.env "$env_backup"
+  bypass_value=false
+  if [ "$auth_bypass_mode" = "enabled" ]; then
+    bypass_value=true
+  fi
+  if grep -q '^AUTH_BYPASS_ENABLED=' /etc/fgp/fgp.env; then
+    sed -i "s/^AUTH_BYPASS_ENABLED=.*/AUTH_BYPASS_ENABLED=$bypass_value/" /etc/fgp/fgp.env
+  else
+    printf '\nAUTH_BYPASS_ENABLED=%s\n' "$bypass_value" >>/etc/fgp/fgp.env
+  fi
+fi
 
 set -a
 . /etc/fgp/fgp.env
@@ -148,11 +168,11 @@ printf '\n'
 systemctl is-active --quiet fgp-api.service
 systemctl is-active --quiet fgp-scraper.service
 
-rm -f "$archive" /tmp/fgp-health-$stamp.json /tmp/fgp-public-health-$stamp.json
+rm -f "$archive" "$env_backup" /tmp/fgp-health-$stamp.json /tmp/fgp-public-health-$stamp.json
 echo "FGP_DEPLOYMENT_OK rollback=$previous database_backup=$backup_dir/pre-deploy-$stamp.db"
 '@
 
-$remote = $remoteTemplate.Replace("__REMOTE_ARCHIVE__", $remoteArchive).Replace("__ARCHIVE_HASH__", $archiveHash).Replace("__STAMP__", $stamp).Replace("`r", "")
+$remote = $remoteTemplate.Replace("__REMOTE_ARCHIVE__", $remoteArchive).Replace("__ARCHIVE_HASH__", $archiveHash).Replace("__STAMP__", $stamp).Replace("__AUTH_BYPASS_MODE__", $AuthBypass).Replace("`r", "")
 
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
