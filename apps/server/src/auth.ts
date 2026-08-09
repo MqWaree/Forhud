@@ -27,6 +27,10 @@ export interface AuthRequest extends Request {
   sessionId: string;
 }
 
+export function authBypassEnabled() {
+  return process.env.AUTH_BYPASS_ENABLED?.trim().toLowerCase() === "true";
+}
+
 export function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -120,8 +124,22 @@ export function publicUser(user: AuthContext) {
     role: user.role,
     status: user.status,
     requirePasswordChange: user.requirePasswordChange,
+    authBypassEnabled: authBypassEnabled(),
     workspace: user.workspace,
   };
+}
+
+function requestOriginAllowed(req: Request) {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return true;
+  const origin = req.headers.origin;
+  const expected = process.env.PUBLIC_APP_ORIGIN || "http://localhost:5173";
+  const allowedOrigins = new Set([
+    expected,
+    ...(process.env.NODE_ENV === "production"
+      ? []
+      : ["http://localhost:5173", "http://127.0.0.1:5173"]),
+  ]);
+  return !origin || allowedOrigins.has(origin);
 }
 
 export async function createSession(
@@ -165,6 +183,30 @@ export async function requireAuth(
   next: NextFunction,
 ) {
   try {
+    if (authBypassEnabled()) {
+      const user = await prisma.user.findFirst({
+        where: { role: "ADMIN", status: "ACTIVE" },
+        orderBy: { createdAt: "asc" },
+        include: { workspace: true },
+      });
+      if (!user)
+        return res.status(503).json({
+          error: "Authentication bypass requires an active administrator",
+        });
+      if (!requestOriginAllowed(req))
+        return res.status(403).json({ error: "Request origin rejected" });
+      (req as AuthRequest).auth = {
+        id: user.id,
+        workspaceId: user.workspaceId,
+        username: user.username,
+        role: "ADMIN",
+        status: user.status,
+        requirePasswordChange: false,
+        workspace: user.workspace,
+      };
+      (req as AuthRequest).sessionId = `auth-bypass:${user.id}`;
+      return next();
+    }
     const token = cookieValue(req, SESSION_COOKIE);
     if (!token)
       return res.status(401).json({ error: "Authentication required" });
@@ -182,18 +224,8 @@ export async function requireAuth(
       clearSessionCookie(res);
       return res.status(401).json({ error: "Session expired" });
     }
-    if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
-      const origin = req.headers.origin;
-      const expected = process.env.PUBLIC_APP_ORIGIN || "http://localhost:5173";
-      const allowedOrigins = new Set([
-        expected,
-        ...(process.env.NODE_ENV === "production"
-          ? []
-          : ["http://localhost:5173", "http://127.0.0.1:5173"]),
-      ]);
-      if (origin && !allowedOrigins.has(origin))
-        return res.status(403).json({ error: "Request origin rejected" });
-    }
+    if (!requestOriginAllowed(req))
+      return res.status(403).json({ error: "Request origin rejected" });
     const auth = {
       id: session.user.id,
       workspaceId: session.user.workspaceId,
