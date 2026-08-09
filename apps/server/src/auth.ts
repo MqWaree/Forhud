@@ -1,6 +1,11 @@
 import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import type { NextFunction, Request, Response } from "express";
+import { zxcvbn, zxcvbnOptions } from "@zxcvbn-ts/core";
+import {
+  adjacencyGraphs,
+  dictionary as commonPasswordDictionary,
+} from "@zxcvbn-ts/language-common";
 import { prisma } from "./db.js";
 
 const scryptAsync = promisify(scrypt);
@@ -50,37 +55,19 @@ export async function verifyPassword(password: string, stored: string) {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
-const COMMON_PASSWORD_PATTERN =
-  /^(?:password|passw0rd|admin|administrator|welcome|letmein|qwerty|abc|test|user|login|changeme|default)[\s._-]*\d{0,8}[!@#$%^&*]*$/i;
+zxcvbnOptions.setOptions({
+  dictionary: commonPasswordDictionary,
+  graphs: adjacencyGraphs,
+});
 
 export function passwordStrengthIssue(password: string) {
   const normalized = password.normalize("NFKC");
-  if (COMMON_PASSWORD_PATTERN.test(normalized))
+  // A guess estimate avoids a fixed character-count rule while rejecting
+  // common words, l33t substitutions, dates, repeats, and keyboard patterns.
+  // 10^8 guesses is deliberately above the library's score-2 boundary and
+  // still permits compact randomly generated credentials.
+  if (zxcvbn(normalized).guessesLog10 < 8)
     return "Choose a less predictable password";
-  if (/^(.)\1+$/u.test(normalized))
-    return "Choose a less predictable password";
-  if (
-    /(?:012345|123456|234567|345678|456789|567890|abcdef|qwerty)/i.test(
-      normalized.replace(/[^a-z0-9]/gi, ""),
-    )
-  )
-    return "Choose a less predictable password";
-
-  let poolSize = 0;
-  if (/[a-z]/.test(normalized)) poolSize += 26;
-  if (/[A-Z]/.test(normalized)) poolSize += 26;
-  if (/\d/.test(normalized)) poolSize += 10;
-  if (/[^\p{L}\p{N}\s]/u.test(normalized)) poolSize += 33;
-  if (/\s/.test(normalized)) poolSize += 1;
-  if ([...normalized].some((character) => character.codePointAt(0)! > 127))
-    poolSize += 100;
-
-  const uniqueCharacters = new Set(normalized).size;
-  const diversityFactor =
-    uniqueCharacters <= 2 ? 0.2 : uniqueCharacters <= 4 ? 0.55 : 1;
-  const estimatedEntropy =
-    normalized.length * Math.log2(Math.max(poolSize, 1)) * diversityFactor;
-  if (estimatedEntropy < 50) return "Choose a less predictable password";
   return undefined;
 }
 

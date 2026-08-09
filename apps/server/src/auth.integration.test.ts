@@ -141,6 +141,14 @@ describe("authentication, authorization, isolation, and recovery", () => {
     });
     expect(shortAccount.status).toBe(400);
 
+    const commonAccount = await admin.post("/api/admin/users").send({
+      username: "common-password",
+      password: "P@ssw0rd!",
+      role: "RESEARCHER",
+      requirePasswordChange: false,
+    });
+    expect(commonAccount.status).toBe(400);
+
     const strongAccount = await admin.post("/api/admin/users").send({
       username: "x",
       password: "N7!xQ2@p",
@@ -157,6 +165,15 @@ describe("authentication, authorization, isolation, and recovery", () => {
           .send({ username: "x", password: "N7!xQ2@p" })
       ).status,
     ).toBe(200);
+    expect(
+      (
+        await shortUser.post("/api/auth/change-password").send({
+          currentPassword: "N7!xQ2@p",
+          newPassword: "P@ssw0rd!",
+          confirmPassword: "P@ssw0rd!",
+        })
+      ).status,
+    ).toBe(400);
     expect(
       (
         await shortUser.post("/api/auth/change-password").send({
