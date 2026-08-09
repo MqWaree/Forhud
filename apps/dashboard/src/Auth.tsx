@@ -15,6 +15,7 @@ export type AuthUser = {
   role: "ADMIN" | "MANAGER" | "RESEARCHER";
   status: string;
   requirePasswordChange: boolean;
+  authBypassEnabled: boolean;
   workspace: { id: string; name: string; scannerId: string };
 };
 
@@ -99,7 +100,17 @@ export default function AuthRoot({ children }: { children: ReactNode }) {
     );
   return (
     <AuthContext.Provider value={{ user, refresh, logout }}>
-      {children}
+      {user.authBypassEnabled ? (
+        <div className="auth-bypass-mode">
+          <div className="auth-bypass-banner" role="alert">
+            Login is temporarily disabled. Every visitor has administrator
+            access.
+          </div>
+          {children}
+        </div>
+      ) : (
+        children
+      )}
     </AuthContext.Provider>
   );
 }
