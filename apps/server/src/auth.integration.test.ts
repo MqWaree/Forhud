@@ -140,6 +140,9 @@ describe("authentication, authorization, isolation, and recovery", () => {
       requirePasswordChange: false,
     });
     expect(shortAccount.status).toBe(400);
+    expect(shortAccount.body).toEqual({
+      error: "Choose a less predictable password",
+    });
 
     const commonAccount = await admin.post("/api/admin/users").send({
       username: "common-password",
@@ -148,6 +151,9 @@ describe("authentication, authorization, isolation, and recovery", () => {
       requirePasswordChange: false,
     });
     expect(commonAccount.status).toBe(400);
+    expect(commonAccount.body).toEqual({
+      error: "Choose a less predictable password",
+    });
 
     const strongAccount = await admin.post("/api/admin/users").send({
       username: "x",
