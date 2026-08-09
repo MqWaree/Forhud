@@ -508,4 +508,1723 @@ async function persistImport(body: ImportPayload) {
       if (seen.has(normalized)) continue;
       seen.add(normalized);
       const providerResult = ["brave", "google"].includes(
- ×m¸ÞÚ$z{-®éÜj×6W76–öç2Òv—B&—6Öç6V&6…6W76–öâæf–æDÖç’‡°¢v†W&S¢²v÷&·76T–C¢‡&W2WF…&WVW7B’æWF‚çv÷&·76T–BÒÀ¢–æ6ÇVFS¢²&W7VÇG3¢²–æ6ÇVFS¢²F—66÷&DÆ–æ·3¢G'VRÒÒÒÀ¢Ò“°¢6öç7B&÷w2Ò°¢²$FFR"Â%6V&6‚VW'’"Â%U$Ç2f÷VæB"Â$F—66÷&BÆ–æ·2"Â$GW&F–öâ%ÒÀ¢ââç6W76–öç2æÖ‚‡2’Óâ°¢2æ7&VFVDBçFô•4õ7G&–ær‚’À¢2çVW'’À¢2ç&W7VÇG2æÆVæwF‚À¢2ç&W7VÇG2ç&VGV6R‚†âÂ"’Óââ²"æF—66÷&DÆ–æ·2æÆVæwF‚Â’À¢2æ6ö×ÆWFVD@¢ò7G&–ær‡2æ6ö×ÆWFVDBævWEF–ÖR‚’Ò2æ7&VFVDBævWEF–ÖR‚’¢¢""À¢Ò’À¢Ó°¢&W0¢çG—R‚'FW‡Bö77b"¢ç6VæB‡&÷w2æÖ‚‡"’Óâ"æÖ†77dW66R’æ¦ö–â‚"Â"’’æ¦ö–â‚%Æâ"’“°§Ò“° ¦ævWB‚"ö’÷v÷&·76R"Â7–æ2‡&WÂ&W2’Óâ°¢6öç7BWF‚Ò‡&W2WF…&WVW7B’æWFƒ°¢6öç7B¶W‡FVç6–öç2Â66ææW%ÒÒv—B&öÖ—6RæÆÂ…°¢&—6ÖæW‡FVç6–öä–ç7Fæ6Ræ6÷VçB‡°¢v†W&S¢°¢v÷&·76T–C¢WF‚çv÷&·76T–BÀ¢&Wfö¶VDC¢çVÆÂÀ¢Æ7E6VVã¢²wFS¢æWrFFR„FFRææ÷r‚’Ò"¢c¢’ÒÀ¢ÒÀ¢Ò’À¢&—6Öç66ææW%7FFRæf–æEVæ—VR‡°¢v†W&S¢²v÷&·76T–C¢WF‚çv÷&·76T–BÒÀ¢Ò’À¢Ò“°¢&W2æ§6öâ‡²ââæWF‚çv÷&·76RÂ6öææV7FVDW‡FVç6–öç3¢W‡FVç6–öç2Â66ææW"Ò“°§Ò“°¦ç÷7B€¢"ö’÷v÷&·76R÷&VvVæW&FR×66ææW"Ö–B"À¢&WV—&U&öÆR‚$DÔ”â"’À¢7–æ2‡&WÂ&W2ÂæW‡B’Óâ°¢G'’°¢6öç7BWF‚Ò‡&W2WF…&WVW7B’æWFƒ°¢6öç7B6öæf—&ÖF–öâÒ ¢æö&¦V7B‡²6öæf—&Ó¢¢æÆ—FW&Â‚%$TtTäU$DR"’Ò¢ç'6R‡&Wæ&öG’“°¢fö–B6öæf—&ÖF–öã°¢ÆWB66ææW$–BÒvVæW&FU66ææW$–B‚“°¢v†–ÆR†v—B&—6Öçv÷&·76Ræf–æEVæ—VR‡²v†W&S¢²66ææW$–BÒÒ’¢66ææW$–BÒvVæW&FU66ææW$–B‚“°¢6öç7B·v÷&·76UÒÒv—B&—6ÖâGG&ç67F–öâ…°¢&—6Öçv÷&·76RçWFFR‡°¢v†W&S¢²–C¢WF‚çv÷&·76T–BÒÀ¢FF¢²66ææW$–BÒÀ¢Ò’À¢&—6ÖæW‡FVç6–öä–ç7Fæ6RçWFFTÖç’‡°¢v†W&S¢²v÷&·76T–C¢WF‚çv÷&·76T–BÂ&Wfö¶VDC¢çVÆÂÒÀ¢FF¢²&Wfö¶VDC¢æWrFFR‚’Â66ææW%7FFS¢%5DõTB"ÒÀ¢Ò’À¢Ò“°¢v—BVF—B‡&WÂ%44ääU%ô”Eõ$TtTäU$DTB"Â%v÷&·76R"ÂWF‚çv÷&·76T–B“°¢&W2æ§6öâ‡²66ææW$–C¢v÷&·76Rç66ææW$–BÒ“°¢Ò6F6‚†W'&÷"’°¢æW‡B†W'&÷"“°¢Ð¢ÒÀ¢“° ¦ævWB‚"ö’öFÖ–âö÷fW'f–Wr"Â&WV—&U&öÆR‚$DÔ”â"’Â7–æ2‡&WÂ&W2’Óâ°¢6öç7Bv÷&·76T–BÒ‡&W2WF…&WVW7B’æWF‚çv÷&·76T–C°¢6öç7B°¢W6W'2À¢7F—fUW6W'2À¢W‡FVç6–öç2À¢66ææW%&W7VÇG2À¢ÆVG2À¢66ææW"À¢&6·WÀ¢ÒÒv—B&öÖ—6RæÆÂ…°¢&—6ÖçW6W"æ6÷VçB‡²v†W&S¢²v÷&·76T–BÒÒ’À¢&—6ÖçW6W"æ6÷VçB‡²v†W&S¢²v÷&·76T–BÂ7FGW3¢$5D•dR"ÒÒ’À¢&—6ÖæW‡FVç6–öä–ç7Fæ6Ræ6÷VçB‡°¢v†W&S¢°¢v÷&·76T–BÀ¢&Wfö¶VDC¢çVÆÂÀ¢Æ7E6VVã¢²wFS¢æWrFFR„FFRææ÷r‚’Ò"¢c¢’ÒÀ¢ÒÀ¢Ò’À¢&—6Öç66ææW%&W7VÇBæ6÷VçB‡²v†W&S¢²v÷&·76T–BÒÒ’À¢&—6ÖæÆVBæ6÷VçB‡²v†W&S¢²v÷&·76T–BÒÒ’À¢&—6Öç66ææW%7FFRæf–æEVæ—VR‡²v†W&S¢²v÷&·76T–BÒÒ’À¢&—6Öæ&6·WÖWFFFæf–æDf—'7B‡°¢v†W&S¢²7FGW3¢$4ôÕÄUDTB"ÒÀ¢÷&FW$'“¢²7&VFVDC¢&FW62"ÒÀ¢Ò’À¢Ò“°¢&W2æ§6öâ‡°¢W6W'2À¢7F—fUW6W'2À¢6öææV7FVDW‡FVç6–öç3¢W‡FVç6–öç2À¢66ææW%&W7VÇG2À¢ÆVG2À¢66ææW'5'Vææ–æs¢66ææW#òç7FGW2ÓÓÒ%%Tää”är"ò¢À¢Æ7D&6·W¢&6·Wòæ7&VFVDBÇÂçVÆÂÀ¢Ò“°§Ò“°¦ævWB‚"ö’öFÖ–â÷W6W'2"Â&WV—&U&öÆR‚$DÔ”â"’Â7–æ2‡&WÂ&W2’Óâ°¢6öç7Bv÷&·76T–BÒ‡&W2WF…&WVW7B’æWF‚çv÷&·76T–C°¢&W2æ§6öâ€¢v—B&—6ÖçW6W"æf–æDÖç’‡°¢v†W&S¢²v÷&·76T–BÒÀ¢÷&FW$'“¢²7&VFVDC¢&FW62"ÒÀ¢6VÆV7C¢°¢–C¢G'VRÀ¢W6W&æÖS¢G'VRÀ¢&öÆS¢G'VRÀ¢7FGW3¢G'VRÀ¢&WV—&U77v÷&D6†ævS¢G'VRÀ¢Æ7DÆöv–äC¢G'VRÀ¢7&VFVDC¢G'VRÀ¢ö6÷VçC¢²6VÆV7C¢²76–væVDÆVG3¢G'VRÂW‡FVç6–öä–ç7Fæ6W3¢G'VRÒÒÀ¢ÒÀ¢Ò’À¢“°§Ò“°¦ç÷7B‚"ö’öFÖ–â÷W6W'2"Â&WV—&U&öÆR‚$DÔ”â"’Â7–æ2‡&WÂ&W2ÂæW‡B’Óâ°¢G'’°¢6öç7BWF‚Ò‡&W2WF…&WVW7B’æWFƒ°¢6öç7B–çWBÒ66÷VçE66†VÖ¢æW‡FVæB‡°¢&öÆS¢¢æVçVÒ‡&öÆW2’À¢&WV—&U77v÷&D6†ævS¢¢æ&ööÆVâ‚’æFVfVÇB‡G'VR’À¢Ò¢ç'6R‡&Wæ&öG’“°¢6öç7BW6W"Òv—B&—6ÖçW6W"æ7&VFR‡°¢FF¢°¢v÷&·76T–C¢WF‚çv÷&·76T–BÀ¢æÖS¢–çWBçW6W&æÖRÀ¢W6W&æÖS¢–çWBçW6W&æÖRÀ¢77v÷&D†6ƒ¢v—B†6…77v÷&B†–çWBç77v÷&B’À¢&öÆS¢–çWBç&öÆRÀ¢&WV—&U77v÷&D6†ævS¢–çWBç&WV—&U77v÷&D6†ævRÀ¢ÒÀ¢6VÆV7C¢°¢–C¢G'VRÀ¢W6W&æÖS¢G'VRÀ¢&öÆS¢G'VRÀ¢7FGW3¢G'VRÀ¢ÒÀ¢Ò“°¢v—BVF—B‡&WÂ%U4U%ô5$TDTB"Â%W6W""ÂW6W"æ–BÂ²&öÆS¢W6W"ç&öÆRÒ“°¢&W2ç7FGW2ƒ#’æ§6öâ‡W6W"“°¢Ò6F6‚†W'&÷"’°¢æW‡B†W'&÷"“°¢Ð§Ò“°¦çF6‚€¢"ö’öFÖ–â÷W6W'2ó¦–B"À¢&WV—&U&öÆR‚$DÔ”â"’À¢7–æ2‡&WÂ&W2ÂæW‡B’Óâ°¢G'’°¢6öç7BWF‚Ò‡&W2WF…&WVW7B’æWFƒ°¢6öç7BF&vWBÒv—B&—6ÖçW6W"æf–æDf—'7B‡°¢v†W&S¢²–C¢7G&–ær‡&Wç&×2æ–B’Âv÷&·76T–C¢WF‚çv÷&·76T–BÒÀ¢Ò“°¢–b‚F&vWB’&WGW&â&W2ç7FGW2ƒCB’æ§6öâ‡²W'&÷#¢$æ÷Bf÷VæB"Ò“°¢6öç7B–çWBÒ ¢æö&¦V7B‡°¢W6W&æÖS¢W6W&æÖU66†VÖæ÷F–öæÂ‚’À¢&öÆS¢¢æVçVÒ‡&öÆW2’æ÷F–öæÂ‚’À¢7FGW3¢¢æVçVÒ…²$5D•dR"Â$D•4$ÄTB%Ò’æ÷F–öæÂ‚’À¢FV×÷&'•77v÷&C¢æWu77v÷&E66†VÖæ÷F–öæÂ‚’À¢Ò¢ç'6R‡&Wæ&öG’“°¢–b‡F&vWBæ–BÓÓÒWF‚æ–Bbb–çWBç7FGW2ÓÓÒ$D•4$ÄTB"¢&WGW&â&W0¢ç7FGW2ƒC¢æ§6öâ‡²W'&÷#¢%–÷R6ææ÷BF—6&ÆR–÷W"÷vâ66÷VçB"Ò“°¢6öç7BW6W"Òv—B&—6ÖçW6W"çWFFR‡°¢v†W&S¢²–C¢F&vWBæ–BÒÀ¢FF¢°¢âââ†–çWBçW6W&æÖP¢ò²æÖS¢–çWBçW6W&æÖRÂW6W&æÖS¢–çWBçW6W&æÖRÐ¢¢·Ò’À¢&öÆS¢–çWBç&öÆRÀ¢7FGW3¢–çWBç7FGW2À¢âââ†–çWBçFV×÷&'•77v÷&@¢ò°¢77v÷&D†6ƒ¢v—B†6…77v÷&B†–çWBçFV×÷&'•77v÷&B’À¢&WV—&U77v÷&D6†ævS¢G'VRÀ¢Ð¢¢·Ò’À¢ÒÀ¢6VÆV7C¢°¢–C¢G'VRÀ¢W6W&æÖS¢G'VRÀ¢&öÆS¢G'VRÀ¢7FGW3¢G'VRÀ¢ÒÀ¢Ò“°¢–b†–çWBç7FGW2ÓÓÒ$D•4$ÄTB"¢v—B&—6ÖâGG&ç67F–öâ…°¢&—6ÖæWF…6W76–öâæFVÆWFTÖç’‡²v†W&S¢²W6W$–C¢F&vWBæ–BÒÒ’À¢&—6ÖæW‡FVç6–öä–ç7Fæ6RçWFFTÖç’‡°¢v†W&S¢²÷væW%W6W$–C¢F&vWBæ–BÂ&Wfö¶VDC¢çVÆÂÒÀ¢FF¢²&Wfö¶VDC¢æWrFFR‚’Â66ææW%7FFS¢%5DõTB"ÒÀ¢Ò’À¢Ò“°¢v—BVF—B‡&WÂ%U4U%õUDDTB"Â%W6W""ÂF&vWBæ–BÂ°¢&öÆS¢–çWBç&öÆRÀ¢7FGW3¢–çWBç7FGW2À¢77v÷&E&W6WC¢&ööÆVâ†–çWBçFV×÷&'•77v÷&B’À¢Ò“°¢&W2æ§6öâ‡W6W"“°¢Ò6F6‚†W'&÷"’°¢æW‡B†W'&÷"“°¢Ð¢ÒÀ¢“° ¦ævWB‚"ö’öFÖ–âöW‡FVç6–öç2"Â&WV—&U&öÆR‚$DÔ”â"’Â7–æ2‡&WÂ&W2’Óâ°¢6öç7Bv÷&·76T–BÒ‡&W2WF…&WVW7B’æWF‚çv÷&·76T–C°¢6öç7BW‡FVç6–öç2Òv—B&—6ÖæW‡FVç6–öä–ç7Fæ6Ræf–æDÖç’‡°¢v†W&S¢²v÷&·76T–BÒÀ¢÷&FW$'“¢²Æ7E6VVã¢&FW62"ÒÀ¢6VÆV7C¢°¢–C¢G'VRÀ¢–ç7Fæ6T–C¢G'VRÀ¢æÖS¢G'VRÀ¢66ææW%7FFS¢G'VRÀ¢7W'&VçE6V&6ƒ¢G'VRÀ¢7W'&VçEvS¢G'VRÀ¢vW566ææVC¢G'VRÀ¢&W7VÇG4f÷VæC¢G'VRÀ¢Væ—VUW&Ç56VçC¢G'VRÀ¢GWÆ–6FW56¶—VC¢G'VRÀ¢Æ7E6VVã¢G'VRÀ¢&Wfö¶VDC¢G'VRÀ¢7&VFVDC¢G'VRÀ¢÷væW%W6W#¢²6VÆV7C¢²–C¢G'VRÂW6W&æÖS¢G'VRÒÒÀ¢ÒÀ¢Ò“°¢&W2æ§6öâ€¢W‡FVç6–öç2æÖ‚†W‡FVç6–öâ’Óâ‡°¢ââæW‡FVç6–öâÀ¢6öææV7FVC ¢W‡FVç6–öâç&Wfö¶VDBb`¢W‡FVç6–öâæÆ7E6VVâævWEF–ÖR‚’ãÒFFRææ÷r‚’Ò"¢c¢À¢Ò’’À¢“°§Ò“°¦çF6‚€¢"ö’öFÖ–âöW‡FVç6–öç2ó¦–B"À¢&WV—&U&öÆR‚$DÔ”â"’À¢7–æ2‡&WÂ&W2ÂæW‡B’Óâ°¢G'’°¢6öç7BWF‚Ò‡&W2WF…&WVW7B’æWFƒ°¢6öç7BW‡FVç6–öâÒv—B&—6ÖæW‡FVç6–öä–ç7Fæ6Ræf–æDf—'7B‡°¢v†W&S¢²–C¢7G&–ær‡&Wç&×2æ–B’Âv÷&·76T–C¢WF‚çv÷&·76T–BÒÀ¢Ò“°¢–b‚W‡FVç6–öâ’&WGW&â&W2ç7FGW2ƒCB’æ§6öâ‡²W'&÷#¢$æ÷Bf÷VæB"Ò“°¢6öç7B–çWBÒ ¢æö&¦V7B‡°¢æÖS¢¢ç7G&–ær‚’çG&–Ò‚’æÖ–âƒ’æÖ‚ƒ’æ÷F–öæÂ‚’À¢&Wfö¶S¢¢æ&ööÆVâ‚’æ÷F–öæÂ‚’À¢Ò¢ç'6R‡&Wæ&öG’“°¢6öç7BWFFVBÒv—B&—6ÖæW‡FVç6–öä–ç7Fæ6RçWFFR‡°¢v†W&S¢²–C¢W‡FVç6–öâæ–BÒÀ¢FF¢°¢æÖS¢–çWBææÖRÀ¢âââ†–çWBç&Wfö¶P¢ò²&Wfö¶VDC¢æWrFFR‚’Â66ææW%7FFS¢%5DõTB"Ð¢¢·Ò’À¢ÒÀ¢6VÆV7C¢°¢–C¢G'VRÀ¢–ç7Fæ6T–C¢G'VRÀ¢æÖS¢G'VRÀ¢66ææW%7FFS¢G'VRÀ¢&Wfö¶VDC¢G'VRÀ¢ÒÀ¢Ò“°¢v—BVF—B€¢&WÀ¢–çWBç&Wfö¶Rò$U…DTå4”ôåõ$Udô´TB"¢$U…DTå4”ôåõ$TäÔTB"À¢$W‡FVç6–öä–ç7Fæ6R"À¢W‡FVç6–öâæ–BÀ¢“°¢&W2æ§6öâ‡WFFVB“°¢Ò6F6‚†W'&÷"’°¢æW‡B†W'&÷"“°¢Ð¢ÒÀ¢“°¦ç÷7B€¢"ö’öFÖ–âöW‡FVç6–öç2ó¦–Böf÷&6R×7F÷"À¢&WV—&U&öÆR‚$DÔ”â"’À¢7–æ2‡&WÂ&W2’Óâ°¢6öç7BWF‚Ò‡&W2WF…&WVW7B’æWFƒ°¢6öç7B&W7VÇBÒv—B&—6ÖæW‡FVç6–öä–ç7Fæ6RçWFFTÖç’‡°¢v†W&S¢²–C¢7G&–ær‡&Wç&×2æ–B’Âv÷&·76T–C¢WF‚çv÷&·76T–BÒÀ¢FF¢²66ææW%7FFS¢$dõ$4Uõ5DõTB"ÒÀ¢Ò“°¢–b‚&W7VÇBæ6÷VçB’&WGW&â&W2ç7FGW2ƒCB’æ§6öâ‡²W'&÷#¢$æ÷Bf÷VæB"Ò“°¢v—BVF—B€¢&WÀ¢%44ääU%ôdõ$4Uõ5DõTB"À¢$W‡FVç6–öä–ç7Fæ6R"À¢7G&–ær‡&Wç&×2æ–B’À¢“°¢&W2æ§6öâ‡²7F÷VC¢G'VRÒ“°¢ÒÀ¢“°¦ç÷7B€¢"ö’öFÖ–â÷66ææW'2÷7F÷ÖÆÂ"À¢&WV—&U&öÆR‚$DÔ”â"’À¢7–æ2‡&WÂ&W2ÂæW‡B’Óâ°¢G'’°¢6öç7BWF‚Ò‡&W2WF…&WVW7B’æWFƒ°¢v—B&—6ÖæW‡FVç6–öä–ç7Fæ6RçWFFTÖç’‡°¢v†W&S¢²v÷&·76T–C¢WF‚çv÷&·76T–BÂ&Wfö¶VDC¢çVÆÂÒÀ¢FF¢²66ææW%7FFS¢$dõ$4Uõ5DõTB"ÒÀ¢Ò“°¢v—B7F÷66ææW"†WF‚çv÷&·76T–B“°¢v—BVF—B‡&WÂ$ÄÅõ44ääU%5õ5DõTB"Â%v÷&·76R"ÂWF‚çv÷&·76T–B“°¢&W2æ§6öâ‡²7F÷VC¢G'VRÒ“°¢Ò6F6‚†W'&÷"’°¢æW‡B†W'&÷"“°¢Ð¢ÒÀ¢“°¦ævWB‚"ö’öFÖ–â÷66ææW'2"Â&WV—&U&öÆR‚$DÔ”â"’Â7–æ2‡&WÂ&W2’Óâ°¢6öç7Bv÷&·76T–BÒ‡&W2WF…&WVW7B’æWF‚çv÷&·76T–C°¢6öç7B·v÷&·76U66ææW"ÂW‡FVç6–öç5ÒÒv—B&öÖ—6RæÆÂ…°¢&—6Öç66ææW%7FFRæf–æEVæ—VR‡²v†W&S¢²v÷&·76T–BÒÒ’À¢&—6ÖæW‡FVç6–öä–ç7Fæ6Ræf–æDÖç’‡°¢v†W&S¢²v÷&·76T–BÂ&Wfö¶VDC¢çVÆÂÒÀ¢÷&FW$'“¢²Æ7E6VVã¢&FW62"ÒÀ¢6VÆV7C¢°¢–C¢G'VRÀ¢–ç7Fæ6T–C¢G'VRÀ¢æÖS¢G'VRÀ¢66ææW%7FFS¢G'VRÀ¢7W'&VçE6V&6ƒ¢G'VRÀ¢7W'&VçEvS¢G'VRÀ¢vW566ææVC¢G'VRÀ¢&W7VÇG4f÷VæC¢G'VRÀ¢Æ7E6VVã¢G'VRÀ¢ÒÀ¢Ò’À¢Ò“°¢&W2æ§6öâ‡²v÷&·76U66ææW"ÂW‡FVç6–öç2Ò“°§Ò“°¦ævWB‚"ö’öFÖ–âöVF—B"Â&WV—&U&öÆR‚$DÔ”â"’Â7–æ2‡&WÂ&W2’Óâ°¢&W2æ§6öâ€¢v—B&—6ÖæVF—DÆöræf–æDÖç’‡°¢v†W&S¢²v÷&·76T–C¢‡&W2WF…&WVW7B’æWF‚çv÷&·76T–BÒÀ¢÷&FW$'“¢²7&VFVDC¢&FW62"ÒÀ¢F¶S¢SÀ¢–æ6ÇVFS¢°¢7F÷#¢²6VÆV7C¢²–C¢G'VRÂW6W&æÖS¢G'VRÒÒÀ¢ÒÀ¢Ò’À¢“°§Ò“° ¦ævWB‚"ö’öFÖ–âö&6·W2"Â&WV—&U&öÆR‚$DÔ”â"’Â7–æ2…÷&WÂ&W2’Óà¢&W2æ§6öâ€¢v—B&—6Öæ&6·WÖWFFFæf–æDÖç’‡²÷&FW$'“¢²7&VFVDC¢&FW62"ÒÒ’À¢’À¢“°¦ç÷7B‚"ö’öFÖ–âö&6·W2"Â&WV—&U&öÆR‚$DÔ”â"’Â7–æ2‡&WÂ&W2ÂæW‡B’Óâ°¢G'’°¢6öç7BWF‚Ò‡&W2WF…&WVW7B’æWFƒ°¢6öç7B&6·WÒv—B7&VFT&6·W‚$ÔåTÂ"ÂWF‚æ–B“°¢v—BVF—B‡&WÂ$$4µUô5$TDTB"Â$&6·WÖWFFF"Â&6·Wæ–B“°¢&W2ç7FGW2ƒ#’æ§6öâ†&6·W“°¢Ò6F6‚†W'&÷"’°¢æW‡B†W'&÷"“°¢Ð§Ò“°¦ç÷7B€¢"ö’öFÖ–âö&6·W2÷WÆöB"À¢&WV—&U&öÆR‚$DÔ”â"’À¢W‡&W72ç&r‡²G—S¢&Æ–6F–öâöö7FWB×7G&VÒ"ÂÆ–Ö—C¢#Ö""Ò’À¢7–æ2‡&WÂ&W2ÂæW‡B’Óâ°¢G'’°¢6öç7BWF‚Ò‡&W2WF…&WVW7B’æWFƒ°¢–b‚'VffW"æ—4'VffW"‡&Wæ&öG’’¢&WGW&â&W0¢ç7FGW2ƒC¢æ§6öâ‡²W'&÷#¢$5Æ—FR&6·Wf–ÆR—2&WV—&VB"Ò“°¢6öç7B&6·WÒv—B–×÷'D&6·W‡&Wæ&öG’ÂWF‚æ–B“°¢v—BVF—B‡&WÂ$$4µUõUÄôDTB"Â$&6·WÖWFFF"Â&6·Wæ–B“°¢&W2ç7FGW2ƒ#’æ§6öâ†&6·W“°¢Ò6F6‚†W'&÷"’°¢æW‡B†W'&÷"“°¢Ð¢ÒÀ¢“°¦ævWB€¢"ö’öFÖ–âö&6·W2ó¦–BöF÷væÆöB"À¢&WV—&U&öÆR‚$DÔ”â"’À¢7–æ2‡&WÂ&W2’Óâ°¢6öç7B&6·WÒv—B&—6Öæ&6·WÖWFFFæf–æEVæ—VR‡°¢v†W&S¢²–C¢7G&–ær‡&Wç&×2æ–B’ÒÀ¢Ò“°¢–b‚&6·W’&WGW&â&W2ç7FGW2ƒCB’æ§6öâ‡²W'&÷#¢$æ÷Bf÷VæB"Ò“°¢&W2æF÷væÆöB†&6·Wf–ÆUF‚†&6·Wæf–ÆVæÖR’Â&6·Wæf–ÆVæÖR“°¢ÒÀ¢“°¦æFVÆWFR‚"ö’öFÖ–âö&6·W2ó¦–B"Â&WV—&U&öÆR‚$DÔ”â"’Â7–æ2‡&WÂ&W2’Óâ°¢6öç7B&6·WÒv—B&—6Öæ&6·WÖWFFFæf–æEVæ—VR‡°¢v†W&S¢²–C¢7G&–ær‡&Wç&×2æ–B’ÒÀ¢Ò“°¢–b‚&6·W’&WGW&â&W2ç7FGW2ƒCB’æ§6öâ‡²W'&÷#¢$æ÷Bf÷VæB"Ò“°¢v—BFVÆWFT&6·W†&6·Wæf–ÆVæÖR“°¢v—B&—6Öæ&6·WÖWFFFæFVÆWFR‡²v†W&S¢²–C¢&6·Wæ–BÒÒ“°¢v—BVF—B‡&WÂ$$4µUôDTÄUDTB"Â$&6·WÖWFFF"Â&6·Wæ–B“°¢&W2ç7FGW2ƒ#B’æVæB‚“°§Ò“°¦ç÷7B€¢"ö’öFÖ–âö&6·W2ó¦–B÷&W7F÷&R"À¢&WV—&U&öÆR‚$DÔ”â"’À¢7–æ2‡&WÂ&W2ÂæW‡B’Óâ°¢G'’°¢6öç7BWF‚Ò‡&W2WF…&WVW7B’æWFƒ°¢¢æö&¦V7B‡²6öæf—&Ó¢¢æÆ—FW&Â‚%$U5Dõ$R"’Ò’ç'6R‡&Wæ&öG’“°¢6öç7B&6·WÒv—B&—6Öæ&6·WÖWFFFæf–æEVæ—VR‡°¢v†W&S¢²–C¢7G&–ær‡&Wç&×2æ–B’ÒÀ¢Ò“°¢–b‚&6·W’&WGW&â&W2ç7FGW2ƒCB’æ§6öâ‡²W'&÷#¢$æ÷Bf÷VæB"Ò“°¢v—B7F÷66ææW"†WF‚çv÷&·76T–B“°¢6öç7B&W7VÇBÒv—B&W7F÷&T&6·W†&6·Wæf–ÆVæÖRÂWF‚æ–B“°¢6öç7B·&W7F÷&VD7F÷"Â&W7F÷&VEv÷&·76UÒÒv—B&öÖ—6RæÆÂ…°¢&—6ÖçW6W"æf–æEVæ—VR‡°¢v†W&S¢²–C¢WF‚æ–BÒÀ¢6VÆV7C¢²–C¢G'VRÒÀ¢Ò’À¢&—6Öçv÷&·76Ræf–æEVæ—VR‡°¢v†W&S¢²–C¢WF‚çv÷&·76T–BÒÀ¢6VÆV7C¢²–C¢G'VRÒÀ¢Ò’À¢Ò“°¢v—B&—6ÖæVF—DÆöræ7&VFR‡°¢FF¢°¢v÷&·76T–C¢&W7F÷&VEv÷&·76Sòæ–BÀ¢7F÷$–C¢&W7F÷&VD7F÷#òæ–BÀ¢7F–öã¢$$4µUõ$U5Dõ$TB"À¢F&vWEG—S¢$&6·WÖWFFF"À¢F&vWD–C¢&6·Wæ–BÀ¢ÒÀ¢Ò“°¢6ÆV%6W76–öä6öö¶–R‡&W2“°¢&W2æ§6öâ‡&W7VÇB“°¢Ò6F6‚†W'&÷"’°¢æW‡B†W'&÷"“°¢Ð¢ÒÀ¢“°¦çW6R‚…÷&WÂ&W2’Óâ°¢&W2ç7FGW2ƒCB’æ§6öâ‡²W'&÷#¢$’&÷WFRæ÷Bf÷VæB"Ò“°§Ò“°¦çW6R€¢€¢W'#¢ç’À¢÷&W¢W‡&W72å&WVW7BÀ¢&W3¢W‡&W72å&W7öç6RÀ¢öæW‡C¢W‡&W72äæW‡DgVæ7F–öâÀ¢’Óâ°¢6öç7BGWÆ–6FUW6W&æÖRÐ¢W'#òæ6öFRÓÓÒ%#""b`¢¥4ôâç7G&–æv–g’†W'#òæÖWFòçF&vWBÇÂ""’æ–æ6ÇVFW2‚'W6W&æÖR"“°¢6öç7B7FGW2Ð¢W'#òç7FGW46öFRóð¢†W'#òææÖRÓÓÒ%¦öDW'&÷""òC¢GWÆ–6FUW6W&æÖRòC’¢S“°¢–b‡7FGW2ãÒS’6öç6öÆRæW'&÷"†W'"“°¢&W2ç7FGW2‡7FGW2’æ§6öâ‡°¢W'&÷#¢GWÆ–6FUW6W&æÖP¢ò%W6W&æÖR—2Ç&VG’–âW6Râ ¢¢7FGW2ãÒSbb&ö6W72æVçbääôDUôTåbÓÓÒ'&öGV7F–öâ ¢ò%VæW‡V7FVB6W'fW"W'&÷" ¢¢W'"–ç7Fæ6VöbW'&÷ ¢òW'"æÖW76vP¢¢%VæW‡V7FVB6W'fW"W'&÷""À¢Ò“°¢ÒÀ¢“°¦W‡÷'BFVfVÇB° 
+        body.source.toLowerCase(),
+      );
+      if (
+        isExcludedBusinessPlatform(normalized) ||
+        (providerResult &&
+          isExcludedBusinessSearchResult({
+            url: normalized,
+            title: item.title,
+          }))
+      ) {
+        excluded++;
+        continue;
+      }
+      await assertPublicUrl(normalized);
+      const hostname = extractDomain(normalized);
+      const domain = await prisma.domain.upsert({
+        where: { hostname },
+        create: { hostname },
+        update: { lastSeen: new Date() },
+      });
+      const archived = await prisma.searchResult.upsert({
+        where: {
+          searchSessionId_normalizedUrl: {
+            searchSessionId: session.id,
+            normalizedUrl: normalized,
+          },
+        },
+        create: {
+          searchSessionId: session.id,
+          title: item.title,
+          url: item.url,
+          normalizedUrl: normalized,
+          domainId: domain.id,
+          position: item.position,
+        },
+        update: { title: item.title, position: item.position },
+      });
+      const existing = await prisma.scannerResult.findUnique({
+        where: {
+          workspaceId_domainId: {
+            workspaceId: body.workspaceId,
+            domainId: domain.id,
+          },
+        },
+      });
+      const workspace = await prisma.scannerResult.upsert({
+        where: {
+          workspaceId_domainId: {
+            workspaceId: body.workspaceId,
+            domainId: domain.id,
+          },
+        },
+        create: {
+          workspaceId: body.workspaceId,
+          url: item.url,
+          normalizedUrl: normalized,
+          title: item.title,
+          domainId: domain.id,
+        },
+        update: {
+          title: item.title || undefined,
+          url: item.url,
+          lastSeen: new Date(),
+        },
+      });
+      if (!existing) created++;
+      await prisma.scannerSource.upsert({
+        where: {
+          scannerResultId_searchSessionId: {
+            scannerResultId: workspace.id,
+            searchSessionId: session.id,
+          },
+        },
+        create: {
+          scannerResultId: workspace.id,
+          searchSessionId: session.id,
+          query: body.searchQuery,
+          clientId: body.clientId,
+          position: item.position,
+        },
+        update: {
+          position: item.position,
+          query: body.searchQuery,
+          clientId: body.clientId,
+        },
+      });
+      const synced = await syncScannerResultToLead({
+        workspaceId: body.workspaceId,
+        scannerResultId: workspace.id,
+        searchResultId: archived.id,
+        actorId: body.actorId,
+        sourceLabel: body.searchQuery,
+      });
+      if (synced.created) leadsAdded++;
+      imported++;
+      acceptedDomains.add(hostname);
+    } catch {
+      // Invalid, unresolvable, and non-public URLs are deliberately rejected.
+    }
+  }
+  const state = await prisma.scannerState.findUniqueOrThrow({
+    where: { workspaceId: body.workspaceId },
+  });
+  if (state.status === "COMPLETED" && created)
+    await prisma.scannerState.update({
+      where: { workspaceId: body.workspaceId },
+      data: { status: "IDLE" },
+    });
+  emit(
+    "import",
+    {
+      sessionId: session.id,
+      count: imported,
+      created,
+      query: body.searchQuery,
+      clientId: body.clientId,
+      workspaceId: body.workspaceId,
+      excluded,
+      leadsAdded,
+    },
+    body.workspaceId,
+  );
+  return {
+    sessionId: session.id,
+    imported,
+    created,
+    duplicates: imported - created,
+    excluded,
+    leadsAdded,
+    rejected: body.results.length - imported - excluded,
+    acceptedDomains: [...acceptedDomains],
+  };
+}
+
+app.post("/api/search/import", requireExtension, async (req, res, next) => {
+  try {
+    await scannerReady;
+    const body = importSearchSchema.parse(req.body);
+    const extension = (req as ExtensionRequest).extension;
+    const result = await persistImport({
+      ...body,
+      workspaceId: extension.workspaceId,
+      extensionInstanceId: extension.id,
+      clientId: extension.instanceId,
+    });
+    await prisma.extensionInstance.update({
+      where: { id: extension.id },
+      data: {
+        lastSeen: new Date(),
+        currentSearch: body.searchQuery,
+        scannerState: "RUNNING",
+        pagesScanned: { increment: 1 },
+        resultsFound: { increment: body.results.length },
+        uniqueUrlsSent: { increment: result.created },
+        duplicatesSkipped: { increment: result.duplicates },
+      },
+    });
+    res.status(201).json(result);
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.post(
+  "/api/extension/scanner/start",
+  requireExtension,
+  async (req, res, next) => {
+    try {
+      await scannerReady;
+      const extension = (req as ExtensionRequest).extension;
+      const settings = await getSettings(extension.workspaceId);
+      await prisma.extensionInstance.update({
+        where: { id: extension.id },
+        data: { scannerState: "RUNNING", lastSeen: new Date() },
+      });
+      res.status(202).json(
+        await startScanner(extension.workspaceId, {
+          crawlerConcurrency: Number(settings.crawlerConcurrency),
+          adaptiveConcurrency: Boolean(settings.adaptiveConcurrency),
+          timeoutSeconds: Number(settings.timeoutSeconds),
+          retries: Number(settings.retries),
+          dynamicFallback: Boolean(settings.dynamicFallback),
+          robotsRespect: Boolean(settings.robotsRespect),
+          deepScan: Boolean(settings.deepScan),
+          maxPages: Number(settings.maxPages),
+          maxDepth: Number(settings.maxDepth),
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.post(
+  "/api/extension/scanner/stop",
+  requireExtension,
+  async (req, res, next) => {
+    try {
+      const extension = (req as ExtensionRequest).extension;
+      await prisma.extensionInstance.update({
+        where: { id: extension.id },
+        data: { scannerState: "STOPPED", lastSeen: new Date() },
+      });
+      res.json(await stopScanner(extension.workspaceId));
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.use("/api", (req, res, next) => {
+  if (maintenanceMode)
+    return res.status(503).json({ error: "Maintenance in progress" });
+  next();
+});
+app.use("/api", requireAuth);
+app.use("/api", (req, res, next) => {
+  const auth = (req as AuthRequest).auth;
+  const allowed = new Set([
+    "/auth/me",
+    "/auth/logout",
+    "/auth/change-password",
+  ]);
+  if (auth.requirePasswordChange && !allowed.has(req.path))
+    return res.status(403).json({
+      error: "You must change your temporary password before continuing",
+      code: "PASSWORD_CHANGE_REQUIRED",
+    });
+  next();
+});
+
+app.post("/api/scanner/import-links", async (req, res, next) => {
+  try {
+    await scannerReady;
+    const body = importLinksSchema.parse(req.body);
+    const auth = (req as AuthRequest).auth;
+    const result = await persistImport({
+      workspaceId: auth.workspaceId,
+      actorId: auth.id,
+      searchQuery: body.label,
+      source: "manual",
+      clientId: auth.workspace.scannerId,
+      pageUrl: "http://localhost/manual-link-import",
+      capturedAt: new Date().toISOString(),
+      results: body.urls.map((url, index) => ({
+        title: extractDomain(url),
+        url,
+        position: index + 1,
+      })),
+    });
+    res.status(201).json(result);
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.get("/api/search/brave/status", (_req, res) => {
+  res.json({
+    configured: braveSearchConfigured(),
+    provider: "Brave Search",
+    maxResults: MAX_SEARCH_TARGET_RESULTS,
+    resultsPerRequest: 20,
+    maxRequests: MAX_BRAVE_SEARCH_REQUESTS,
+    businessFilter: true,
+    defaultExcludedPlatforms: defaultExcludedBusinessPlatformCount,
+  });
+});
+
+app.post("/api/search/brave", async (req, res, next) => {
+  try {
+    await scannerReady;
+    const input = z
+      .object({
+        query: z.string().trim().min(2).max(300),
+        maxResults: z
+          .number()
+          .int()
+          .positive()
+          .max(MAX_SEARCH_TARGET_RESULTS)
+          .default(25),
+      })
+      .parse(req.body);
+    const auth = (req as AuthRequest).auth;
+    const discovery = await searchBrave(input.query, input.maxResults);
+    const imported = await persistImport({
+      workspaceId: auth.workspaceId,
+      actorId: auth.id,
+      searchQuery: input.query,
+      source: "brave",
+      clientId: auth.workspace.scannerId,
+      pageUrl: `https://search.brave.com/search?q=${encodeURIComponent(input.query)}`,
+      capturedAt: new Date().toISOString(),
+      results: discovery.results,
+    });
+    const settings = await getSettings(auth.workspaceId);
+    const scanner = await startScanner(auth.workspaceId, {
+      crawlerConcurrency: Number(settings.crawlerConcurrency),
+      adaptiveConcurrency: Boolean(settings.adaptiveConcurrency),
+      timeoutSeconds: Number(settings.timeoutSeconds),
+      retries: Number(settings.retries),
+      dynamicFallback: Boolean(settings.dynamicFallback),
+      robotsRespect: Boolean(settings.robotsRespect),
+      deepScan: Boolean(settings.deepScan),
+      maxPages: Number(settings.maxPages),
+      maxDepth: Number(settings.maxDepth),
+    });
+    await audit(
+      req,
+      "BRAVE_SEARCH_STARTED",
+      "SearchSession",
+      imported.sessionId,
+      {
+        query: input.query,
+        requestedResults: input.maxResults,
+        discoveredResults: discovery.results.length,
+        excludedPlatforms: discovery.excluded + imported.excluded,
+        requests: discovery.requests,
+      },
+    );
+    res.status(201).json({
+      ...imported,
+      requested: input.maxResults,
+      discovered: discovery.results.length,
+      excluded: discovery.excluded + imported.excluded,
+      complete: discovery.results.length >= input.maxResults,
+      requests: discovery.requests,
+      scanner,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/scanner", async (req, res, next) => {
+  try {
+    await scannerReady;
+    const page = Math.max(1, Number(req.query.page) || 1),
+      pageSize = Math.min(100, Math.max(10, Number(req.query.pageSize) || 50));
+    res.json(
+      await scannerSnapshot(
+        (req as AuthRequest).auth.workspaceId,
+        page,
+        pageSize,
+        String(req.query.search || ""),
+        String(req.query.status || "All"),
+      ),
+    );
+  } catch (e) {
+    next(e);
+  }
+});
+app.get("/api/clients", async (_req, res) => {
+  const auth = (_req as AuthRequest).auth;
+  res.json([auth.workspace.scannerId]);
+});
+app.post("/api/scanner/start", async (req, res, next) => {
+  try {
+    await scannerReady;
+    const workspaceId = (req as AuthRequest).auth.workspaceId;
+    const s = await getSettings(workspaceId);
+    res.status(202).json(
+      await startScanner(workspaceId, {
+        crawlerConcurrency: Number(s.crawlerConcurrency),
+        adaptiveConcurrency: Boolean(s.adaptiveConcurrency),
+        timeoutSeconds: Number(s.timeoutSeconds),
+        retries: Number(s.retries),
+        dynamicFallback: Boolean(s.dynamicFallback),
+        robotsRespect: Boolean(s.robotsRespect),
+        deepScan: Boolean(s.deepScan),
+        maxPages: Number(s.maxPages),
+        maxDepth: Number(s.maxDepth),
+      }),
+    );
+  } catch (e) {
+    next(e);
+  }
+});
+app.post("/api/scanner/stop", async (req, res, next) => {
+  try {
+    res.json(await stopScanner((req as AuthRequest).auth.workspaceId));
+  } catch (e) {
+    next(e);
+  }
+});
+app.post(
+  "/api/scanner/reset",
+  requireRole("ADMIN", "MANAGER"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      await resetScanner(auth.workspaceId);
+      await audit(req, "SCANNER_RESET", "Workspace", auth.workspaceId);
+      res.json({ reset: true });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+app.post("/api/scanner/retry-failed", async (req, res, next) => {
+  try {
+    const updated = await prisma.scannerResult.updateMany({
+      where: {
+        workspaceId: (req as AuthRequest).auth.workspaceId,
+        scanStatus: { in: ["Failed", "Timeout"] },
+      },
+      data: { scanStatus: "Pending", error: null },
+    });
+    res.json({ queued: updated.count });
+  } catch (e) {
+    next(e);
+  }
+});
+app.post("/api/scanner/results/:id/rescan", async (req, res, next) => {
+  try {
+    const auth = (req as unknown as AuthRequest).auth;
+    const item = await prisma.scannerResult.findFirst({
+      where: {
+        id: String(req.params.id),
+        workspaceId: auth.workspaceId,
+      },
+    });
+    if (!item) return res.status(404).json({ error: "Not found" });
+    await prisma.scannerResult.update({
+      where: { id: item.id },
+      data: { scanStatus: "Pending", error: null },
+    });
+    res.status(202).json({ queued: 1 });
+  } catch (e) {
+    next(e);
+  }
+});
+app.get("/api/export/scanner.csv", async (req, res) => {
+  const items = await prisma.scannerResult.findMany({
+    where: {
+      workspaceId: (req as AuthRequest).auth.workspaceId,
+      scanStatus: { not: "Excluded" },
+    },
+    include: {
+      domain: { include: { location: true } },
+      discordLinks: true,
+      sources: true,
+    },
+  });
+  const rows = [
+    [
+      "Website",
+      "Domain",
+      "Discord",
+      "Hosting Country",
+      "Status",
+      "Scan Engine",
+      "Fetch Mode",
+      "Final URL",
+      "Emails",
+      "Social Links",
+      "Pages Visited",
+      "Source Searches",
+      "First Seen",
+      "Last Seen",
+    ],
+    ...items.map((x) => [
+      x.url,
+      x.domain.hostname,
+      x.discordLinks.map((d) => d.url).join(" "),
+      x.domain.location?.country || "",
+      x.scanStatus,
+      x.scanEngine,
+      x.fetchMode,
+      x.finalUrl,
+      (() => {
+        try {
+          return (JSON.parse(x.emailsJson) as string[]).join(" ");
+        } catch {
+          return "";
+        }
+      })(),
+      (() => {
+        try {
+          return (JSON.parse(x.socialLinksJson) as { url: string }[])
+            .map((link) => link.url)
+            .join(" ");
+        } catch {
+          return "";
+        }
+      })(),
+      x.pagesVisited,
+      x.sources.map((s) => s.query).join(" | "),
+      x.firstSeen.toISOString(),
+      x.lastSeen.toISOString(),
+    ]),
+  ];
+  res
+    .set({
+      "content-type": "text/csv",
+      "content-disposition": 'attachment; filename="scanner-workspace.csv"',
+    })
+    .send(rows.map((r) => r.map(csvEscape).join(",")).join("\n"));
+});
+
+app.post("/api/scanner/leads", async (req, res, next) => {
+  try {
+    const auth = (req as AuthRequest).auth;
+    const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+    const results = await prisma.scannerResult.findMany({
+      where: { id: { in: ids }, workspaceId: auth.workspaceId },
+      include: { discordLinks: true, sources: true },
+    });
+    let added = 0;
+    for (const result of results) {
+      let discoveredEmails: string[] = [];
+      let discoveredSocials: { type: string; url: string }[] = [];
+      try {
+        discoveredEmails = JSON.parse(result.emailsJson);
+      } catch {}
+      try {
+        discoveredSocials = JSON.parse(result.socialLinksJson);
+      } catch {}
+      const discoveredTelegram = discoveredSocials.find(
+        (link) => link.type === "telegram",
+      )?.url;
+      const otherSocials = discoveredSocials
+        .filter((link) => link.type !== "telegram")
+        .map((link) => link.url)
+        .join("\n");
+      const existing = await prisma.lead.findUnique({
+        where: {
+          workspaceId_domainId: {
+            workspaceId: auth.workspaceId,
+            domainId: result.domainId,
+          },
+        },
+      });
+      await prisma.lead.upsert({
+        where: {
+          workspaceId_domainId: {
+            workspaceId: auth.workspaceId,
+            domainId: result.domainId,
+          },
+        },
+        create: {
+          workspaceId: auth.workspaceId,
+          domainId: result.domainId,
+          scannerResultId: result.id,
+          status: "New",
+          priority: "Medium",
+          website: result.finalUrl || result.url,
+          discordInvite:
+            result.discordLinks.find(
+              (link) => discordDestinationKind(link.url) === "invite",
+            )?.url || "",
+          email: discoveredEmails[0] || "",
+          telegram: discoveredTelegram || "",
+          otherContact: otherSocials,
+          activities: {
+            create: {
+              actorId: auth.id,
+              type: "created",
+              description: `Lead added from scanner${result.sources[0]?.query ? ` Â· ${result.sources[0].query}` : ""}`,
+            },
+          },
+        },
+        update: {
+          scannerResultId: result.id,
+          website: existing?.website
+            ? undefined
+            : result.finalUrl || result.url,
+          discordInvite: existing?.discordInvite
+            ? undefined
+            : result.discordLinks.find(
+                (link) => discordDestinationKind(link.url) === "invite",
+              )?.url || undefined,
+          email: existing?.email ? undefined : discoveredEmails[0] || undefined,
+          telegram: existing?.telegram ? undefined : discoveredTelegram,
+          otherContact: existing?.otherContact
+            ? undefined
+            : otherSocials || undefined,
+        },
+      });
+      if (!existing) added++;
+    }
+    emit("lead-update", { count: results.length }, auth.workspaceId);
+    res.json({ processed: results.length, added });
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.get("/api/search/sessions", async (req, res) =>
+  res.json(
+    await prisma.searchSession.findMany({
+      where: { workspaceId: (req as AuthRequest).auth.workspaceId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        results: {
+          include: {
+            discordLinks: true,
+            domain: { include: { location: true } },
+          },
+        },
+      },
+    }),
+  ),
+);
+app.get("/api/search/sessions/:id", async (req, res) => {
+  const auth = (req as unknown as AuthRequest).auth;
+  const item = await prisma.searchSession.findFirst({
+    where: {
+      id: String(req.params.id),
+      workspaceId: auth.workspaceId,
+    },
+    include: {
+      results: {
+        include: {
+          discordLinks: true,
+          domain: { include: { location: true } },
+        },
+      },
+    },
+  });
+  item ? res.json(item) : res.status(404).json({ error: "Not found" });
+});
+
+const leadInclude = {
+  domain: { include: { location: true } },
+  searchResult: { include: { discordLinks: true, searchSession: true } },
+  scannerResult: { include: { discordLinks: true, sources: true } },
+  assignedTo: { select: { id: true, username: true, role: true } },
+  activities: {
+    orderBy: { createdAt: "desc" as const },
+    include: { actor: { select: { id: true, username: true } } },
+  },
+  tags: { include: { tag: true } },
+};
+app.get("/api/leads", async (req, res) => {
+  const auth = (req as AuthRequest).auth;
+  const tag = String(req.query.tag || "");
+  res.json(
+    await prisma.lead.findMany({
+      where: {
+        workspaceId: auth.workspaceId,
+        OR: [
+          { scannerResultId: null },
+          { scannerResult: { scanStatus: { not: "Excluded" } } },
+        ],
+        ...(auth.role === "RESEARCHER" ? { assignedToId: auth.id } : {}),
+        ...(tag ? { tags: { some: { tag: { name: tag } } } } : {}),
+      },
+      orderBy: { updatedAt: "desc" },
+      include: leadInclude,
+    }),
+  );
+});
+app.get("/api/leads/:id", async (req, res) => {
+  const auth = (req as unknown as AuthRequest).auth;
+  const item = await prisma.lead.findFirst({
+    where: {
+      id: String(req.params.id),
+      workspaceId: auth.workspaceId,
+      ...(auth.role === "RESEARCHER" ? { assignedToId: auth.id } : {}),
+    },
+    include: leadInclude,
+  });
+  item ? res.json(item) : res.status(404).json({ error: "Not found" });
+});
+app.post("/api/leads", async (req, res, next) => {
+  try {
+    const auth = (req as AuthRequest).auth;
+    const url = normalizeUrl(String(req.body.url));
+    await assertPublicUrl(url);
+    const hostname = extractDomain(url);
+    const domain = await prisma.domain.upsert({
+      where: { hostname },
+      create: { hostname },
+      update: {},
+    });
+    const lead = await prisma.lead.upsert({
+      where: {
+        workspaceId_domainId: {
+          workspaceId: auth.workspaceId,
+          domainId: domain.id,
+        },
+      },
+      create: {
+        workspaceId: auth.workspaceId,
+        domainId: domain.id,
+        website: url,
+        status: "New",
+        priority: "Medium",
+        activities: {
+          create: {
+            actorId: auth.id,
+            type: "created",
+            description: "Lead added manually",
+          },
+        },
+      },
+      update: {},
+    });
+    res.status(201).json(lead);
+  } catch (e) {
+    next(e);
+  }
+});
+app.patch("/api/leads/:id", async (req, res, next) => {
+  try {
+    const auth = (req as unknown as AuthRequest).auth;
+    const parsed = leadPatchSchema.parse(req.body);
+    const { tags, ...data } = parsed;
+    const before = await prisma.lead.findFirst({
+      where: {
+        id: String(req.params.id),
+        workspaceId: auth.workspaceId,
+        ...(auth.role === "RESEARCHER" ? { assignedToId: auth.id } : {}),
+      },
+      include: { tags: { include: { tag: true } } },
+    });
+    if (!before) return res.status(404).json({ error: "Not found" });
+    const lead = await prisma.lead.update({
+      where: { id: String(req.params.id) },
+      data,
+    });
+    const labels: Record<string, string> = {
+      status: "Status",
+      priority: "Priority",
+      notes: "Notes",
+      companyName: "Company name",
+      contactName: "Contact name",
+      email: "Email",
+      discordUsername: "Discord username",
+      telegram: "Telegram",
+      otherContact: "Other contact",
+      website: "Website",
+      discordInvite: "Discord invite",
+    };
+    for (const [key, value] of Object.entries(data))
+      if (value !== undefined && value !== (before as any)[key])
+        await prisma.leadActivity.create({
+          data: {
+            leadId: lead.id,
+            actorId: auth.id,
+            type: key,
+            description:
+              key === "status" || key === "priority"
+                ? `${labels[key]} changed: ${(before as any)[key]} â†’ ${value}`
+                : key === "notes"
+                  ? "Notes updated"
+                  : `${labels[key]} updated`,
+          },
+        });
+    if (tags) {
+      const cleaned = [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
+      const old = before.tags.map((x) => x.tag.name);
+      for (const name of cleaned.filter((x) => !old.includes(x))) {
+        const tag = await prisma.tag.upsert({
+          where: {
+            workspaceId_name: { workspaceId: auth.workspaceId, name },
+          },
+          create: { workspaceId: auth.workspaceId, name },
+          update: {},
+        });
+        await prisma.leadTag.create({
+          data: { leadId: lead.id, tagId: tag.id },
+        });
+        await prisma.leadActivity.create({
+          data: {
+            leadId: lead.id,
+            actorId: auth.id,
+            type: "tag",
+            description: `Tag added: ${name}`,
+          },
+        });
+      }
+      for (const name of old.filter((x) => !cleaned.includes(x))) {
+        const tag = await prisma.tag.findUnique({
+          where: {
+            workspaceId_name: { workspaceId: auth.workspaceId, name },
+          },
+        });
+        if (tag)
+          await prisma.leadTag.delete({
+            where: { leadId_tagId: { leadId: lead.id, tagId: tag.id } },
+          });
+        await prisma.leadActivity.create({
+          data: {
+            leadId: lead.id,
+            actorId: auth.id,
+            type: "tag",
+            description: `Tag removed: ${name}`,
+          },
+        });
+      }
+    }
+    emit("lead-update", { id: lead.id }, auth.workspaceId);
+    res.json(
+      await prisma.lead.findUnique({
+        where: { id: lead.id },
+        include: leadInclude,
+      }),
+    );
+  } catch (e) {
+    next(e);
+  }
+});
+app.delete(
+  "/api/leads/:id",
+  requireRole("ADMIN", "MANAGER"),
+  async (req, res) => {
+    await prisma.lead.deleteMany({
+      where: {
+        id: String(req.params.id),
+        workspaceId: (req as AuthRequest).auth.workspaceId,
+      },
+    });
+    res.status(204).end();
+  },
+);
+app.post(
+  "/api/leads/bulk",
+  requireRole("ADMIN", "MANAGER"),
+  async (req, res, next) => {
+    try {
+      const workspaceId = (req as AuthRequest).auth.workspaceId;
+      const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+      if (req.body.action === "delete")
+        await prisma.lead.deleteMany({
+          where: { id: { in: ids }, workspaceId },
+        });
+      else {
+        const { tags, ...data } = leadPatchSchema.parse(req.body.data);
+        void tags;
+        await prisma.lead.updateMany({
+          where: { id: { in: ids }, workspaceId },
+          data,
+        });
+      }
+      res.json({ updated: ids.length });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+app.get(
+  "/api/team/users",
+  requireRole("ADMIN", "MANAGER"),
+  async (req, res) => {
+    const workspaceId = (req as AuthRequest).auth.workspaceId;
+    const users = await prisma.user.findMany({
+      where: { workspaceId, status: "ACTIVE" },
+      orderBy: { username: "asc" },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        _count: {
+          select: {
+            assignedLeads: {
+              where: { status: { notIn: ["Won", "Lost", "Ignore"] } },
+            },
+          },
+        },
+      },
+    });
+    res.json(users);
+  },
+);
+app.post(
+  "/api/leads/bulk-assign",
+  requireRole("ADMIN", "MANAGER"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      const input = z
+        .object({
+          ids: z.array(z.string()).min(1).max(5000),
+          assignedToId: z.string().nullable(),
+        })
+        .parse(req.body);
+      const assignee = input.assignedToId
+        ? await prisma.user.findFirst({
+            where: {
+              id: input.assignedToId,
+              workspaceId: auth.workspaceId,
+              status: "ACTIVE",
+            },
+          })
+        : null;
+      if (input.assignedToId && !assignee)
+        return res.status(400).json({ error: "Invalid assignee" });
+      const leads = await prisma.lead.findMany({
+        where: { id: { in: input.ids }, workspaceId: auth.workspaceId },
+        select: { id: true, assignedToId: true },
+      });
+      await prisma.$transaction([
+        prisma.lead.updateMany({
+          where: {
+            id: { in: leads.map((lead) => lead.id) },
+            workspaceId: auth.workspaceId,
+          },
+          data: { assignedToId: assignee?.id || null },
+        }),
+        ...leads.map((lead) =>
+          prisma.leadActivity.create({
+            data: {
+              leadId: lead.id,
+              actorId: auth.id,
+              previousAssigneeId: lead.assignedToId,
+              newAssigneeId: assignee?.id,
+              type: "assignment",
+              description: assignee
+                ? `Assigned to ${assignee.username} by ${auth.username}`
+                : `Unassigned by ${auth.username}`,
+            },
+          }),
+        ),
+      ]);
+      if (assignee && assignee.id !== auth.id)
+        await prisma.notification.create({
+          data: {
+            workspaceId: auth.workspaceId,
+            userId: assignee.id,
+            type: "assignment",
+            title: `${leads.length} lead${leads.length === 1 ? "" : "s"} assigned`,
+            body: `${auth.username} assigned ${leads.length} lead${leads.length === 1 ? "" : "s"} to you.`,
+          },
+        });
+      await audit(req, "LEADS_ASSIGNED", "Lead", undefined, {
+        count: leads.length,
+        assignedToId: assignee?.id || null,
+      });
+      emit("lead-update", { count: leads.length }, auth.workspaceId);
+      res.json({ updated: leads.length });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.get("/api/notifications", async (req, res) => {
+  const auth = (req as AuthRequest).auth;
+  res.json(
+    await prisma.notification.findMany({
+      where: { userId: auth.id, workspaceId: auth.workspaceId },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+  );
+});
+app.post("/api/notifications/read", async (req, res) => {
+  const auth = (req as AuthRequest).auth;
+  const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+  const result = await prisma.notification.updateMany({
+    where: { id: { in: ids }, userId: auth.id },
+    data: { readAt: new Date() },
+  });
+  res.json({ updated: result.count });
+});
+app.get("/api/tags", async (req, res) =>
+  res.json(
+    await prisma.tag.findMany({
+      where: { workspaceId: (req as AuthRequest).auth.workspaceId },
+      orderBy: { name: "asc" },
+    }),
+  ),
+);
+
+async function locateDomain(domainId: string, workspaceId: string) {
+  const domain = await prisma.domain.findUniqueOrThrow({
+    where: { id: domainId },
+  });
+  const addresses = await dns.lookup(domain.hostname, { all: true });
+  const ip =
+    addresses.find((a) => !a.address.includes(":"))?.address ??
+    addresses[0]?.address;
+  if (!ip) throw new Error("DNS lookup returned no address");
+  await assertPublicUrl(`http://${domain.hostname}`);
+  let data: any = {};
+  try {
+    const template = process.env.IP_GEOLOCATION_URL || "https://ipwho.is/{ip}";
+    const r = await fetch(template.replace("{ip}", encodeURIComponent(ip)), {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (r.ok) data = await r.json();
+  } catch {}
+  const location = await prisma.hostingLocation.upsert({
+    where: { domainId },
+    create: {
+      domainId,
+      ipAddress: ip,
+      country: data.country,
+      countryCode: data.country_code,
+      region: data.region,
+      city: data.city,
+      asn: data.connection?.asn ? String(data.connection.asn) : undefined,
+      provider: data.connection?.isp || data.connection?.org,
+      status: "Completed",
+    },
+    update: {
+      ipAddress: ip,
+      country: data.country,
+      countryCode: data.country_code,
+      region: data.region,
+      city: data.city,
+      asn: data.connection?.asn ? String(data.connection.asn) : undefined,
+      provider: data.connection?.isp || data.connection?.org,
+      status: "Completed",
+      checkedAt: new Date(),
+    },
+  });
+  const leads = await prisma.lead.findMany({
+    where: { domainId, workspaceId },
+  });
+  for (const lead of leads)
+    await prisma.leadActivity.create({
+      data: {
+        leadId: lead.id,
+        type: "location",
+        description: `Hosting location resolved${location.country ? `: ${location.country}` : ""}`,
+      },
+    });
+  return location;
+}
+app.get("/api/location", async (req, res) =>
+  res.json(
+    await prisma.domain.findMany({
+      where: {
+        OR: [
+          {
+            scannerResults: {
+              some: { workspaceId: (req as AuthRequest).auth.workspaceId },
+            },
+          },
+          {
+            leads: {
+              some: { workspaceId: (req as AuthRequest).auth.workspaceId },
+            },
+          },
+        ],
+      },
+      orderBy: { lastSeen: "desc" },
+      include: { location: true },
+    }),
+  ),
+);
+app.post("/api/location/check", async (req, res, next) => {
+  try {
+    const workspaceId = (req as AuthRequest).auth.workspaceId;
+    const visibleWhere = {
+      OR: [
+        { scannerResults: { some: { workspaceId } } },
+        { leads: { some: { workspaceId } } },
+      ],
+    };
+    const requested: Array<string> = req.body.domainIds?.length
+      ? req.body.domainIds
+      : (
+          await prisma.domain.findMany({
+            where: visibleWhere,
+            select: { id: true },
+          })
+        ).map((x) => x.id);
+    const ids = (
+      await prisma.domain.findMany({
+        where: { id: { in: requested }, ...visibleWhere },
+        select: { id: true },
+      })
+    ).map((item) => item.id);
+    const results = await Promise.allSettled(
+      ids.map((id) => locateDomain(id, workspaceId)),
+    );
+    emit(
+      "location-complete",
+      {
+        count: results.filter((x) => x.status === "fulfilled").length,
+      },
+      workspaceId,
+    );
+    res.json({
+      checked: results.filter((x) => x.status === "fulfilled").length,
+      failed: results.filter((x) => x.status === "rejected").length,
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+app.patch("/api/auth/account", async (req, res, next) => {
+  try {
+    const auth = (req as AuthRequest).auth;
+    const input = z.object({ username: usernameSchema }).parse(req.body);
+    await prisma.user.update({
+      where: { id: auth.id },
+      data: { username: input.username, name: input.username },
+    });
+    res.json({
+      ...publicUser(auth),
+      username: input.username,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+app.post("/api/auth/change-password", async (req, res, next) => {
+  try {
+    const auth = (req as AuthRequest).auth;
+    const input = z
+      .object({
+        currentPassword: z.string().min(1).max(200),
+        newPassword: newPasswordSchema,
+        confirmPassword: z.string().min(1).max(200),
+      })
+      .refine((value) => value.newPassword === value.confirmPassword, {
+        message: "New passwords do not match",
+      })
+      .parse(req.body);
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: auth.id },
+    });
+    if (!(await verifyPassword(input.currentPassword, user.passwordHash)))
+      return res.status(400).json({ error: "Current password is incorrect" });
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: auth.id },
+        data: {
+          passwordHash: await hashPassword(input.newPassword),
+          requirePasswordChange: false,
+        },
+      }),
+      prisma.authSession.deleteMany({
+        where: { userId: auth.id, id: { not: (req as AuthRequest).sessionId } },
+      }),
+    ]);
+    await audit(req, "PASSWORD_CHANGED", "User", auth.id);
+    res.json({ changed: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/settings", requireRole("ADMIN"), async (req, res) =>
+  res.json(await getSettings((req as AuthRequest).auth.workspaceId)),
+);
+app.patch("/api/settings", requireRole("ADMIN"), async (req, res, next) => {
+  try {
+    const auth = (req as AuthRequest).auth;
+    const data = settingsSchema.parse(req.body);
+    await Promise.all(
+      Object.entries(data).map(([id, value]) => {
+        if (id === "automaticBackups" || id.startsWith("backup"))
+          return prisma.setting.upsert({
+            where: { id },
+            create: { id, value: JSON.stringify(value) },
+            update: { value: JSON.stringify(value) },
+          });
+        return prisma.workspaceSetting.upsert({
+          where: {
+            workspaceId_key: { workspaceId: auth.workspaceId, key: id },
+          },
+          create: {
+            workspaceId: auth.workspaceId,
+            key: id,
+            value: JSON.stringify(value),
+          },
+          update: { value: JSON.stringify(value) },
+        });
+      }),
+    );
+    await audit(req, "SETTINGS_UPDATED", "Workspace", auth.workspaceId, {
+      keys: Object.keys(data),
+    });
+    res.json(await getSettings(auth.workspaceId));
+  } catch (e) {
+    next(e);
+  }
+});
+app.get("/api/export/leads.csv", async (req, res) => {
+  const auth = (req as AuthRequest).auth;
+  const leads = await prisma.lead.findMany({
+    where: {
+      workspaceId: auth.workspaceId,
+      OR: [
+        { scannerResultId: null },
+        { scannerResult: { scanStatus: { not: "Excluded" } } },
+      ],
+      ...(auth.role === "RESEARCHER" ? { assignedToId: auth.id } : {}),
+    },
+    include: leadInclude,
+  });
+  const rows = [
+    [
+      "Website",
+      "Domain",
+      "Discord",
+      "Company",
+      "Contact",
+      "Email",
+      "Tags",
+      "Hosting Country",
+      "Search Query",
+      "Status",
+      "Priority",
+      "Notes",
+      "Added",
+    ],
+    ...leads.map((l) => [
+      l.website || l.searchResult?.url || "",
+      l.domain.hostname,
+      l.discordInvite ||
+        l.scannerResult?.discordLinks.map((d) => d.url).join(" ") ||
+        "",
+      l.companyName,
+      l.contactName,
+      l.email,
+      l.tags.map((t) => t.tag.name).join(" | "),
+      l.domain.location?.country || "",
+      l.searchResult?.searchSession.query ||
+        l.scannerResult?.sources[0]?.query ||
+        "",
+      l.status,
+      l.priority,
+      l.notes,
+      l.createdAt.toISOString(),
+    ]),
+  ];
+  res
+    .set({
+      "content-type": "text/csv",
+      "content-disposition": 'attachment; filename="leads.csv"',
+    })
+    .send(rows.map((r) => r.map(csvEscape).join(",")).join("\n"));
+});
+app.get("/api/export/history.csv", async (req, res) => {
+  const sessions = await prisma.searchSession.findMany({
+    where: { workspaceId: (req as AuthRequest).auth.workspaceId },
+    include: { results: { include: { discordLinks: true } } },
+  });
+  const rows = [
+    ["Date", "Search Query", "URLs Found", "Discord Links", "Duration"],
+    ...sessions.map((s) => [
+      s.createdAt.toISOString(),
+      s.query,
+      s.results.length,
+      s.results.reduce((n, r) => n + r.discordLinks.length, 0),
+      s.completedAt
+        ? String(s.completedAt.getTime() - s.createdAt.getTime())
+        : "",
+    ]),
+  ];
+  res
+    .type("text/csv")
+    .send(rows.map((r) => r.map(csvEscape).join(",")).join("\n"));
+});
+
+app.get("/api/workspace", async (req, res) => {
+  const auth = (req as AuthRequest).auth;
+  const [extensions, scanner] = await Promise.all([
+    prisma.extensionInstance.count({
+      where: {
+        workspaceId: auth.workspaceId,
+        revokedAt: null,
+        lastSeen: { gte: new Date(Date.now() - 2 * 60 * 1000) },
+      },
+    }),
+    prisma.scannerState.findUnique({
+      where: { workspaceId: auth.workspaceId },
+    }),
+  ]);
+  res.json({ ...auth.workspace, connectedExtensions: extensions, scanner });
+});
+app.post(
+  "/api/workspace/regenerate-scanner-id",
+  requireRole("ADMIN"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      const confirmation = z
+        .object({ confirm: z.literal("REGENERATE") })
+        .parse(req.body);
+      void confirmation;
+      let scannerId = generateScannerId();
+      while (await prisma.workspace.findUnique({ where: { scannerId } }))
+        scannerId = generateScannerId();
+      const [workspace] = await prisma.$transaction([
+        prisma.workspace.update({
+          where: { id: auth.workspaceId },
+          data: { scannerId },
+        }),
+        prisma.extensionInstance.updateMany({
+          where: { workspaceId: auth.workspaceId, revokedAt: null },
+          data: { revokedAt: new Date(), scannerState: "STOPPED" },
+        }),
+      ]);
+      await audit(req, "SCANNER_ID_REGENERATED", "Workspace", auth.workspaceId);
+      res.json({ scannerId: workspace.scannerId });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.get("/api/admin/overview", requireRole("ADMIN"), async (req, res) => {
+  const workspaceId = (req as AuthRequest).auth.workspaceId;
+  const [
+    users,
+    activeUsers,
+    extensions,
+    scannerResults,
+    leads,
+    scanner,
+    backup,
+  ] = await Promise.all([
+    prisma.user.count({ where: { workspaceId } }),
+    prisma.user.count({ where: { workspaceId, status: "ACTIVE" } }),
+    prisma.extensionInstance.count({
+      where: {
+        workspaceId,
+        revokedAt: null,
+        lastSeen: { gte: new Date(Date.now() - 2 * 60 * 1000) },
+      },
+    }),
+    prisma.scannerResult.count({ where: { workspaceId } }),
+    prisma.lead.count({ where: { workspaceId } }),
+    prisma.scannerState.findUnique({ where: { workspaceId } }),
+    prisma.backupMetadata.findFirst({
+      where: { status: "COMPLETED" },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+  res.json({
+    users,
+    activeUsers,
+    connectedExtensions: extensions,
+    scannerResults,
+    leads,
+    scannersRunning: scanner?.status === "RUNNING" ? 1 : 0,
+    lastBackup: backup?.createdAt || null,
+  });
+});
+app.get("/api/admin/users", requireRole("ADMIN"), async (req, res) => {
+  const workspaceId = (req as AuthRequest).auth.workspaceId;
+  res.json(
+    await prisma.user.findMany({
+      where: { workspaceId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        status: true,
+        requirePasswordChange: true,
+        lastLoginAt: true,
+        createdAt: true,
+        _count: { select: { assignedLeads: true, extensionInstances: true } },
+      },
+    }),
+  );
+});
+app.post("/api/admin/users", requireRole("ADMIN"), async (req, res, next) => {
+  try {
+    const auth = (req as AuthRequest).auth;
+    const input = accountSchema
+      .extend({
+        role: z.enum(roles),
+        requirePasswordChange: z.boolean().default(true),
+      })
+      .parse(req.body);
+    const user = await prisma.user.create({
+      data: {
+        workspaceId: auth.workspaceId,
+        name: input.username,
+        username: input.username,
+        passwordHash: await hashPassword(input.password),
+        role: input.role,
+        requirePasswordChange: input.requirePasswordChange,
+      },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        status: true,
+      },
+    });
+    await audit(req, "USER_CREATED", "User", user.id, { role: user.role });
+    res.status(201).json(user);
+  } catch (error) {
+    next(error);
+  }
+});
+app.patch(
+  "/api/admin/users/:id",
+  requireRole("ADMIN"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      const target = await prisma.user.findFirst({
+        where: { id: String(req.params.id), workspaceId: auth.workspaceId },
+      });
+      if (!target) return res.status(404).json({ error: "Not found" });
+      const input = z
+        .object({
+          username: usernameSchema.optional(),
+          role: z.enum(roles).optional(),
+          status: z.enum(["ACTIVE", "DISABLED"]).optional(),
+          temporaryPassword: newPasswordSchema.optional(),
+        })
+        .parse(req.body);
+      if (target.id === auth.id && input.status === "DISABLED")
+        return res
+          .status(400)
+          .json({ error: "You cannot disable your own account" });
+      const user = await prisma.user.update({
+        where: { id: target.id },
+        data: {
+          ...(input.username
+            ? { name: input.username, username: input.username }
+            : {}),
+          role: input.role,
+          status: input.status,
+          ...(input.temporaryPassword
+            ? {
+                passwordHash: await hashPassword(input.temporaryPassword),
+                requirePasswordChange: true,
+              }
+            : {}),
+        },
+        select: {
+          id: true,
+          username: true,
+          role: true,
+          status: true,
+        },
+      });
+      if (input.status === "DISABLED")
+        await prisma.$transaction([
+          prisma.authSession.deleteMany({ where: { userId: target.id } }),
+          prisma.extensionInstance.updateMany({
+            where: { ownerUserId: target.id, revokedAt: null },
+            data: { revokedAt: new Date(), scannerState: "STOPPED" },
+          }),
+        ]);
+      await audit(req, "USER_UPDATED", "User", target.id, {
+        role: input.role,
+        status: input.status,
+        passwordReset: Boolean(input.temporaryPassword),
+      });
+      res.json(user);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.get("/api/admin/extensions", requireRole("ADMIN"), async (req, res) => {
+  const workspaceId = (req as AuthRequest).auth.workspaceId;
+  const extensions = await prisma.extensionInstance.findMany({
+    where: { workspaceId },
+    orderBy: { lastSeen: "desc" },
+    select: {
+      id: true,
+      instanceId: true,
+      name: true,
+      scannerState: true,
+      currentSearch: true,
+      currentPage: true,
+      pagesScanned: true,
+      resultsFound: true,
+      uniqueUrlsSent: true,
+      duplicatesSkipped: true,
+      lastSeen: true,
+      revokedAt: true,
+      createdAt: true,
+      ownerUser: { select: { id: true, username: true } },
+    },
+  });
+  res.json(
+    extensions.map((extension) => ({
+      ...extension,
+      connected:
+        !extension.revokedAt &&
+        extension.lastSeen.getTime() >= Date.now() - 2 * 60 * 1000,
+    })),
+  );
+});
+app.patch(
+  "/api/admin/extensions/:id",
+  requireRole("ADMIN"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      const extension = await prisma.extensionInstance.findFirst({
+        where: { id: String(req.params.id), workspaceId: auth.workspaceId },
+      });
+      if (!extension) return res.status(404).json({ error: "Not found" });
+      const input = z
+        .object({
+          name: z.string().trim().min(1).max(100).optional(),
+          revoke: z.boolean().optional(),
+        })
+        .parse(req.body);
+      const updated = await prisma.extensionInstance.update({
+        where: { id: extension.id },
+        data: {
+          name: input.name,
+          ...(input.revoke
+            ? { revokedAt: new Date(), scannerState: "STOPPED" }
+            : {}),
+        },
+        select: {
+          id: true,
+          instanceId: true,
+          name: true,
+          scannerState: true,
+          revokedAt: true,
+        },
+      });
+      await audit(
+        req,
+        input.revoke ? "EXTENSION_REVOKED" : "EXTENSION_RENAMED",
+        "ExtensionInstance",
+        extension.id,
+      );
+      res.json(updated);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.post(
+  "/api/admin/extensions/:id/force-stop",
+  requireRole("ADMIN"),
+  async (req, res) => {
+    const auth = (req as AuthRequest).auth;
+    const result = await prisma.extensionInstance.updateMany({
+      where: { id: String(req.params.id), workspaceId: auth.workspaceId },
+      data: { scannerState: "FORCE_STOPPED" },
+    });
+    if (!result.count) return res.status(404).json({ error: "Not found" });
+    await audit(
+      req,
+      "SCANNER_FORCE_STOPPED",
+      "ExtensionInstance",
+      String(req.params.id),
+    );
+    res.json({ stopped: true });
+  },
+);
+app.post(
+  "/api/admin/scanners/stop-all",
+  requireRole("ADMIN"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      await prisma.extensionInstance.updateMany({
+        where: { workspaceId: auth.workspaceId, revokedAt: null },
+        data: { scannerState: "FORCE_STOPPED" },
+      });
+      await stopScanner(auth.workspaceId);
+      await audit(req, "ALL_SCANNERS_STOPPED", "Workspace", auth.workspaceId);
+      res.json({ stopped: true });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.get("/api/admin/scanners", requireRole("ADMIN"), async (req, res) => {
+  const workspaceId = (req as AuthRequest).auth.workspaceId;
+  const [workspaceScanner, extensions] = await Promise.all([
+    prisma.scannerState.findUnique({ where: { workspaceId } }),
+    prisma.extensionInstance.findMany({
+      where: { workspaceId, revokedAt: null },
+      orderBy: { lastSeen: "desc" },
+      select: {
+        id: true,
+        instanceId: true,
+        name: true,
+        scannerState: true,
+        currentSearch: true,
+        currentPage: true,
+        pagesScanned: true,
+        resultsFound: true,
+        lastSeen: true,
+      },
+    }),
+  ]);
+  res.json({ workspaceScanner, extensions });
+});
+app.get("/api/admin/audit", requireRole("ADMIN"), async (req, res) => {
+  res.json(
+    await prisma.auditLog.findMany({
+      where: { workspaceId: (req as AuthRequest).auth.workspaceId },
+      orderBy: { createdAt: "desc" },
+      take: 500,
+      include: {
+        actor: { select: { id: true, username: true } },
+      },
+    }),
+  );
+});
+
+app.get("/api/admin/backups", requireRole("ADMIN"), async (_req, res) =>
+  res.json(
+    await prisma.backupMetadata.findMany({ orderBy: { createdAt: "desc" } }),
+  ),
+);
+app.post("/api/admin/backups", requireRole("ADMIN"), async (req, res, next) => {
+  try {
+    const auth = (req as AuthRequest).auth;
+    const backup = await createBackup("MANUAL", auth.id);
+    await audit(req, "BACKUP_CREATED", "BackupMetadata", backup.id);
+    res.status(201).json(backup);
+  } catch (error) {
+    next(error);
+  }
+});
+app.post(
+  "/api/admin/backups/upload",
+  requireRole("ADMIN"),
+  express.raw({ type: "application/octet-stream", limit: "100mb" }),
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      if (!Buffer.isBuffer(req.body))
+        return res
+          .status(400)
+          .json({ error: "A SQLite backup file is required" });
+      const backup = await importBackup(req.body, auth.id);
+      await audit(req, "BACKUP_UPLOADED", "BackupMetadata", backup.id);
+      res.status(201).json(backup);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.get(
+  "/api/admin/backups/:id/download",
+  requireRole("ADMIN"),
+  async (req, res) => {
+    const backup = await prisma.backupMetadata.findUnique({
+      where: { id: String(req.params.id) },
+    });
+    if (!backup) return res.status(404).json({ error: "Not found" });
+    res.download(backupFilePath(backup.filename), backup.filename);
+  },
+);
+app.delete("/api/admin/backups/:id", requireRole("ADMIN"), async (req, res) => {
+  const backup = await prisma.backupMetadata.findUnique({
+    where: { id: String(req.params.id) },
+  });
+  if (!backup) return res.status(404).json({ error: "Not found" });
+  await deleteBackup(backup.filename);
+  await prisma.backupMetadata.delete({ where: { id: backup.id } });
+  await audit(req, "BACKUP_DELETED", "BackupMetadata", backup.id);
+  res.status(204).end();
+});
+app.post(
+  "/api/admin/backups/:id/restore",
+  requireRole("ADMIN"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      z.object({ confirm: z.literal("RESTORE") }).parse(req.body);
+      const backup = await prisma.backupMetadata.findUnique({
+        where: { id: String(req.params.id) },
+      });
+      if (!backup) return res.status(404).json({ error: "Not found" });
+      await stopScanner(auth.workspaceId);
+      const result = await restoreBackup(backup.filename, auth.id);
+      const [restoredActor, restoredWorkspace] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: auth.id },
+          select: { id: true },
+        }),
+        prisma.workspace.findUnique({
+          where: { id: auth.workspaceId },
+          select: { id: true },
+        }),
+      ]);
+      await prisma.auditLog.create({
+        data: {
+          workspaceId: restoredWorkspace?.id,
+          actorId: restoredActor?.id,
+          action: "BACKUP_RESTORED",
+          targetType: "BackupMetadata",
+          targetId: backup.id,
+        },
+      });
+      clearSessionCookie(res);
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.use((_req, res) => {
+  res.status(404).json({ error: "API route not found" });
+});
+app.use(
+  (
+    err: any,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    const duplicateUsername =
+      err?.code === "P2002" &&
+      JSON.stringify(err?.meta?.target || "").includes("username");
+    const status =
+      err?.statusCode ??
+      (err?.name === "ZodError" ? 400 : duplicateUsername ? 409 : 500);
+    if (status >= 500) console.error(err);
+    res.status(status).json({
+      error: duplicateUsername
+        ? "Username is already in use."
+        : status >= 500 && process.env.NODE_ENV === "production"
+          ? "Unexpected server error"
+          : err instanceof Error
+            ? err.message
+            : "Unexpected server error",
+    });
+  },
+);
+export default app;
