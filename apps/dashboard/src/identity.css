@@ -167,6 +167,29 @@
 .identity-user small {
   text-transform: capitalize;
 }
+.auth-bypass-mode {
+  min-height: 100vh;
+  padding-top: 34px;
+}
+.auth-bypass-mode > .app {
+  min-height: calc(100vh - 34px);
+}
+.auth-bypass-banner {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 1000;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(248, 113, 113, 0.4);
+  background: #7f1d1d;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
 .admin-nav-label {
   color: #485568;
   font-size: 8px;
