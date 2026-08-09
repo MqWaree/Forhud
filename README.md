@@ -87,6 +87,7 @@ DATABASE_URL="file:./lead-intelligence.db"
 PORT=3001
 HOST=127.0.0.1
 PUBLIC_APP_ORIGIN=http://localhost:5173
+AUTH_BYPASS_ENABLED=false
 INITIAL_SETUP_TOKEN=replace-with-a-one-time-production-setup-secret
 SCRAPER_URL=http://127.0.0.1:3011
 SCRAPER_TOKEN=replace-with-a-long-random-secret
@@ -100,6 +101,8 @@ SCRAPER_SCROLL_WAIT_MS=125
 ```
 
 Place these values in `apps/server/.env` when running the server through its workspace command. A fresh production database will not create its first administrator until the operator supplies an `INITIAL_SETUP_TOKEN` of at least 24 characters and enters the same one-time value in the setup form. Existing installations do not use this token after the first administrator exists. Keep the scraper bound to loopback and use the same unique `SCRAPER_TOKEN` of at least 24 characters in the scraper and Node environments; production startup rejects the development placeholder. Set `NODE_ENV=production`, a precise `PUBLIC_APP_ORIGIN`, and a protected `BACKUP_DIR` for a non-local deployment. HTTPS enables the session cookie's `Secure` flag.
+
+`AUTH_BYPASS_ENABLED=true` is an explicitly unsafe temporary operating mode. It maps every unauthenticated request to the first active administrator and exposes all data and mutations publicly. The dashboard displays a permanent red warning while the mode is active. Prefer the default `false`; production deployments can change the mode reversibly with `deploy-release.ps1 -AuthBypass enabled` or `deploy-release.ps1 -AuthBypass disabled`.
 
 Scanner IDs created by current builds use 80 bits of entropy. On the first hardened startup, legacy short Scanner IDs are rotated and existing extension tokens are revoked, so each Chrome profile must reconnect once using the new ID shown in the dashboard.
 
