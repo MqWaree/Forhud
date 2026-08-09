@@ -2212,6 +2212,16 @@ app.use(
     const duplicateUsername =
       err?.code === "P2002" &&
       JSON.stringify(err?.meta?.target || "").includes("username");
+    const validationMessage =
+      err?.name === "ZodError" && Array.isArray(err?.issues)
+        ? err.issues.find(
+            (issue: unknown) =>
+              typeof issue === "object" &&
+              issue !== null &&
+              "message" in issue &&
+              typeof issue.message === "string",
+          )?.message
+        : undefined;
     const status =
       err?.statusCode ??
       (err?.name === "ZodError" ? 400 : duplicateUsername ? 409 : 500);
@@ -2219,11 +2229,13 @@ app.use(
     res.status(status).json({
       error: duplicateUsername
         ? "Username is already in use."
-        : status >= 500 && process.env.NODE_ENV === "production"
-          ? "Unexpected server error"
-          : err instanceof Error
-            ? err.message
-            : "Unexpected server error",
+        : validationMessage
+          ? validationMessage
+          : status >= 500 && process.env.NODE_ENV === "production"
+            ? "Unexpected server error"
+            : err instanceof Error
+              ? err.message
+              : "Unexpected server error",
     });
   },
 );
