@@ -285,9 +285,11 @@ export default function App() {
             <b>{user.username}</b>
             <small>{user.role.toLowerCase()}</small>
           </div>
-          <button className="identity-action" onClick={() => void logout()}>
-            <LogOut /> <span>Sign out</span>
-          </button>
+          {!user.authBypassEnabled && (
+            <button className="identity-action" onClick={() => void logout()}>
+              <LogOut /> <span>Sign out</span>
+            </button>
+          )}
         </div>
         <button
           className="mobile-menu"
