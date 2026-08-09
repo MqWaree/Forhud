@@ -27,6 +27,7 @@ stamp="__STAMP__"
 current="/opt/fgp"
 previous="/opt/fgp-rollback-$stamp"
 failed="/opt/fgp-failed-$stamp"
+preflight="/tmp/fgp-preflight-$stamp"
 backup_dir="/var/backups/fgp"
 services_stopped=0
 initial_services_healthy=0
@@ -40,6 +41,7 @@ rollback() {
   trap - ERR
   set +e
   if [ "$exit_code" -ne 0 ]; then
+    rm -rf -- "$preflight"
     echo "Deployment failed - restoring the previous release."
     systemctl stop fgp-api.service fgp-scraper.service || true
     if [ -d "$current" ]; then
@@ -73,6 +75,15 @@ if [ "$actual_sha" != "$expected_sha" ]; then
   echo "Release checksum mismatch."
   exit 1
 fi
+
+# Validate the exact workspace/lockfile combination before stopping the live
+# services. This catches package-manager configuration drift without downtime.
+install -d -m 0755 "$preflight"
+tar -xzf "$archive" -C "$preflight"
+cd "$preflight"
+pnpm install --frozen-lockfile --lockfile-only --ignore-scripts
+cd /
+rm -rf -- "$preflight"
 
 test -d "$current"
 test ! -e "$previous"
