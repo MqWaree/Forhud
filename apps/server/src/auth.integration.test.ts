@@ -76,6 +76,38 @@ afterAll(async () => {
 });
 
 describe("authentication, authorization, isolation, and recovery", () => {
+  it("grants explicit temporary bypass visitors administrator access", async () => {
+    const previous = process.env.AUTH_BYPASS_ENABLED;
+    process.env.AUTH_BYPASS_ENABLED = "true";
+    try {
+      const visitor = request(app);
+      const me = await visitor.get("/api/auth/me");
+      expect(me.status).toBe(200);
+      expect(me.body).toMatchObject({
+        username: "admin",
+        role: "ADMIN",
+        authBypassEnabled: true,
+      });
+      expect((await visitor.get("/api/admin/users")).status).toBe(200);
+      expect(
+        (
+          await visitor
+            .post("/api/admin/users")
+            .set("Origin", "https://untrusted.example")
+            .send({
+              username: "blocked-cross-origin",
+              password: "M4#vR8!q",
+              role: "RESEARCHER",
+            })
+        ).status,
+      ).toBe(403);
+    } finally {
+      if (previous === undefined) delete process.env.AUTH_BYPASS_ENABLED;
+      else process.env.AUTH_BYPASS_ENABLED = previous;
+    }
+    expect((await request(app).get("/api/auth/me")).status).toBe(401);
+  });
+
   it("creates one initial admin with a hashed password and secure cookie", async () => {
     expect((await admin.get("/api/auth/me")).body.username).toBe("admin");
     const storedUser = await prisma.user.findUnique({
