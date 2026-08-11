@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { Prisma } from "./generated/client/client.js";
 import { prisma } from "./db.js";
 
 export const RATE_WINDOW_MS = 15 * 60 * 1000;
@@ -31,30 +32,41 @@ export async function recordRateLimitAttempt(
   keyHash: string,
   now = Date.now(),
 ) {
-  await prisma.$transaction(async (tx) => {
-    const current = await tx.securityRateLimit.findUnique({
-      where: { keyHash },
-    });
-    if (!current || current.resetAt.getTime() <= now) {
-      await tx.securityRateLimit.upsert({
-        where: { keyHash },
-        create: {
-          keyHash,
-          count: 1,
-          resetAt: new Date(now + RATE_WINDOW_MS),
-        },
-        update: {
-          count: 1,
-          resetAt: new Date(now + RATE_WINDOW_MS),
-        },
-      });
-      return;
-    }
-    await tx.securityRateLimit.update({
-      where: { keyHash },
-      data: { count: { increment: 1 } },
-    });
-  });
+  await recordRateLimitAttempts([keyHash], now);
+}
+
+export async function recordRateLimitAttempts(
+  keyHashes: string[],
+  now = Date.now(),
+) {
+  const uniqueKeys = [...new Set(keyHashes)];
+  const nowDate = new Date(now);
+  const resetAt = new Date(now + RATE_WINDOW_MS);
+
+  // SQLite permits only one writer at a time. Avoid parallel interactive
+  // transactions here: they can deadlock one another and surface as Prisma
+  // P1008 timeouts during an otherwise ordinary invalid login. Each UPSERT is
+  // one short atomic statement, and multiple buckets are deliberately written
+  // in sequence.
+  for (const keyHash of uniqueKeys)
+    await prisma.$executeRaw(
+      Prisma.sql`
+        INSERT INTO "SecurityRateLimit"
+          ("keyHash", "count", "resetAt", "updatedAt")
+        VALUES
+          (${keyHash}, 1, ${resetAt}, ${nowDate})
+        ON CONFLICT("keyHash") DO UPDATE SET
+          "count" = CASE
+            WHEN "resetAt" <= ${nowDate} THEN 1
+            ELSE "count" + 1
+          END,
+          "resetAt" = CASE
+            WHEN "resetAt" <= ${nowDate} THEN ${resetAt}
+            ELSE "resetAt"
+          END,
+          "updatedAt" = ${nowDate}
+      `,
+    );
 }
 
 export async function clearRateLimit(...keyHashes: string[]) {
