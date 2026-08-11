@@ -215,6 +215,21 @@ describe("authentication, authorization, isolation, and recovery", () => {
     expect(await prisma.securityRateLimit.count()).toBeGreaterThan(0);
   });
 
+  it("never turns concurrent invalid logins into database timeout errors", async () => {
+    const attempts = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        request(app)
+          .post("/api/auth/login")
+          .send({ username: "concurrent-rate-target", password: "wrong" }),
+      ),
+    );
+
+    expect(attempts.every(({ status }) => status === 401 || status === 429)).toBe(
+      true,
+    );
+    expect(attempts.some(({ status }) => status === 500)).toBe(false);
+  });
+
   it("enforces role permissions and assignment visibility", async () => {
     const lead = await manager
       .post("/api/leads")
