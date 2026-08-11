@@ -37,6 +37,7 @@ import {
   clearRateLimit,
   rateLimitKey,
   recordRateLimitAttempt,
+  recordRateLimitAttempts,
   retryAfterRateLimit,
 } from "./rate-limit.js";
 import {
@@ -356,10 +357,7 @@ app.post("/api/auth/login", async (req, res, next) => {
     );
     const valid = user?.status === "ACTIVE" && passwordMatches;
     if (!user || !valid) {
-      await Promise.all([
-        recordRateLimitAttempt(accountKey, now),
-        recordRateLimitAttempt(ipRateKey, now),
-      ]);
+      await recordRateLimitAttempts([accountKey, ipRateKey], now);
       return res.status(401).json({ error: "Invalid username or password." });
     }
     // A successful account login clears only that account bucket. Keep the
