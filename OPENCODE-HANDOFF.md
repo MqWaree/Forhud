@@ -1,6 +1,8 @@
 # FGP / Forhuds Panel — OpenCode Handoff
 
-Last updated: 2026-09-01 (Europe/Paris)
+Last updated: 2026-09-02 (Europe/Paris)
+
+DeepSeek V4 Pro takeover note: the current model-specific transfer is in `DEEPSEEK-V4-PRO-HANDOFF.md`, the failed/partial/no-result optimization and bug-fix history is in `DEEPSEEK-ATTEMPT-LEDGER.md`, and the ready-to-paste OpenCode bootstrap prompt is in `DEEPSEEK-V4-PRO-START-PROMPT.md`. Read those after `AGENTS.md`. This document remains the durable chronological/product handoff.
 
 This document transfers the durable project context from a long-running Codex conversation into the repository. It intentionally omits all secret values. Read `AGENTS.md` first for mandatory engineering and deployment rules.
 
