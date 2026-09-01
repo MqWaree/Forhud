@@ -23,6 +23,7 @@ const rootEntries = [
   "tests",
   "THIRD_PARTY_NOTICES.md",
   "tsconfig.base.json",
+  "vitest.config.ts",
 ];
 
 const deniedDirectories = new Set([

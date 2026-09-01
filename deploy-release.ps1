@@ -65,6 +65,7 @@ function Publish-GitRelease {
     "scripts",
     "tests",
     "tsconfig.base.json",
+    "vitest.config.ts",
     "deploy-release.ps1",
     "DEPLOY-FGP.cmd",
     "DEPLOY-CORRECTED-RELEASE.cmd",
