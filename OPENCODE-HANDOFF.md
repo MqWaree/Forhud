@@ -21,7 +21,7 @@ FGP began as a lead-intelligence/search-and-scan panel and expanded into a multi
 
 Production is served at `https://forhud.shop` from an Ubuntu VPS. GitHub is `https://github.com/MqWaree/Forhud` and the primary branch is `main`.
 
-The latest application release baseline is commit `7ecf02d`, and current GitHub `main` also contains this OpenCode handoff documentation. Resolve the current remote HEAD when starting work. The application changes in `7ecf02d` have not yet been confirmed as deployed. The most recent local deployment log ending successfully is from earlier on 2026-09-01 and predates the final merged release.
+The latest application release baseline is commit `7ecf02d`, and current GitHub `main` also contains this OpenCode handoff and repaired deployment launchers. Resolve the current remote HEAD when starting work. The recovered application changes have now been deployed and independently verified; see the production evidence below.
 
 ## 2. Current source and verification state
 
@@ -111,7 +111,7 @@ The remote phase:
 The latest successful local log is:
 
 ```text
-outputs/deploy-release-20260901-035242.log
+outputs/deploy-release-20260901-235350.log
 ```
 
 It ends with:
@@ -120,7 +120,7 @@ It ends with:
 FGP_DEPLOYMENT_OK
 ```
 
-and both loopback/public health payloads reported the database connected and Scrapling healthy. However, that deployment was before the final `7ecf02d` merge/push. The immediate next operational task is to deploy current `main`, enter the VPS password interactively, then verify the log, services, public health endpoint, and the relevant scanner UI.
+and both loopback/public health payloads reported the database connected and Scrapling healthy. An independent HTTPS request after completion returned the same healthy payload. The public HTML referenced `index-BkNjb471.js` and `index-CUVbUSv1.css`, matching the assets generated inside the deployment log. GitHub recorded the safe deployment workflow at commit `5d1b16b`; changes after application commit `7ecf02d` are handoff/launcher operations rather than a different runtime feature tree.
 
 Historical deployment lessons:
 
@@ -130,6 +130,7 @@ Historical deployment lessons:
 - A pnpm frozen-lockfile mismatch previously stopped rollout. Preflight now validates the exact archive/lockfile before service downtime.
 - The API may need several health retries after start; early connection-refused messages are normal if followed by healthy responses.
 - Never infer success from a build alone. Require the final deployment marker and public verification.
+- Do not run two deployment launcher windows simultaneously. An overlapping attempt rebuilt the shared local archive after another process had hashed it, causing one safe checksum rejection. The later isolated deployment completed successfully. Add a local deployment mutex before further launcher work.
 
 ## 5. Workstation recovery context
 
@@ -526,14 +527,11 @@ Git ignore and release builder rules already reject most sensitive runtime files
 
 ### Immediate
 
-1. Deploy current GitHub `main` (which contains application release `7ecf02d`) using `DEPLOY-FGP.cmd` or the equivalent safe interactive workflow.
-2. Verify a new deployment log ends in `FGP_DEPLOYMENT_OK`.
-3. Verify `fgp-api`, `fgp-scraper`, and conditionally enabled `fgp-haze-notifier` services.
-4. Verify `https://forhud.shop/api/health` and load the dashboard.
-5. Run a small controlled Searcher job and confirm progress persists after refresh.
-6. Confirm a healthy home page with failed speculative paths is not falsely marked Timeout/Blocked.
-7. Confirm Telegram/email recovery synchronizes to Leads.
-8. Confirm automatic retry counters and failure history behave as intended.
+1. Run a small controlled Searcher job and confirm progress persists after refresh.
+2. Confirm a healthy home page with failed speculative paths is not falsely marked Timeout/Blocked.
+3. Confirm Telegram/email recovery synchronizes to Leads.
+4. Confirm automatic retry counters and failure history behave as intended.
+5. Add a local mutual-exclusion guard to the deployment launcher so two windows cannot rebuild/upload the shared archive concurrently.
 
 ### Production measurement
 
@@ -567,7 +565,7 @@ Review untracked root patchers and staging folders individually. Preserve anythi
 Use this after opening the repository in OpenCode:
 
 ```text
-Read AGENTS.md and OPENCODE-HANDOFF.md completely. Inspect git status and confirm origin/main. Do not expose or reuse any secrets mentioned in historical material. First verify whether the application changes from commit 7ecf02d are live; if they are not, deploy current main with the repository's safe workflow and verify the final deployment marker, services, public health, and a small scanner smoke test. Then report the exact GitHub HEAD, production state, and any remaining blocker.
+Read AGENTS.md and OPENCODE-HANDOFF.md completely. Inspect git status and confirm origin/main. Do not expose or reuse any secrets mentioned in historical material. Confirm the recorded production deployment evidence is still healthy, then run a small controlled Searcher smoke test focused on persisted progress, contact recovery, retry classification, and Leads synchronization. Report the exact GitHub HEAD, measured production outcomes, and any remaining blocker.
 ```
 
 ## 21. Final context for the next agent

@@ -243,10 +243,11 @@ After every deployment, verify:
 
 At the time this file was created:
 
-- GitHub `main` contains application release commit `7ecf02d` plus the later OpenCode handoff documentation. Resolve the current remote HEAD instead of assuming a documentation commit hash.
-- Application commit `7ecf02d` merges the recovered feature release and the previous GitHub security/login fixes.
-- The newest successful deployment log available locally is `outputs/deploy-release-20260901-035242.log`, ending in `FGP_DEPLOYMENT_OK` with healthy loopback/public responses.
-- That log predates the final application-release validation/push. Therefore **do not assume the application changes in `7ecf02d` are live until current `main` is deployed successfully and verified**.
+- GitHub `main` contains application release commit `7ecf02d`, the OpenCode handoff, and the repaired deployment launchers. Resolve the current remote HEAD instead of assuming a documentation commit hash.
+- The safe deployment workflow recorded GitHub commit `5d1b16b`; its changes after the application release are operational launcher/documentation changes, not a different runtime feature tree.
+- `outputs/deploy-release-20260901-235350.log` ends in `FGP_DEPLOYMENT_OK` with healthy loopback and public responses and a timestamped database backup/rollback release.
+- An independent HTTPS check returned database connected, extension available, and Scrapling 0.4.11 healthy. The public HTML served the same `index-BkNjb471.js` and `index-CUVbUSv1.css` assets produced by the deployment build. The recovered application release is therefore verified live.
+- One overlapping launcher attempt produced a checksum mismatch because two windows can rebuild the same local archive. The later isolated deployment succeeded; avoid concurrent deployment windows and add a local deployment mutex before further launcher work.
 - The working tree contains several untracked one-off patch/diagnostic helpers. They are intentionally not part of the release and must not be bulk-added without individual review.
 
 ## Definition of done
