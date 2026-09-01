@@ -24,6 +24,7 @@ function result(discordLinks: string[], fetchMode: "HTTP" | "Dynamic") {
     internalLinks: [],
     priorityLinks: [],
     scriptLinks: [],
+    rustPriceListings: [],
     durationMs: 10,
     looksDynamic: true,
     isSoft404: false,
@@ -41,11 +42,42 @@ function response(payload: unknown) {
   });
 }
 
+function errorResponse(
+  status: number,
+  error: string,
+  extra: Record<string, unknown> = {},
+) {
+  return Promise.resolve({
+    ok: false,
+    status,
+    json: () => Promise.resolve({ error, ...extra }),
+  });
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("Scrapling dynamic fast path", () => {
+  it("rejects absent, placeholder, and short scraper tokens in production", async () => {
+    const { configuredScraperToken } = await import("./scraper-client.js");
+    expect(() => configuredScraperToken({ NODE_ENV: "production" })).toThrow(
+      /SCRAPER_TOKEN/,
+    );
+    expect(() =>
+      configuredScraperToken({
+        NODE_ENV: "production",
+        SCRAPER_TOKEN: "aether-dev-local-worker",
+      }),
+    ).toThrow(/SCRAPER_TOKEN/);
+    expect(
+      configuredScraperToken({
+        NODE_ENV: "production",
+        SCRAPER_TOKEN: "production-scraper-secret-123456789",
+      }),
+    ).toBe("production-scraper-secret-123456789");
+  });
+
   it("does not launch Chromium when static extraction already found Discord", async () => {
     const fetchMock = vi.fn(() =>
       response(result(["https://discord.gg/static-fast-path"], "HTTP")),
@@ -109,5 +141,100 @@ describe("Scrapling dynamic fast path", () => {
       "https://discord.gg/challenge-recovered",
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("passes Rust price mode to both static and rendered worker requests", async () => {
+    const staticResult = { ...result([], "HTTP"), looksDynamic: true };
+    const dynamicResult = {
+      ...result([], "Dynamic"),
+      rustPriceListings: [
+        {
+          name: "Premium",
+          priceMinor: 160,
+          currency: "USD",
+          priceText: "$1.60",
+          link: "https://example.com/rust-nfa",
+          method: "VARIANT_CONTROL",
+        },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => response(staticResult))
+      .mockImplementationOnce(() => response(dynamicResult));
+    vi.stubGlobal("fetch", fetchMock);
+    const { scrapePage } = await import("./scraper-client.js");
+
+    const page = await scrapePage("https://example.com/rust-nfa", {
+      timeoutMs: 1_000,
+      dynamicFallback: true,
+      discoveryMode: "rust-price",
+    });
+
+    expect(page.rustPriceListings).toHaveLength(1);
+    const bodies = fetchMock.mock.calls.map((call) =>
+      JSON.parse(String((call[1] as RequestInit).body)),
+    );
+    expect(bodies).toEqual([
+      expect.objectContaining({
+        discoveryMode: "rust-price",
+        forceDynamic: false,
+      }),
+      expect.objectContaining({
+        discoveryMode: "rust-price",
+        forceDynamic: true,
+      }),
+    ]);
+  });
+
+  it("turns worker overload and gateway timeouts into retryable diagnostics", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        errorResponse(503, "Scrapling worker busy; global capacity is full", {
+          retryAfterSeconds: 7,
+        }),
+      )
+      .mockImplementationOnce(() =>
+        errorResponse(504, "Timeout while rendering page"),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const { scrapePage } = await import("./scraper-client.js");
+
+    await expect(
+      scrapePage("https://example.com/", {
+        timeoutMs: 1_000,
+        dynamicFallback: false,
+      }),
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/worker busy.*503/i),
+      status: 503,
+      retryAfterSeconds: 7,
+    });
+    await expect(
+      scrapePage("https://example.com/", {
+        timeoutMs: 1_000,
+        dynamicFallback: false,
+      }),
+    ).rejects.toThrow(/worker timeout.*504/i);
+  });
+
+  it("preserves a structured remote network cause from the worker", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        errorResponse(502, "Could not resolve target", {
+          code: "DNS_FAILURE",
+        }),
+      ),
+    );
+    const { scrapePage } = await import("./scraper-client.js");
+
+    await expect(
+      scrapePage("https://example.com/", {
+        timeoutMs: 1_000,
+        dynamicFallback: false,
+      }),
+    ).rejects.toThrow(/DNS_FAILURE/);
   });
 });

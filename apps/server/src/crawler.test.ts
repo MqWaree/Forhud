@@ -41,10 +41,25 @@ describe("Node-controlled Scrapling URL boundaries", () => {
     );
     expect(classifyFetchError("certificate verify failed")).toBe("TLS_FAILURE");
     expect(classifyFetchError("Scrapling worker timeout")).toBe("TIMEOUT");
+    expect(
+      classifyFetchError(
+        "Scrapling worker busy (HTTP 503): global capacity is full",
+      ),
+    ).toBe("SCRAPER_BUSY");
+    expect(
+      classifyFetchError("Scrapling worker error (HTTP 502): internal error"),
+    ).toBe("SCRAPER_ERROR");
+    expect(
+      classifyFetchError(
+        "Scrapling worker error (HTTP 502): DNS_FAILURE: Could not resolve target",
+      ),
+    ).toBe("DNS_FAILURE");
   });
 
   it("rejects a public-to-private redirect before a second worker request", async () => {
-    scrapePage.mockResolvedValueOnce(page("https://11.0.0.1/", "http://127.0.0.1/private"));
+    scrapePage.mockResolvedValueOnce(
+      page("https://11.0.0.1/", "http://127.0.0.1/private"),
+    );
     const { fetchPage } = await import("./crawler.js");
     await expect(
       fetchPage("https://11.0.0.1/", {
@@ -57,7 +72,9 @@ describe("Node-controlled Scrapling URL boundaries", () => {
   });
 
   it("blocks a deep-scan redirect to another public domain", async () => {
-    scrapePage.mockResolvedValueOnce(page("https://11.0.0.1/contact", "https://12.0.0.1/contact"));
+    scrapePage.mockResolvedValueOnce(
+      page("https://11.0.0.1/contact", "https://12.0.0.1/contact"),
+    );
     const { fetchPage } = await import("./crawler.js");
     await expect(
       fetchPage("https://11.0.0.1/contact", {
@@ -75,7 +92,10 @@ describe("Node-controlled Scrapling URL boundaries", () => {
       ...page("https://11.0.0.1/discord", "https://discord.gg/redirect-code"),
       discordLinks: ["https://discord.gg/redirect-code"],
       discordDetections: [
-        { url: "https://discord.gg/redirect-code", method: "redirect-location" },
+        {
+          url: "https://discord.gg/redirect-code",
+          method: "redirect-location",
+        },
       ],
     });
     const { fetchPage } = await import("./crawler.js");
@@ -123,12 +143,105 @@ describe("Node-controlled Scrapling URL boundaries", () => {
       retries: 2,
     });
     expect(result.httpStatus).toBe(200);
-    expect(result.attempts.map((attempt) => attempt.status)).toEqual([503, 200]);
+    expect(result.attempts.map((attempt) => attempt.status)).toEqual([
+      503, 200,
+    ]);
+  });
+
+  it("retries one transient public 403 response without bypassing access controls", async () => {
+    scrapePage
+      .mockResolvedValueOnce({ ...page("https://11.0.0.1/"), httpStatus: 403 })
+      .mockResolvedValueOnce(page("https://11.0.0.1/"));
+    const { fetchPage } = await import("./crawler.js");
+    const result = await fetchPage("https://11.0.0.1/", {
+      timeoutMs: 2_000,
+      redirects: 5,
+      dynamicFallback: false,
+      retries: 1,
+    });
+    expect(result.httpStatus).toBe(200);
+    expect(result.attempts.map((attempt) => attempt.status)).toEqual([
+      403, 200,
+    ]);
+    expect(scrapePage).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries an isolated Scrapling worker timeout", async () => {
+    scrapePage
+      .mockRejectedValueOnce(new Error("Scrapling worker timeout"))
+      .mockResolvedValueOnce(page("https://11.0.0.1/"));
+    const { fetchPage } = await import("./crawler.js");
+    const result = await fetchPage("https://11.0.0.1/", {
+      timeoutMs: 2_000,
+      redirects: 5,
+      dynamicFallback: false,
+      retries: 1,
+    });
+
+    expect(result.httpStatus).toBe(200);
+    expect(result.attempts[0]).toMatchObject({ errorCode: "TIMEOUT" });
+    expect(scrapePage).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries worker overload but does not retry permanent TLS failures", async () => {
+    scrapePage
+      .mockRejectedValueOnce(
+        new Error("Scrapling worker busy (HTTP 503): capacity is full"),
+      )
+      .mockResolvedValueOnce(page("https://11.0.0.1/"));
+    const { fetchPage } = await import("./crawler.js");
+    const recovered = await fetchPage("https://11.0.0.1/", {
+      timeoutMs: 2_000,
+      redirects: 5,
+      dynamicFallback: false,
+      retries: 2,
+    });
+    expect(recovered.httpStatus).toBe(200);
+    expect(recovered.attempts[0]).toMatchObject({
+      errorCode: "SCRAPER_BUSY",
+    });
+
+    scrapePage.mockReset();
+    scrapePage.mockRejectedValue(new Error("certificate verify failed"));
+    await expect(
+      fetchPage("https://12.0.0.1/", {
+        timeoutMs: 2_000,
+        redirects: 5,
+        dynamicFallback: false,
+        retries: 3,
+      }),
+    ).rejects.toThrow(/certificate/i);
+    expect(scrapePage).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves worker retry timing in the attempt diagnostics", async () => {
+    scrapePage
+      .mockRejectedValueOnce(
+        Object.assign(
+          new Error("Scrapling worker busy (HTTP 503): capacity is full"),
+          { retryAfterSeconds: 0 },
+        ),
+      )
+      .mockResolvedValueOnce(page("https://11.0.0.1/"));
+    const { fetchPage } = await import("./crawler.js");
+    const recovered = await fetchPage("https://11.0.0.1/", {
+      timeoutMs: 2_000,
+      redirects: 5,
+      dynamicFallback: false,
+      retries: 1,
+    });
+
+    expect(recovered.attempts[0]).toMatchObject({
+      errorCode: "SCRAPER_BUSY",
+      retryAfterSeconds: 0,
+    });
   });
 
   it("records a safe redirect chain and validates every destination", async () => {
     scrapePage
-      .mockResolvedValueOnce(page("https://11.0.0.1/old", "https://11.0.0.1/new"))
+      .mockResolvedValueOnce(
+        page("https://11.0.0.1/old", "https://11.0.0.1/new"),
+      )
       .mockResolvedValueOnce(page("https://11.0.0.1/new"));
     const { fetchPage } = await import("./crawler.js");
     const result = await fetchPage("https://11.0.0.1/old", {
@@ -157,14 +270,20 @@ describe("Node-controlled Scrapling URL boundaries", () => {
       durationMs: 1,
     });
     const { robotsAllows } = await import("./crawler.js");
-    await expect(robotsAllows("https://11.0.0.1/private/secret", 2_000)).resolves.toBe(false);
-    await expect(robotsAllows("https://11.0.0.1/private/public/info", 2_000)).resolves.toBe(true);
+    await expect(
+      robotsAllows("https://11.0.0.1/private/secret", 2_000),
+    ).resolves.toBe(false);
+    await expect(
+      robotsAllows("https://11.0.0.1/private/public/info", 2_000),
+    ).resolves.toBe(true);
   });
 
   it("fails open when robots.txt is unavailable and exposes that decision", async () => {
     fetchRobotsResource.mockRejectedValueOnce(new Error("worker timeout"));
     const { robotsDecision } = await import("./crawler.js");
-    await expect(robotsDecision("https://13.0.0.1/store", 2_000)).resolves.toMatchObject({
+    await expect(
+      robotsDecision("https://13.0.0.1/store", 2_000),
+    ).resolves.toMatchObject({
       allowed: true,
       reason: "ROBOTS_UNAVAILABLE_FAIL_OPEN",
     });
@@ -181,7 +300,9 @@ describe("Node-controlled Scrapling URL boundaries", () => {
       durationMs: 1,
     });
     const { robotsDecision } = await import("./crawler.js");
-    await expect(robotsDecision("https://14.0.0.1/store", 2_000)).resolves.toMatchObject({
+    await expect(
+      robotsDecision("https://14.0.0.1/store", 2_000),
+    ).resolves.toMatchObject({
       allowed: false,
       reason: "ROBOTS_AUTH_REQUIRED",
     });

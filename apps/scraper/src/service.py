@@ -12,12 +12,22 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from html import unescape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import unquote, urljoin, urlparse, urlunparse
 
-from scrapling.fetchers import AsyncFetcher
+from curl_cffi.const import CurlOpt
+from curl_cffi.requests import AsyncSession as CurlAsyncSession
+from curl_cffi.requests.exceptions import (
+    ConnectionError as CurlConnectionError,
+    DNSError as CurlDNSError,
+    SSLError as CurlSSLError,
+    Timeout as CurlTimeout,
+)
+from scrapling.engines.toolbelt.convertor import ResponseFactory
 
 SERVICE_VERSION = "1.0.0"
 USER_AGENT = "FGPLeadResearch/1.0 (+local, respectful scanner)"
@@ -28,6 +38,10 @@ SCROLL_WAIT_MS = max(25, min(500, int(os.environ.get("SCRAPER_SCROLL_WAIT_MS", "
 DYNAMIC_SETTLE_MS = max(250, min(5_000, int(os.environ.get("SCRAPER_DYNAMIC_SETTLE_MS", "1250"))))
 DISCORD_RE = re.compile(
     r"(?:(?:https?:)?//)?(?:www\.)?(?:discord\.gg/[A-Za-z0-9_-]+|discord(?:app)?\.com/(?:invite/[A-Za-z0-9_-]+|channels/\d+(?:/\d+)?|servers/[A-Za-z0-9_-]+|widget/?\?[^\s\"'<>]*\bid=\d+)|(?:e\.)?widgetbot\.io/channels/\d+(?:/\d+)?)[^\s\"'<>]*",
+    re.IGNORECASE,
+)
+TELEGRAM_RE = re.compile(
+    r"(?:(?:https?:)?//)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog|(?:web\.)?telegram\.org)/[^\s\"'<>]+",
     re.IGNORECASE,
 )
 EMAIL_RE = re.compile(r"(?<![\w.+-])([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,63})(?![\w.-])", re.IGNORECASE)
@@ -42,6 +56,8 @@ LOW_VALUE_CONTENT_PATH_RE = re.compile(
 SOCIAL_HOSTS = {
     "t.me": "telegram",
     "telegram.me": "telegram",
+    "telegram.dog": "telegram",
+    "telegram.org": "telegram",
     "twitter.com": "twitter",
     "x.com": "twitter",
     "youtube.com": "youtube",
@@ -70,16 +86,59 @@ SOFT_404_RE = re.compile(
     r"(?:^|\b)(?:404|page\s+(?:was\s+)?not\s+found|page\s+does(?:n['’]t|\s+not)\s+exist|content\s+not\s+found)(?:\b|$)",
     re.IGNORECASE,
 )
-GLOBAL_SLOTS = threading.BoundedSemaphore(max(1, int(os.environ.get("SCRAPER_GLOBAL_CONCURRENCY", "12"))))
+PRICE_TEXT_RE = re.compile(
+    r"(?<![\w])(?:([$€£¥])\s*([0-9]{1,7}(?:[.,][0-9]{1,2})?)|([0-9]{1,7}(?:[.,][0-9]{1,2})?)\s*(USD|EUR|GBP|CAD|AUD|RUB|UAH|PLN|SEK|NOK|DKK|JPY|CNY|USDT|₽|₴|zł|kr))(?![\w])",
+    re.IGNORECASE,
+)
+RUST_NFA_RE = re.compile(
+    r"(?:\brust\b.{0,100}\b(?:nfa|non[-\s]?full\s+access|no\s+full\s+access)\b|\b(?:nfa|non[-\s]?full\s+access|no\s+full\s+access)\b.{0,100}\brust\b)",
+    re.IGNORECASE | re.DOTALL,
+)
+NFA_VARIANT_RE = re.compile(
+    r"(?:\b(?:premium|basic|aged|random)\b|\binactive\s+\d+\s+days?\b|\b\d+(?:\s*[-\u2013\u2014]\s*\d+|\s*(?:k)?\+)\s*(?:hours?|hrs?)\b|[$€£₽]\s*\d+\+?\s*inventory\b)",
+    re.IGNORECASE,
+)
+PRICE_CLASS_RE = re.compile(
+    r"(?:^|[-_\s])(?:price|amount|cost|product-price|sale-price)(?:$|[-_\s])",
+    re.IGNORECASE,
+)
+OUT_OF_STOCK_RE = re.compile(r"\b(?:out\s+of\s+stock|sold\s+out|unavailable)\b", re.IGNORECASE)
+IN_STOCK_RE = re.compile(r"\b(?:in\s+stock|available|buy\s+now|add\s+to\s+cart)\b", re.IGNORECASE)
+CURRENCY_SYMBOLS = {"$": "USD", "€": "EUR", "£": "GBP", "¥": "JPY", "₽": "RUB", "₴": "UAH", "zł": "PLN", "kr": "SEK"}
+NFA_INTERFACE_RE = re.compile(
+    r"\b(?:out\s+of\s+stock|sold\s+out|unavailable|add\s+to\s+cart|buy\s+now|select(?:\s+option)?|quantity)\b",
+    re.IGNORECASE,
+)
+GLOBAL_SLOTS = threading.BoundedSemaphore(max(1, int(os.environ.get("SCRAPER_GLOBAL_CONCURRENCY", "32"))))
 DYNAMIC_SLOTS = threading.BoundedSemaphore(
     max(1, min(4, int(os.environ.get("SCRAPER_DYNAMIC_CONCURRENCY", "3"))))
 )
 HOST_LOCKS: dict[str, threading.Lock] = {}
 HOST_LOCKS_GUARD = threading.Lock()
+DNS_CACHE: dict[tuple[str, int], tuple[float, list[str]]] = {}
+DNS_CACHE_GUARD = threading.Lock()
+DNS_CACHE_TTL_SECONDS = max(
+    5,
+    min(300, int(os.environ.get("SCRAPER_DNS_CACHE_TTL_SECONDS", "60"))),
+)
+DEVELOPMENT_SCRAPER_TOKEN = "aether-dev-local-worker"
 
 
 class ScraperError(RuntimeError):
     pass
+
+
+def configured_scraper_token() -> str:
+    token = os.environ.get("SCRAPER_TOKEN", "").strip()
+    if os.environ.get("NODE_ENV") == "production" and (
+        len(token) < 24
+        or token == DEVELOPMENT_SCRAPER_TOKEN
+        or "REPLACE_WITH" in token
+    ):
+        raise ScraperError(
+            "SCRAPER_TOKEN must be a unique secret of at least 24 characters in production"
+        )
+    return token or DEVELOPMENT_SCRAPER_TOKEN
 
 
 def _is_private_ip(value: str) -> bool:
@@ -97,7 +156,7 @@ def _is_private_ip(value: str) -> bool:
     )
 
 
-def validate_public_url(value: str, *, allow_private: bool = False) -> str:
+def resolve_public_target(value: str, *, allow_private: bool = False) -> tuple[str, list[str]]:
     parsed = urlparse(value)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
         raise ScraperError("Only public HTTP(S) URLs are allowed")
@@ -106,15 +165,46 @@ def validate_public_url(value: str, *, allow_private: bool = False) -> str:
         if not allow_private:
             raise ScraperError("Internal host blocked")
     if allow_private:
-        return value
+        return value, []
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    cache_key = (hostname, port)
+    with DNS_CACHE_GUARD:
+        cached = DNS_CACHE.get(cache_key)
+        if cached and cached[0] > time.monotonic():
+            return value, list(cached[1])
     try:
-        records = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+        records = socket.getaddrinfo(hostname, port)
     except OSError as error:
         raise ScraperError(f"DNS lookup failed: {error}") from error
     addresses = {record[4][0] for record in records}
     if not addresses or any(_is_private_ip(address) for address in addresses):
         raise ScraperError("Private or internal address blocked")
-    return value
+    approved_addresses = sorted(addresses)
+    with DNS_CACHE_GUARD:
+        if len(DNS_CACHE) >= 2_048:
+            now = time.monotonic()
+            for key, entry in list(DNS_CACHE.items()):
+                if entry[0] <= now:
+                    DNS_CACHE.pop(key, None)
+            if len(DNS_CACHE) >= 2_048:
+                DNS_CACHE.pop(next(iter(DNS_CACHE)))
+        DNS_CACHE[cache_key] = (
+            time.monotonic() + DNS_CACHE_TTL_SECONDS,
+            approved_addresses,
+        )
+    return value, approved_addresses
+
+
+def validate_public_url(value: str, *, allow_private: bool = False) -> str:
+    return resolve_public_target(value, allow_private=allow_private)[0]
+
+
+def _curl_resolve_entry(value: str, addresses: list[str]) -> str:
+    parsed = urlparse(value)
+    hostname = parsed.hostname or ""
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    encoded = [f"[{address}]" if ":" in address else address for address in addresses]
+    return f"{hostname}:{port}:{','.join(encoded)}"
 
 
 def normalize_discord(value: str, *, allow_root_destination: bool = False) -> str | None:
@@ -172,6 +262,33 @@ def normalize_discord(value: str, *, allow_root_destination: bool = False) -> st
     return None
 
 
+def normalize_telegram(value: str) -> str | None:
+    decoded = _decode_embedded_text(value).strip().rstrip("),.;]}")
+    match = TELEGRAM_RE.search(decoded)
+    if not match:
+        return None
+    candidate = match.group(0)
+    if candidate.startswith("//"):
+        candidate = f"https:{candidate}"
+    elif not re.match(r"https?://", candidate, re.I):
+        candidate = f"https://{candidate}"
+    try:
+        parsed = urlparse(candidate)
+    except ValueError:
+        return None
+    host = (parsed.hostname or "").lower().removeprefix("www.")
+    path = re.sub(r"/{2,}", "/", parsed.path or "/").rstrip("/")
+    if host in {"t.me", "telegram.me", "telegram.dog"}:
+        if not path:
+            return None
+        return urlunparse(("https", "t.me", path, "", parsed.query, parsed.fragment))
+    if host in {"telegram.org", "web.telegram.org"}:
+        if not path and not parsed.fragment:
+            return None
+        return urlunparse(("https", host, path or "/", "", parsed.query, parsed.fragment))
+    return None
+
+
 def normalize_link(value: str, page_url: str) -> str | None:
     try:
         parsed = urlparse(urljoin(page_url, unescape(value.strip())))
@@ -209,6 +326,249 @@ def _decode_embedded_text(value: str) -> str:
     return decoded.replace(r"\/", "/")
 
 
+def _price_parts(value: str, currency_hint: str = "") -> tuple[int, str, str] | None:
+    match = PRICE_TEXT_RE.search(unescape(value).replace("\u00a0", " "))
+    if not match:
+        plain = re.fullmatch(r"\s*([0-9]{1,7}(?:[.,][0-9]{1,2})?)\s*", value)
+        if not plain or not currency_hint:
+            return None
+        amount_text = plain.group(1)
+        currency_token = currency_hint
+        display = f"{amount_text} {currency_hint}"
+    else:
+        amount_text = match.group(2) or match.group(3)
+        currency_token = match.group(1) or match.group(4) or currency_hint
+        display = match.group(0).strip()
+    normalized_number = amount_text.replace(",", ".")
+    try:
+        amount_minor = round(float(normalized_number) * 100)
+    except ValueError:
+        return None
+    if amount_minor <= 0:
+        return None
+    token = currency_token.strip()
+    currency = CURRENCY_SYMBOLS.get(token, token.upper())
+    if currency not in {"USD", "EUR", "GBP", "CAD", "AUD", "RUB", "UAH", "PLN", "SEK", "NOK", "DKK", "JPY", "CNY", "USDT"}:
+        return None
+    return amount_minor, currency, display
+
+
+def _actual_price_parts(value: str, currency_hint: str = "") -> tuple[int, str, str] | None:
+    """Select the advertised price, not an inventory value such as '$100+'."""
+    decoded = unescape(value).replace("\u00a0", " ")
+    candidates = []
+    for match in PRICE_TEXT_RE.finditer(decoded):
+        if re.match(r"\s*\+\s*inventory\b", decoded[match.end() : match.end() + 24], re.IGNORECASE):
+            continue
+        candidates.append(match.group(0))
+    return _price_parts(candidates[-1], currency_hint) if candidates else _price_parts(decoded, currency_hint)
+
+
+def _listing_title(value: str, price_text: str, fallback: str, *, require_nfa: bool = True) -> str:
+    compact = re.sub(r"\s+", " ", unescape(value)).strip()
+    compact = NFA_INTERFACE_RE.sub(" ", compact)
+    if price_text:
+        compact = re.sub(re.escape(price_text), " ", compact, count=1, flags=re.IGNORECASE)
+    compact = re.sub(r"\s*[|•]\s*|\s+[-–—]\s*$", " ", compact)
+    compact = re.sub(r"\s+", " ", compact).strip(" ,-|•")
+    if require_nfa and not (NFA_VARIANT_RE.search(compact) or RUST_NFA_RE.search(compact)):
+        compact = fallback
+    if not compact:
+        compact = fallback
+    return compact[:300]
+
+
+def _product_keywords(product_name: str) -> list[str]:
+    ignored = {
+        "account", "accounts", "item", "items", "game", "games", "price", "prices",
+        "sale", "selling", "buy", "shop", "store", "market", "for", "the", "and",
+        "nfa", "full", "access",
+    }
+    return [
+        token.lower()
+        for token in re.findall(r"[A-Za-z0-9]{3,}", product_name)
+        if token.lower() not in ignored
+    ][:12]
+
+
+def extract_rust_price_listings(
+    page: Any,
+    page_url: str,
+    title: str,
+    *,
+    product_name: str = "Rust NFA accounts",
+    product_type: str = "RUST_NFA",
+) -> list[dict[str, Any]]:
+    listings: dict[str, dict[str, Any]] = {}
+    page_text = _text_content(page)
+    headings = " ".join(page.css("h1::text, h2::text").getall()[:20])
+    rust_mode = product_type.upper() == "RUST_NFA"
+    product_keywords = _product_keywords(product_name)
+    relevance_text = f"{title} {headings} {page_text[:6000]}".lower()
+    page_is_nfa = bool(RUST_NFA_RE.search(relevance_text))
+    page_is_product = page_is_nfa if rust_mode else bool(
+        product_keywords and any(keyword in relevance_text for keyword in product_keywords)
+    )
+    inferred_currency = _first(page, 'meta[property="product:price:currency"]::attr(content)') or ("USD" if "$" in page_text else "")
+
+    def add_listing(
+        *,
+        context: str,
+        price_value: str,
+        listing_url: str = "",
+        method: str,
+        currency_hint: str = "",
+        name: str = "",
+    ) -> None:
+        combined = re.sub(r"\s+", " ", f"{name} {context}").strip()
+        if rust_mode:
+            if not (RUST_NFA_RE.search(combined) or (page_is_nfa and NFA_VARIANT_RE.search(combined))):
+                return
+        elif (
+            not page_is_product
+            or (
+                method != "VARIANT_CONTROL"
+                and product_keywords
+                and not any(keyword in combined.lower() for keyword in product_keywords)
+            )
+        ):
+            return
+        parsed_price = _actual_price_parts(price_value, currency_hint or inferred_currency)
+        if not parsed_price:
+            return
+        price_minor, currency, price_text = parsed_price
+        normalized_url = normalize_link(listing_url, page_url) if listing_url else page_url
+        if not normalized_url:
+            normalized_url = page_url
+        listing_title = _listing_title(
+            name or context,
+            price_text,
+            title or product_name,
+            require_nfa=rust_mode,
+        )
+        key = f"{normalized_url.lower().rstrip('/')}|{listing_title.lower()}"
+        listings[key] = {
+                "name": listing_title,
+                "priceMinor": price_minor,
+                "currency": currency,
+                "priceText": price_text,
+                "link": normalized_url,
+                "method": method,
+            }
+
+    # Product and Offer JSON-LD is the strongest structured price signal.
+    for raw_json in page.css('script[type="application/ld+json"]::text').getall()[:100]:
+        try:
+            payload = json.loads(raw_json)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        def walk(node: Any, product_name: str = "", product_url: str = "") -> None:
+            if isinstance(node, list):
+                for child in node[:500]:
+                    walk(child, product_name, product_url)
+                return
+            if not isinstance(node, dict):
+                return
+            kind = str(node.get("@type", ""))
+            local_name = str(node.get("name") or product_name)
+            local_url = str(node.get("url") or product_url)
+            if kind.lower() in {"product", "individualproduct", "productgroup"}:
+                product_name, product_url = local_name, local_url
+            if kind.lower() in {"offer", "aggregateoffer"} or "price" in node:
+                price = node.get("price") or node.get("lowPrice")
+                if price is not None:
+                    add_listing(
+                        context=f"{product_name} {node.get('description', '')}",
+                        name=product_name,
+                        price_value=str(price),
+                        currency_hint=str(node.get("priceCurrency", "")),
+                        listing_url=str(node.get("url") or product_url),
+                        method="JSON_LD",
+                    )
+            for child in node.values():
+                if isinstance(child, (dict, list)):
+                    walk(child, product_name, product_url)
+
+        walk(payload)
+
+    # Select options, buttons, radio labels, and table rows can each be a variant.
+    for control in page.xpath(
+        "//option | //button | //label | //tr | //*[@role='option' or @role='radio']"
+    )[:1000]:
+        text = " ".join(control.xpath(".//text()[not(ancestor::script) and not(ancestor::style)]").getall())
+        data_price = control.attrib.get("data-price") or control.attrib.get("data-product-price") or control.attrib.get("data-cost") or ""
+        if not data_price and not PRICE_TEXT_RE.search(text):
+            continue
+        add_listing(
+            context=text,
+            name=text,
+            price_value=data_price or text,
+            currency_hint=control.attrib.get("data-currency") or inferred_currency,
+            listing_url=control.css("a::attr(href)").get() or control.attrib.get("href") or "",
+            method="VARIANT_CONTROL",
+        )
+
+    # Common product-card and microdata price nodes preserve the surrounding
+    # title/link rather than collapsing all prices into the page title.
+    for node in page.xpath(
+        "//*[@itemprop='price' or @data-price or @data-product-price"
+        " or contains(translate(@class, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'price')"
+        " or contains(translate(@id, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'price')]"
+    )[:1000]:
+        if node.xpath("self::button | self::option | self::label"):
+            continue
+        classes = f"{node.attrib.get('class', '')} {node.attrib.get('id', '')}"
+        if not (node.attrib.get("itemprop") == "price" or node.attrib.get("data-price") or node.attrib.get("data-product-price") or PRICE_CLASS_RE.search(classes)):
+            continue
+        container = node.xpath("ancestor::*[self::tr or self::label or self::article or self::li or self::div or self::section][1]")
+        card = container[0] if container else node.parent
+        context = " ".join(card.xpath(".//text()[not(ancestor::script) and not(ancestor::style)]").getall())
+        price_value = node.attrib.get("content") or node.attrib.get("data-price") or node.attrib.get("data-product-price") or node.text or " ".join(node.xpath(".//text()").getall())
+        name = card.css('[itemprop="name"]::text').get() or card.css("h1::text").get() or card.css("h2::text").get() or card.css("h3::text").get() or card.css("a::attr(title)").get() or context
+        listing_url = card.css('a[itemprop="url"]::attr(href)').get() or card.css("a::attr(href)").get() or ""
+        currency_hint = node.attrib.get("data-currency") or node.attrib.get("currency") or _first(page, 'meta[property="product:price:currency"]::attr(content)')
+        add_listing(
+            context=context,
+            name=name,
+            price_value=price_value,
+            currency_hint=currency_hint,
+            listing_url=listing_url,
+            method="PRODUCT_CARD",
+        )
+
+    # Page-level product metadata and bounded visible-text fallback cover
+    # simple single-listing pages that do not use product markup.
+    meta_amount = _first(page, 'meta[property="product:price:amount"]::attr(content)')
+    meta_currency = _first(page, 'meta[property="product:price:currency"]::attr(content)')
+    if meta_amount:
+        add_listing(
+            context=f"{title} {page_text[:1200]}",
+            name=title,
+            price_value=meta_amount,
+            currency_hint=meta_currency,
+            listing_url=page_url,
+            method="PRODUCT_META",
+        )
+    if page_is_product:
+        for block in page.xpath("//tr | //li | //article | //label | //option | //p")[:1500]:
+            text = " ".join(block.xpath(".//text()[not(ancestor::script) and not(ancestor::style)]").getall())
+            relevant_variant = (
+                bool(NFA_VARIANT_RE.search(text))
+                if rust_mode
+                else bool(
+                    PRICE_TEXT_RE.search(text)
+                    and (
+                        any(keyword in text.lower() for keyword in product_keywords)
+                        or block.xpath("ancestor::*[@itemtype or @data-product-id][1]")
+                    )
+                )
+            )
+            if relevant_variant and PRICE_TEXT_RE.search(text):
+                add_listing(context=text, name=text, price_value=text, listing_url=block.css("a::attr(href)").get() or "", method="VISIBLE_TEXT")
+    return list(listings.values())[:500]
+
+
 def _internal_priority(path: str, *, discord_label: bool = False, priority_label: bool = False) -> int:
     lowered = path.lower()
     if discord_label or re.search(r"(?:^|[-_/])(?:discord|dsc|dc)(?:[-_/.]|$)", lowered):
@@ -224,7 +584,15 @@ def _internal_priority(path: str, *, discord_label: bool = False, priority_label
     return 10
 
 
-def extract_page(page: Any, requested_url: str, *, fetch_mode: str, duration_ms: int) -> dict[str, Any]:
+def extract_page(
+    page: Any,
+    requested_url: str,
+    *,
+    fetch_mode: str,
+    duration_ms: int,
+    product_name: str = "Rust NFA accounts",
+    product_type: str = "RUST_NFA",
+) -> dict[str, Any]:
     raw = page.body
     if len(raw.encode("utf-8") if isinstance(raw, str) else raw) > MAX_BODY_BYTES:
         raise ScraperError("Response exceeds size limit")
@@ -332,6 +700,15 @@ def extract_page(page: Any, requested_url: str, *, fetch_mode: str, duration_ms:
             }
             discord[normalized] = hit
 
+    def add_telegram(value: str) -> None:
+        normalized = normalize_telegram(value)
+        if normalized:
+            socials[normalized] = {
+                "type": "telegram",
+                "url": normalized,
+                "sourcePage": page_url,
+            }
+
     if redirect:
         add_discord(redirect, "redirect-location")
 
@@ -365,7 +742,10 @@ def extract_page(page: Any, requested_url: str, *, fetch_mode: str, duration_ms:
         host = (parsed.hostname or "").lower().removeprefix("www.")
         for social_host, kind in SOCIAL_HOSTS.items():
             if host == social_host or host.endswith(f".{social_host}"):
-                socials[normalized] = {"type": kind, "url": normalized, "sourcePage": page_url}
+                if kind == "telegram":
+                    add_telegram(raw_href)
+                else:
+                    socials[normalized] = {"type": kind, "url": normalized, "sourcePage": page_url}
                 break
         if (
             host != page_host
@@ -430,6 +810,8 @@ def extract_page(page: Any, requested_url: str, *, fetch_mode: str, duration_ms:
             add_discord(value, method)
     for value in DISCORD_RE.finditer(text):
         add_discord(value.group(0), "visible-text")
+    for value in TELEGRAM_RE.finditer(text):
+        add_telegram(value.group(0))
     script_text = " ".join(page.xpath("//script//text()").getall())
     decoded_script = _decode_embedded_text(script_text)
     # Static JavaScript configuration often assembles public destinations from
@@ -438,9 +820,13 @@ def extract_page(page: Any, requested_url: str, *, fetch_mode: str, duration_ms:
     decoded_script = re.sub(r"(['\"])\s*\+\s*\1", "", decoded_script)
     for value in DISCORD_RE.finditer(decoded_script):
         add_discord(value.group(0), "embedded-data")
+    for value in TELEGRAM_RE.finditer(decoded_script):
+        add_telegram(value.group(0))
     decoded_html = _decode_embedded_text(html)
     for value in DISCORD_RE.finditer(decoded_html):
         add_discord(value.group(0), "html-source")
+    for value in TELEGRAM_RE.finditer(decoded_html):
+        add_telegram(value.group(0))
 
     # Decode a bounded number of inert Base64 strings commonly used in public
     # hydration/configuration payloads. This is string inspection only; no code
@@ -457,6 +843,8 @@ def extract_page(page: Any, requested_url: str, *, fetch_mode: str, duration_ms:
             continue
         for value in DISCORD_RE.finditer(_decode_embedded_text(decoded_token)):
             add_discord(value.group(0), "embedded-data")
+        for value in TELEGRAM_RE.finditer(_decode_embedded_text(decoded_token)):
+            add_telegram(value.group(0))
 
     # Recover statically-declared navigation targets such as meta refresh,
     # location.href, location.assign/replace, data-url and onclick routes. A
@@ -500,11 +888,14 @@ def extract_page(page: Any, requested_url: str, *, fetch_mode: str, duration_ms:
             continue
         for social_host, kind in SOCIAL_HOSTS.items():
             if destination_host == social_host or destination_host.endswith(f".{social_host}"):
-                socials[normalized_destination] = {
-                    "type": kind,
-                    "url": normalized_destination,
-                    "sourcePage": page_url,
-                }
+                if kind == "telegram":
+                    add_telegram(destination)
+                else:
+                    socials[normalized_destination] = {
+                        "type": kind,
+                        "url": normalized_destination,
+                        "sourcePage": page_url,
+                    }
                 break
 
     canonical_raw = _first(page, 'link[rel="canonical"]::attr(href)')
@@ -528,6 +919,13 @@ def extract_page(page: Any, requested_url: str, *, fetch_mode: str, duration_ms:
             html,
             re.IGNORECASE,
         )
+    )
+    rust_price_listings = extract_rust_price_listings(
+        page,
+        page_url,
+        title,
+        product_name=product_name,
+        product_type=product_type,
     )
     return {
         "requestedUrl": requested_url,
@@ -567,6 +965,7 @@ def extract_page(page: Any, requested_url: str, *, fetch_mode: str, duration_ms:
             if score <= 0
         ][:100],
         "scriptLinks": script_links[:12],
+        "rustPriceListings": rust_price_listings,
         "durationMs": duration_ms,
         "looksDynamic": shell or framework_page,
         "staticFetchResult": "SUCCESS",
@@ -607,7 +1006,14 @@ def _load_dynamic_fetcher() -> Any:
         fingerprints.generate_headers = original
 
 
-async def _dynamic_page(url: str, timeout_ms: int, *, allow_private: bool) -> Any:
+async def _dynamic_page(
+    url: str,
+    timeout_ms: int,
+    *,
+    allow_private: bool,
+    pinned_addresses: list[str],
+    discovery_mode: str = "discord",
+) -> Any:
     approved_host = (urlparse(url).hostname or "").lower()
     approved_public_hosts: dict[str, bool] = {approved_host: True}
     captured_main_redirects: list[str] = []
@@ -643,29 +1049,29 @@ async def _dynamic_page(url: str, timeout_ms: int, *, allow_private: bool) -> An
                 await route.continue_()
                 return
             request_host = (parsed.hostname or "").lower()
-            # Keep the top-level document on the approved host. Public
-            # cross-origin scripts/XHR/iframes are allowed only after the same
-            # DNS/IP SSRF validation used for first-party requests. This is
-            # required for legitimate embedded chat and social widgets.
-            if (
-                request_host != approved_host
-                and request.resource_type == "document"
-                and request.frame == page.main_frame
-            ):
+            # Keep the renderer entirely on the approved, DNS-pinned host.
+            # Static extraction still records external social destinations,
+            # but the browser never contacts cross-origin scripts, XHR, images,
+            # or frames where DNS rebinding could target a private service.
+            if request_host != approved_host:
                 # A first-party `/discord` route often performs a client-side
                 # top-level navigation to the invite. Do not permit the browser
                 # to leave the approved site, but preserve a validated public
                 # destination as inert extraction evidence.
-                try:
-                    await asyncio.to_thread(
-                        validate_public_url,
-                        candidate,
-                        allow_private=allow_private,
-                    )
-                    if candidate not in captured_main_redirects:
-                        captured_main_redirects.append(candidate)
-                except ScraperError:
-                    pass
+                if (
+                    request.resource_type == "document"
+                    and request.frame == page.main_frame
+                ):
+                    try:
+                        await asyncio.to_thread(
+                            validate_public_url,
+                            candidate,
+                            allow_private=allow_private,
+                        )
+                        if candidate not in captured_main_redirects:
+                            captured_main_redirects.append(candidate)
+                    except ScraperError:
+                        pass
                 await route.abort()
                 return
             try:
@@ -728,8 +1134,25 @@ async def _dynamic_page(url: str, timeout_ms: int, *, allow_private: bool) -> An
         # Most dynamically rendered Discord controls expose their destination
         # as soon as the DOM settles. Skip the click/scroll tiers in that case;
         # extraction still runs against the complete serialized document.
-        if await has_discord_destination():
+        if discovery_mode != "rust-price" and await has_discord_destination():
             return
+
+        if discovery_mode == "rust-price":
+            # Expand only inert public variant controls. Purchase/login actions
+            # are explicitly excluded, and navigation remains route-guarded.
+            await page.evaluate(
+                r"""() => {
+                    const useful = /(?:variant|option|more|show|expand|hours?|inactive|premium|inventory|nfa)/i;
+                    const dangerous = /(?:buy|purchase|pay|checkout|order|login|sign\s*in|delete|remove|wallet|account|cart)/i;
+                    for (const el of [...document.querySelectorAll('button,[role="button"],[aria-expanded="false"]')].slice(0, 200)) {
+                        const label = [el.textContent, el.getAttribute('aria-label'), el.getAttribute('title'), el.className].filter(Boolean).join(' ');
+                        if (useful.test(label) && !dangerous.test(label)) {
+                            try { el.click(); } catch {}
+                        }
+                    }
+                }"""
+            )
+            await page.wait_for_timeout(min(750, DYNAMIC_SETTLE_MS))
 
         async def click_social_controls() -> None:
             # Expand only public, non-transactional controls whose accessible
@@ -918,6 +1341,13 @@ async def _dynamic_page(url: str, timeout_ms: int, *, allow_private: bool) -> An
     browser_options: dict[str, Any] = {}
     if browser_executable:
         browser_options["executable_path"] = browser_executable
+    if pinned_addresses:
+        pinned_address = pinned_addresses[0]
+        if ":" in pinned_address:
+            pinned_address = f"[{pinned_address}]"
+        browser_options["extra_flags"] = [
+            f"--host-resolver-rules=MAP {approved_host} {pinned_address}, EXCLUDE localhost"
+        ]
 
     fetcher = _load_dynamic_fetcher()
     return await fetcher.async_fetch(
@@ -931,6 +1361,9 @@ async def _dynamic_page(url: str, timeout_ms: int, *, allow_private: bool) -> An
         # adaptively as soon as a complete Discord destination is present.
         wait=min(1_000, DYNAMIC_SETTLE_MS),
         timeout=timeout_ms,
+        # Scrapling models this value as the total bounded attempt count and
+        # requires at least one. Cross-request retries remain in the Node crawler
+        # so they are recorded and coordinated across the whole scan.
         retries=1,
         google_search=False,
         block_ads=False,
@@ -949,27 +1382,50 @@ async def scrape_url(
     allow_private: bool = False,
     mode: str = "page",
     force_dynamic: bool = False,
+    discovery_mode: str = "discord",
+    product_name: str = "Rust NFA accounts",
+    product_type: str = "RUST_NFA",
 ) -> dict[str, Any]:
-    validate_public_url(url, allow_private=allow_private)
+    _, pinned_addresses = resolve_public_target(url, allow_private=allow_private)
     if force_dynamic:
         dynamic_started = time.perf_counter()
         with DYNAMIC_SLOTS:
-            rendered = await _dynamic_page(url, timeout_ms, allow_private=allow_private)
+            rendered = await _dynamic_page(
+                url,
+                timeout_ms,
+                allow_private=allow_private,
+                pinned_addresses=pinned_addresses,
+                discovery_mode=discovery_mode,
+            )
         return extract_page(
             rendered,
             url,
             fetch_mode="Dynamic",
             duration_ms=int((time.perf_counter() - dynamic_started) * 1000),
+            product_name=product_name,
+            product_type=product_type,
         )
     started = time.perf_counter()
-    page = await AsyncFetcher.get(
-        url,
-        timeout=max(1, timeout_ms / 1000),
-        retries=1,
-        follow_redirects=False,
-        stealthy_headers=False,
-        headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9"},
-    )
+    session_options: dict[str, Any] = {}
+    if pinned_addresses:
+        # curl_cffi applies low-level resolver overrides at session creation.
+        # Passing curl_options to request() is not supported by the version
+        # bundled with Scrapling 0.4.11 and causes every static scan to fail.
+        session_options["curl_options"] = {
+            CurlOpt.RESOLVE: [_curl_resolve_entry(url, pinned_addresses)]
+        }
+    session = CurlAsyncSession(**session_options)
+    try:
+        response = await session.get(
+            url,
+            timeout=max(1, timeout_ms / 1000),
+            allow_redirects=False,
+            default_headers=False,
+            headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9"},
+        )
+    finally:
+        await session.close()
+    page = ResponseFactory.from_http_request(response, {})
     elapsed = int((time.perf_counter() - started) * 1000)
     if mode == "robots":
         if len(page.body) > 500_000:
@@ -985,7 +1441,14 @@ async def scrape_url(
             "text": page.body.decode("utf-8", errors="replace"),
             "durationMs": elapsed,
         }
-    result = extract_page(page, url, fetch_mode="HTTP", duration_ms=elapsed)
+    result = extract_page(
+        page,
+        url,
+        fetch_mode="HTTP",
+        duration_ms=elapsed,
+        product_name=product_name,
+        product_type=product_type,
+    )
     should_render = bool(
         dynamic_fallback
         and (
@@ -1007,16 +1470,25 @@ async def scrape_url(
             # broadly in parallel, while Chromium work stays deliberately
             # bounded so a batch cannot exhaust RAM or starve easy domains.
             with DYNAMIC_SLOTS:
+                dynamic_url = str(result["finalUrl"])
+                _, dynamic_addresses = resolve_public_target(
+                    dynamic_url,
+                    allow_private=allow_private,
+                )
                 rendered = await _dynamic_page(
-                    str(result["finalUrl"]),
+                    dynamic_url,
                     timeout_ms,
                     allow_private=allow_private,
+                    pinned_addresses=dynamic_addresses,
+                    discovery_mode=discovery_mode,
                 )
             result = extract_page(
                 rendered,
                 url,
                 fetch_mode="Dynamic",
                 duration_ms=int((time.perf_counter() - dynamic_started) * 1000) + elapsed,
+                product_name=product_name,
+                product_type=product_type,
             )
         except Exception as error:
             result["dynamicFetchResult"] = "FAILED"
@@ -1028,6 +1500,15 @@ def _retry_after_seconds(headers: dict[str, str]) -> int | None:
     value = headers.get("retry-after", "").strip()
     if value.isdigit():
         return max(0, min(300, int(value)))
+    if value:
+        try:
+            retry_at = parsedate_to_datetime(value)
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=timezone.utc)
+            delay = int((retry_at - datetime.now(timezone.utc)).total_seconds())
+            return max(0, min(300, delay))
+        except (TypeError, ValueError, OverflowError):
+            pass
     return None
 
 
@@ -1036,15 +1517,20 @@ class InternalHandler(BaseHTTPRequestHandler):
 
     def _json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            # The caller may have cancelled a slow request. Do not turn that
+            # ordinary cancellation into another worker failure or noisy trace.
+            return
 
     def _authorized(self) -> bool:
-        expected = os.environ.get("SCRAPER_TOKEN", "aether-dev-local-worker")
+        expected = configured_scraper_token()
         return self.client_address[0] in {"127.0.0.1", "::1"} and self.headers.get("Authorization") == f"Bearer {expected}"
 
     def do_GET(self) -> None:
@@ -1072,21 +1558,95 @@ class InternalHandler(BaseHTTPRequestHandler):
             hostname = (urlparse(requested_url).hostname or "").lower()
             with HOST_LOCKS_GUARD:
                 host_lock = HOST_LOCKS.setdefault(hostname, threading.Lock())
-            with GLOBAL_SLOTS, host_lock:
+            # Never let HTTP handler threads wait invisibly until the caller's
+            # deadline expires. A short admission window returns a retryable 503
+            # so the central crawler can back off and reduce concurrency.
+            admission_seconds = max(
+                0.1,
+                min(2.0, int(body.get("timeoutMs", 10_000)) / 10_000),
+            )
+            global_acquired = GLOBAL_SLOTS.acquire(timeout=admission_seconds)
+            if not global_acquired:
+                self._json(
+                    503,
+                    {
+                        "ok": False,
+                        "error": "Scrapling worker busy; global capacity is full",
+                        "retryAfterSeconds": 1,
+                    },
+                )
+                return
+            host_acquired = False
+            try:
+                host_acquired = host_lock.acquire(timeout=admission_seconds)
+                if not host_acquired:
+                    self._json(
+                        503,
+                        {
+                            "ok": False,
+                            "error": "Scrapling worker busy; this host already has an active request",
+                            "retryAfterSeconds": 1,
+                        },
+                    )
+                    return
                 result = asyncio.run(
                     scrape_url(
                         requested_url,
                         timeout_ms=max(2_000, min(60_000, int(body.get("timeoutMs", 10_000)))),
                         dynamic_fallback=bool(body.get("dynamicFallback", True)),
                         force_dynamic=bool(body.get("forceDynamic", False)),
+                        discovery_mode="rust-price" if body.get("discoveryMode") == "rust-price" else "discord",
+                        product_name=str(body.get("productName") or "Rust NFA accounts")[:120],
+                        product_type=str(body.get("productType") or "RUST_NFA")[:30],
                         mode="robots" if body.get("mode") == "robots" else "page",
                     )
                 )
+            finally:
+                if host_acquired:
+                    host_lock.release()
+                GLOBAL_SLOTS.release()
             self._json(200, {"ok": True, "result": result})
         except (ScraperError, ValueError, TypeError, json.JSONDecodeError) as error:
             self._json(400, {"ok": False, "error": str(error)})
-        except TimeoutError as error:
-            self._json(504, {"ok": False, "error": f"Timeout: {error}"})
+        except (TimeoutError, CurlTimeout) as error:
+            self._json(
+                504,
+                {
+                    "ok": False,
+                    "code": "TIMEOUT",
+                    "error": f"Timeout: {error}",
+                    "retryAfterSeconds": 1,
+                },
+            )
+        except CurlDNSError as error:
+            self._json(
+                502,
+                {
+                    "ok": False,
+                    "code": "DNS_FAILURE",
+                    "error": f"DNS lookup failed: {error}",
+                    "retryAfterSeconds": 1,
+                },
+            )
+        except CurlSSLError as error:
+            self._json(
+                502,
+                {
+                    "ok": False,
+                    "code": "TLS_FAILURE",
+                    "error": f"TLS handshake failed: {error}",
+                },
+            )
+        except CurlConnectionError as error:
+            self._json(
+                502,
+                {
+                    "ok": False,
+                    "code": "CONNECTION_FAILURE",
+                    "error": f"Connection failed: {error}",
+                    "retryAfterSeconds": 1,
+                },
+            )
         except Exception as error:
             print(f"Scrapling request failed: {error!r}", file=sys.stderr, flush=True)
             self._json(502, {"ok": False, "error": f"Scrapling worker error: {type(error).__name__}: {error}"})
@@ -1103,6 +1663,7 @@ def _package_version() -> str:
 
 
 def main() -> None:
+    configured_scraper_token()
     host = "127.0.0.1"
     port = int(os.environ.get("SCRAPER_PORT", "3011"))
     server = ThreadingHTTPServer((host, port), InternalHandler)

@@ -1,5 +1,6 @@
 import { prisma } from "./db.js";
-import { discordDestinationKind } from "@lead/shared";
+import { discordDestinationKind, normalizeTelegramUrl } from "@lead/shared";
+import { emit } from "./events.js";
 
 type SyncLeadOptions = {
   workspaceId: string;
@@ -30,7 +31,25 @@ export async function syncScannerResultToLead(options: SyncLeadOptions) {
       id: options.scannerResultId,
       workspaceId: options.workspaceId,
     },
-    include: { discordLinks: true, sources: true, domain: true },
+    select: {
+      id: true,
+      domainId: true,
+      url: true,
+      finalUrl: true,
+      title: true,
+      emailsJson: true,
+      socialLinksJson: true,
+      discordLinks: {
+        select: { url: true },
+        orderBy: { createdAt: "asc" },
+      },
+      sources: {
+        select: { query: true },
+        orderBy: { discoveredAt: "asc" },
+        take: 1,
+      },
+      domain: { select: { hostname: true } },
+    },
   });
   const existing = await prisma.lead.findUnique({
     where: {
@@ -44,7 +63,11 @@ export async function syncScannerResultToLead(options: SyncLeadOptions) {
   const socials = jsonArray<{ type: string; url: string }>(
     result.socialLinksJson,
   );
-  const telegram = socials.find((link) => link.type === "telegram")?.url || "";
+  const telegram =
+    socials
+      .filter((link) => link.type === "telegram")
+      .map((link) => normalizeTelegramUrl(link.url))
+      .find(Boolean) || "";
   const otherContact = socials
     .filter((link) => link.type !== "telegram")
     .map((link) => link.url)
@@ -54,9 +77,17 @@ export async function syncScannerResultToLead(options: SyncLeadOptions) {
   const website = result.finalUrl || result.url;
   const companyName =
     result.title && result.title !== result.domain.hostname ? result.title : "";
-  const discoveredInvite = result.discordLinks.find(
-    (link) => discordDestinationKind(link.url) === "invite",
-  )?.url;
+  const discoveredDiscord =
+    result.discordLinks.find(
+      (link) => discordDestinationKind(link.url) === "invite",
+    )?.url || result.discordLinks[0]?.url;
+  const discoveredEmail = emails[0] || "";
+
+  // Manually created leads remain valid. Scanner discoveries become leads as
+  // soon as Discord or Telegram is verified, with email as the fallback when
+  // neither messaging destination is available.
+  if (!existing && !discoveredDiscord && !telegram && !discoveredEmail)
+    return { lead: null, created: false, skipped: true };
 
   const lead = await prisma.lead.upsert({
     where: {
@@ -74,8 +105,8 @@ export async function syncScannerResultToLead(options: SyncLeadOptions) {
       priority: "Medium",
       website,
       companyName,
-      discordInvite: discoveredInvite || "",
-      email: emails[0] || "",
+      discordInvite: discoveredDiscord || "",
+      email: discoveredEmail,
       telegram,
       otherContact,
       activities: {
@@ -95,13 +126,14 @@ export async function syncScannerResultToLead(options: SyncLeadOptions) {
       companyName: existing?.companyName ? undefined : companyName || undefined,
       discordInvite: existing?.discordInvite
         ? undefined
-        : discoveredInvite || undefined,
-      email: existing?.email ? undefined : emails[0] || undefined,
+        : discoveredDiscord || undefined,
+      email: existing?.email ? undefined : discoveredEmail || undefined,
       telegram: existing?.telegram ? undefined : telegram || undefined,
       otherContact: existing?.otherContact
         ? undefined
         : otherContact || undefined,
     },
   });
-  return { lead, created: !existing };
+  emit("lead-update", { id: lead.id, created: !existing }, options.workspaceId);
+  return { lead, created: !existing, skipped: false };
 }

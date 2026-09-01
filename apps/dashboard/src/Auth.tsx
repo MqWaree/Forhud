@@ -16,6 +16,7 @@ export type AuthUser = {
   status: string;
   requirePasswordChange: boolean;
   workspace: { id: string; name: string; scannerId: string };
+  ranks: Array<{ id: string; name: string; color: string; position: number; permissions: string[] }>;
 };
 
 type AuthValue = {
@@ -46,6 +47,8 @@ export default function AuthRoot({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser>();
   const [loading, setLoading] = useState(true);
   const [setup, setSetup] = useState(false);
+  const [setupProtected, setSetupProtected] = useState(false);
+  const [setupConfigured, setSetupConfigured] = useState(true);
   const refresh = async () => {
     try {
       setUser(await request("/auth/me"));
@@ -58,6 +61,8 @@ export default function AuthRoot({ children }: { children: ReactNode }) {
       try {
         const status = await request("/auth/setup-status");
         setSetup(Boolean(status.required));
+        setSetupProtected(Boolean(status.protected));
+        setSetupConfigured(status.configured !== false);
         if (!status.required) await refresh();
       } finally {
         setLoading(false);
@@ -81,6 +86,8 @@ export default function AuthRoot({ children }: { children: ReactNode }) {
     return (
       <AuthForm
         setup={setup}
+        setupProtected={setupProtected}
+        setupConfigured={setupConfigured}
         onAuthenticated={(next) => {
           setUser(next);
           setSetup(false);
@@ -160,7 +167,6 @@ function RequiredPasswordChange({
             <input
               type="password"
               required
-              minLength={12}
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
             />
@@ -170,7 +176,6 @@ function RequiredPasswordChange({
             <input
               type="password"
               required
-              minLength={12}
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
             />
@@ -192,13 +197,18 @@ function RequiredPasswordChange({
 
 function AuthForm({
   setup,
+  setupProtected,
+  setupConfigured,
   onAuthenticated,
 }: {
   setup: boolean;
+  setupProtected: boolean;
+  setupConfigured: boolean;
   onAuthenticated: (user: AuthUser) => void;
 }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [setupToken, setSetupToken] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -210,7 +220,7 @@ function AuthForm({
       const user = await request(
         setup ? "/auth/setup" : "/auth/login",
         "POST",
-        { username, password },
+        { username, password, ...(setup ? { setupToken } : {}) },
       );
       onAuthenticated(user);
     } catch (reason) {
@@ -260,7 +270,6 @@ function AuthForm({
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                minLength={setup ? 12 : undefined}
                 autoComplete={setup ? "new-password" : "current-password"}
               />
               <button
@@ -273,10 +282,25 @@ function AuthForm({
               </button>
             </span>
           </label>
+          {setup && setupProtected && (
+            <label>
+              <span>Initial setup code</span>
+              <input
+                required
+                type="password"
+                value={setupToken}
+                onChange={(event) => setSetupToken(event.target.value)}
+                autoComplete="one-time-code"
+              />
+            </label>
+          )}
           {setup && (
             <small className="password-hint">
-              Use at least 12 characters. Passwords are stored as one-way
-              hashes.
+              Avoid common or predictable passwords. Passwords are stored as
+              one-way hashes.
+              {setupProtected && !setupConfigured
+                ? " The server operator must configure an initial setup code before this workspace can be created."
+                : ""}
             </small>
           )}
           {error && <div className="auth-error">{error}</div>}

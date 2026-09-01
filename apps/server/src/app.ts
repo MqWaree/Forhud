@@ -2,14 +2,17 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import dns from "node:dns/promises";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
+  canonicalSiteKey,
   csvEscape,
   discordDestinationKind,
   extractDomain,
   importLinksSchema,
   importSearchSchema,
   leadPatchSchema,
+  normalizeDiscordUrl,
   normalizeUrl,
   settingsSchema,
 } from "@lead/shared";
@@ -20,9 +23,10 @@ import {
   audit,
   clearSessionCookie,
   createSession,
-  generateReadableId,
+  generateScannerId,
   hashPassword,
-  PASSWORD_MIN_LENGTH,
+  isSecureScannerId,
+  passwordStrengthIssue,
   publicUser,
   requireAuth,
   requireRole,
@@ -31,6 +35,18 @@ import {
   type AuthRequest,
   verifyPassword,
 } from "./auth.js";
+import {
+  cleanupExpiredRateLimits,
+  clearRateLimit,
+  rateLimitKey,
+  recordRateLimitAttempt,
+  recordRateLimitAttempts,
+  retryAfterRateLimit,
+} from "./rate-limit.js";
+import {
+  assertInitialSetupAuthorized,
+  initialSetupProtection,
+} from "./setup-security.js";
 import {
   pairExtension,
   requireExtension,
@@ -47,6 +63,7 @@ import {
 import {
   bootstrapScanner,
   resetScanner,
+  scannerResultDetail,
   scannerSnapshot,
   startScanner,
   stopScanner,
@@ -59,15 +76,58 @@ import {
   searchBrave,
 } from "./brave-search.js";
 import {
+  discoveryProgressPercent,
+  getCurrentSearchProgress,
+  setCurrentSearchProgress,
+  type CurrentSearchProgress,
+} from "./search-progress.js";
+import {
+  getDiscordReconciliationProgress,
+  startWorkspaceDiscordInviteReconciliation,
+} from "./discord-invite-reconciliation.js";
+import {
   defaultExcludedBusinessPlatformCount,
   isExcludedBusinessPlatform,
   isExcludedBusinessSearchResult,
 } from "./business-filter.js";
+import {
+  deleteRustPriceResults,
+  resetRustPriceScanner,
+  rustPriceDiagnosticExport,
+  rustPriceSnapshot,
+  startRustPriceScanner,
+  stopRustPriceScanner,
+} from "./rust-price-scanner.js";
+import {
+  marketProduct,
+  marketProductTypes,
+  type MarketProduct,
+  type MarketProductType,
+} from "./market-products.js";
+import {
+  lztTrackerSnapshot,
+  recalculateLztAverage,
+  queueLztHighHoursTestAlert,
+  retryLatestFailedHazeTestAlert,
+  restartLztTracker,
+  startLztTracker,
+  stopLztTracker,
+  testLztConnection,
+} from "./lzt-tracker.js";
+import { LztApiError } from "./lzt-client.js";
+import { queueHazeManualMessage } from "./haze-notifier.js";
 import { syncScannerResultToLead } from "./lead-sync.js";
+import {
+  ensureWorkspaceRanks,
+  publicRanksForUser,
+  rankPermissions,
+  requireRankPermission,
+  workspaceMemberDirectory,
+} from "./ranks.js";
 
 export { prisma } from "./db.js";
 const defaults = {
-  crawlerConcurrency: 8,
+  crawlerConcurrency: 32,
   adaptiveConcurrency: true,
   timeoutSeconds: 10,
   retries: 1,
@@ -99,6 +159,7 @@ async function getSettings(workspaceId?: string) {
   };
 }
 const SECURITY_POLICY_MARKER = "security.password-policy-v2";
+const SECURITY_POLICY_V3_MARKER = "security.scanner-id-v3";
 
 export async function applySecurityPolicyV2() {
   if ((await prisma.user.count()) === 0) return;
@@ -121,7 +182,56 @@ export async function applySecurityPolicyV2() {
   });
 }
 
-export const scannerReady = bootstrapScanner().then(applySecurityPolicyV2);
+export async function applySecurityPolicyV3() {
+  const workspaces = await prisma.workspace.findMany({
+    select: { id: true, scannerId: true },
+  });
+  const unsafeWorkspaces = workspaces.filter(
+    (workspace) => !isSecureScannerId(workspace.scannerId),
+  );
+  if (
+    unsafeWorkspaces.length === 0 &&
+    (await prisma.setting.findUnique({
+      where: { id: SECURITY_POLICY_V3_MARKER },
+    }))
+  )
+    return;
+  const used = new Set(workspaces.map((workspace) => workspace.scannerId));
+  await prisma.$transaction(async (tx) => {
+    for (const workspace of unsafeWorkspaces) {
+      let scannerId = generateScannerId();
+      while (used.has(scannerId)) scannerId = generateScannerId();
+      used.add(scannerId);
+      await tx.workspace.update({
+        where: { id: workspace.id },
+        data: { scannerId },
+      });
+      await tx.extensionInstance.updateMany({
+        where: { workspaceId: workspace.id, revokedAt: null },
+        data: { revokedAt: new Date(), scannerState: "STOPPED" },
+      });
+      await tx.auditLog.create({
+        data: {
+          workspaceId: workspace.id,
+          action: "SCANNER_ID_HARDENED",
+          targetType: "Workspace",
+          targetId: workspace.id,
+        },
+      });
+    }
+    await tx.setting.upsert({
+      where: { id: SECURITY_POLICY_V3_MARKER },
+      update: { value: JSON.stringify(true) },
+      create: { id: SECURITY_POLICY_V3_MARKER, value: JSON.stringify(true) },
+    });
+  });
+}
+
+export const scannerReady = bootstrapScanner().then(async () => {
+  await applySecurityPolicyV2();
+  await applySecurityPolicyV3();
+  await cleanupExpiredRateLimits();
+});
 const app = express();
 app.set("trust proxy", "loopback");
 app.use(helmet({ crossOriginResourcePolicy: false }));
@@ -171,56 +281,31 @@ const usernameSchema = z
     "Username must start with a letter or number and use only letters, numbers, dots, dashes, or underscores",
   )
   .transform((value) => value.toLowerCase());
+const newPasswordSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((value) => !passwordStrengthIssue(value), {
+    message: "Choose a less predictable password",
+  });
 const accountSchema = z.object({
   username: usernameSchema,
-  password: z.string().min(PASSWORD_MIN_LENGTH).max(200),
+  password: newPasswordSchema,
 });
-type RateBucket = { count: number; resetAt: number };
-const loginAttempts = new Map<string, RateBucket>();
-const loginIpAttempts = new Map<string, RateBucket>();
-const pairingAttempts = new Map<string, RateBucket>();
-const RATE_WINDOW_MS = 15 * 60 * 1000;
-
-function retryAfter(
-  buckets: Map<string, RateBucket>,
-  key: string,
-  limit: number,
-  now: number,
-) {
-  const bucket = buckets.get(key);
-  if (!bucket || bucket.resetAt <= now) {
-    if (bucket) buckets.delete(key);
-    return 0;
-  }
-  return bucket.count >= limit
-    ? Math.max(1, Math.ceil((bucket.resetAt - now) / 1000))
-    : 0;
-}
-
-function recordAttempt(
-  buckets: Map<string, RateBucket>,
-  key: string,
-  now: number,
-) {
-  const current = buckets.get(key);
-  buckets.set(key, {
-    count: current && current.resetAt > now ? current.count + 1 : 1,
-    resetAt:
-      current && current.resetAt > now ? current.resetAt : now + RATE_WINDOW_MS,
-  });
-  if (buckets.size > 10_000)
-    for (const [candidate, bucket] of buckets)
-      if (bucket.resetAt <= now) buckets.delete(candidate);
-}
 
 const dummyPasswordHash = await hashPassword(
   "FGP timing-safe password verification placeholder",
 );
 let setupInProgress = false;
 
-app.get("/api/auth/setup-status", async (_req, res) =>
-  res.json({ required: (await prisma.user.count()) === 0 }),
-);
+app.get("/api/auth/setup-status", async (_req, res) => {
+  const protection = initialSetupProtection();
+  res.json({
+    required: (await prisma.user.count()) === 0,
+    protected: protection.required,
+    configured: protection.configured,
+  });
+});
 app.post("/api/auth/setup", async (req, res, next) => {
   if (setupInProgress)
     return res
@@ -228,18 +313,22 @@ app.post("/api/auth/setup", async (req, res, next) => {
       .json({ error: "Initial setup is already in progress" });
   setupInProgress = true;
   try {
+    await scannerReady;
     if ((await prisma.user.count()) > 0)
       return res
         .status(409)
         .json({ error: "Initial setup is already complete" });
-    const input = accountSchema.parse(req.body);
+    const input = accountSchema
+      .extend({ setupToken: z.string().trim().max(200).optional() })
+      .parse(req.body);
+    assertInitialSetupAuthorized(input.setupToken);
     let workspace = await prisma.workspace.findFirst({
       orderBy: { createdAt: "asc" },
     });
     if (!workspace) {
-      let scannerId = generateReadableId();
+      let scannerId = generateScannerId();
       while (await prisma.workspace.findUnique({ where: { scannerId } }))
-        scannerId = generateReadableId();
+        scannerId = generateScannerId();
       workspace = await prisma.workspace.create({
         data: { name: `${input.username}'s Workspace`, scannerId },
       });
@@ -268,7 +357,14 @@ app.post("/api/auth/setup", async (req, res, next) => {
       },
     });
     await createSession(user.id, false, res);
-    res.status(201).json(publicUser({ ...user, role: "ADMIN" }));
+    await ensureWorkspaceRanks(user.workspaceId);
+    res.status(201).json(
+      publicUser({
+        ...user,
+        role: "ADMIN",
+        ranks: await publicRanksForUser(user.id),
+      }),
+    );
   } catch (error) {
     next(error);
   } finally {
@@ -291,10 +387,13 @@ app.post("/api/auth/login", async (req, res, next) => {
       })
       .parse(req.body);
     const ipKey = req.ip || req.socket.remoteAddress || "unknown";
-    const key = `${ipKey}:${input.username}`;
+    const accountKey = rateLimitKey("login-account", ipKey, input.username);
+    const ipRateKey = rateLimitKey("login-ip", ipKey);
     const now = Date.now();
-    const accountRetry = retryAfter(loginAttempts, key, 5, now);
-    const ipRetry = retryAfter(loginIpAttempts, ipKey, 25, now);
+    const [accountRetry, ipRetry] = await Promise.all([
+      retryAfterRateLimit(accountKey, 5, now),
+      retryAfterRateLimit(ipRateKey, 25, now),
+    ]);
     const blockedFor = Math.max(accountRetry, ipRetry);
     if (blockedFor) {
       res.set("Retry-After", String(blockedFor));
@@ -312,19 +411,25 @@ app.post("/api/auth/login", async (req, res, next) => {
     );
     const valid = user?.status === "ACTIVE" && passwordMatches;
     if (!user || !valid) {
-      recordAttempt(loginAttempts, key, now);
-      recordAttempt(loginIpAttempts, ipKey, now);
+      await recordRateLimitAttempts([accountKey, ipRateKey], now);
       return res.status(401).json({ error: "Invalid username or password." });
     }
-    loginAttempts.delete(key);
-    loginIpAttempts.delete(ipKey);
+    // A successful account login clears only that account bucket. Keep the
+    // global IP spray counter until its window expires so one valid credential
+    // cannot reset distributed username guessing from the same source.
+    await clearRateLimit(accountKey);
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
     });
     await createSession(user.id, input.remember, res);
+    await ensureWorkspaceRanks(user.workspaceId);
     res.json(
-      publicUser({ ...user, role: user.role as (typeof roles)[number] }),
+      publicUser({
+        ...user,
+        role: user.role as (typeof roles)[number],
+        ranks: await publicRanksForUser(user.id),
+      }),
     );
   } catch (error) {
     next(error);
@@ -337,22 +442,30 @@ app.post("/api/auth/logout", requireAuth, async (req, res) => {
   clearSessionCookie(res);
   res.status(204).end();
 });
-app.get("/api/auth/me", requireAuth, (req, res) =>
-  res.json(publicUser((req as AuthRequest).auth)),
-);
+app.get("/api/auth/me", requireAuth, async (req, res, next) => {
+  try {
+    const auth = (req as AuthRequest).auth;
+    await ensureWorkspaceRanks(auth.workspaceId);
+    res.json(publicUser({ ...auth, ranks: await publicRanksForUser(auth.id) }));
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.post("/api/extension/pair", async (req, res, next) => {
   try {
+    await scannerReady;
     const now = Date.now();
-    const key = req.ip || req.socket.remoteAddress || "unknown";
-    const blockedFor = retryAfter(pairingAttempts, key, 10, now);
+    const ipKey = req.ip || req.socket.remoteAddress || "unknown";
+    const key = rateLimitKey("extension-pair", ipKey);
+    const blockedFor = await retryAfterRateLimit(key, 10, now);
     if (blockedFor) {
       res.set("Retry-After", String(blockedFor));
       return res
         .status(429)
         .json({ error: "Too many pairing attempts. Try again later." });
     }
-    recordAttempt(pairingAttempts, key, now);
+    await recordRateLimitAttempt(key, now);
     const input = z
       .object({
         scannerId: z.string().trim().min(4).max(32),
@@ -361,7 +474,7 @@ app.post("/api/extension/pair", async (req, res, next) => {
       })
       .parse(req.body);
     const paired = await pairExtension(input);
-    pairingAttempts.delete(key);
+    await clearRateLimit(key);
     res.status(201).json(paired);
   } catch (error) {
     next(error);
@@ -415,11 +528,13 @@ app.post(
 app.get("/api/events", requireAuth, (req, res) => {
   res.set({
     "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
+    "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
   });
   res.flushHeaders();
-  connect(res, (req as AuthRequest).auth.workspaceId);
+  const auth = (req as AuthRequest).auth;
+  connect(res, auth.workspaceId, auth.id);
 });
 
 type ImportPayload = {
@@ -433,6 +548,27 @@ type ImportPayload = {
   capturedAt?: string;
   results: { title: string; url: string; position: number }[];
 };
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  task: (item: T) => Promise<R>,
+) {
+  const output = new Array<R>(items.length);
+  let cursor = 0;
+  await Promise.all(
+    Array.from(
+      { length: Math.min(Math.max(1, concurrency), items.length) },
+      async () => {
+        while (cursor < items.length) {
+          const index = cursor++;
+          output[index] = await task(items[index]!);
+        }
+      },
+    ),
+  );
+  return output;
+}
 
 async function persistImport(body: ImportPayload) {
   const session = await prisma.searchSession.create({
@@ -448,14 +584,27 @@ async function persistImport(body: ImportPayload) {
   });
   let imported = 0,
     created = 0,
+    intakeDuplicates = 0,
     excluded = 0,
-    leadsAdded = 0;
+    rejected = 0;
+  const leadsAdded = 0;
   const seen = new Set<string>();
+  const seenDomains = new Set<string>();
   const acceptedDomains = new Set<string>();
+  const candidates: Array<{
+    title: string;
+    url: string;
+    normalized: string;
+    hostname: string;
+    position: number;
+  }> = [];
   for (const item of body.results) {
     try {
       const normalized = normalizeUrl(item.url);
-      if (seen.has(normalized)) continue;
+      if (seen.has(normalized)) {
+        intakeDuplicates++;
+        continue;
+      }
       seen.add(normalized);
       const providerResult = ["brave", "google"].includes(
         body.source.toLowerCase(),
@@ -471,37 +620,95 @@ async function persistImport(body: ImportPayload) {
         excluded++;
         continue;
       }
-      await assertPublicUrl(normalized);
       const hostname = extractDomain(normalized);
+      if (seenDomains.has(hostname)) {
+        intakeDuplicates++;
+        continue;
+      }
+      seenDomains.add(hostname);
+      candidates.push({
+        title: item.title,
+        url: item.url,
+        normalized,
+        hostname,
+        position: item.position,
+      });
+    } catch {
+      rejected++;
+    }
+  }
+
+  const validated = (
+    await mapWithConcurrency(candidates, 16, async (candidate) => {
+      try {
+        await assertPublicUrl(candidate.normalized);
+        return candidate;
+      } catch {
+        rejected++;
+        return undefined;
+      }
+    })
+  ).filter((candidate): candidate is NonNullable<typeof candidate> =>
+    Boolean(candidate),
+  );
+
+  const domainPairs = await mapWithConcurrency(validated, 6, async (item) => {
+    try {
       const domain = await prisma.domain.upsert({
-        where: { hostname },
-        create: { hostname },
+        where: { hostname: item.hostname },
+        create: { hostname: item.hostname },
         update: { lastSeen: new Date() },
       });
+      return { item, domain };
+    } catch {
+      rejected++;
+      return undefined;
+    }
+  });
+  const ready = domainPairs.filter((pair): pair is NonNullable<typeof pair> =>
+    Boolean(pair),
+  );
+  const domainIds = ready.map((pair) => pair.domain.id);
+  const [existingScannerRows, existingLeadRows] = await Promise.all([
+    prisma.scannerResult.findMany({
+      where: { workspaceId: body.workspaceId, domainId: { in: domainIds } },
+      select: { domainId: true },
+    }),
+    prisma.lead.findMany({
+      where: { workspaceId: body.workspaceId, domainId: { in: domainIds } },
+      select: {
+        domainId: true,
+        website: true,
+        companyName: true,
+        searchResultId: true,
+      },
+    }),
+  ]);
+  const existingScanners = new Set(
+    existingScannerRows.map((row) => row.domainId),
+  );
+  const existingLeads = new Map(
+    existingLeadRows.map((row) => [row.domainId, row]),
+  );
+
+  await mapWithConcurrency(ready, 4, async ({ item, domain }) => {
+    try {
       const archived = await prisma.searchResult.upsert({
         where: {
           searchSessionId_normalizedUrl: {
             searchSessionId: session.id,
-            normalizedUrl: normalized,
+            normalizedUrl: item.normalized,
           },
         },
         create: {
           searchSessionId: session.id,
           title: item.title,
           url: item.url,
-          normalizedUrl: normalized,
+          normalizedUrl: item.normalized,
           domainId: domain.id,
           position: item.position,
         },
         update: { title: item.title, position: item.position },
-      });
-      const existing = await prisma.scannerResult.findUnique({
-        where: {
-          workspaceId_domainId: {
-            workspaceId: body.workspaceId,
-            domainId: domain.id,
-          },
-        },
       });
       const workspace = await prisma.scannerResult.upsert({
         where: {
@@ -513,7 +720,7 @@ async function persistImport(body: ImportPayload) {
         create: {
           workspaceId: body.workspaceId,
           url: item.url,
-          normalizedUrl: normalized,
+          normalizedUrl: item.normalized,
           title: item.title,
           domainId: domain.id,
         },
@@ -523,7 +730,8 @@ async function persistImport(body: ImportPayload) {
           lastSeen: new Date(),
         },
       });
-      if (!existing) created++;
+      const scannerWasPresent = existingScanners.has(domain.id);
+      if (!scannerWasPresent) created++;
       await prisma.scannerSource.upsert({
         where: {
           scannerResultId_searchSessionId: {
@@ -544,20 +752,33 @@ async function persistImport(body: ImportPayload) {
           clientId: body.clientId,
         },
       });
-      const synced = await syncScannerResultToLead({
-        workspaceId: body.workspaceId,
-        scannerResultId: workspace.id,
-        searchResultId: archived.id,
-        actorId: body.actorId,
-        sourceLabel: body.searchQuery,
-      });
-      if (synced.created) leadsAdded++;
+      const existingLead = existingLeads.get(domain.id);
+      if (existingLead)
+        await prisma.lead.update({
+          where: {
+            workspaceId_domainId: {
+              workspaceId: body.workspaceId,
+              domainId: domain.id,
+            },
+          },
+          data: {
+            scannerResultId: workspace.id,
+            searchResultId: existingLead.searchResultId
+              ? undefined
+              : archived.id,
+            website: existingLead.website ? undefined : workspace.url,
+            companyName: existingLead.companyName
+              ? undefined
+              : workspace.title || undefined,
+          },
+        });
       imported++;
-      acceptedDomains.add(hostname);
+      acceptedDomains.add(item.hostname);
     } catch {
       // Invalid, unresolvable, and non-public URLs are deliberately rejected.
+      rejected++;
     }
-  }
+  });
   const state = await prisma.scannerState.findUniqueOrThrow({
     where: { workspaceId: body.workspaceId },
   });
@@ -584,10 +805,10 @@ async function persistImport(body: ImportPayload) {
     sessionId: session.id,
     imported,
     created,
-    duplicates: imported - created,
+    duplicates: intakeDuplicates + imported - created,
     excluded,
     leadsAdded,
-    rejected: body.results.length - imported - excluded,
+    rejected,
     acceptedDomains: [...acceptedDomains],
   };
 }
@@ -727,7 +948,32 @@ app.get("/api/search/brave/status", (_req, res) => {
   });
 });
 
+app.get("/api/search/brave/current", async (req, res, next) => {
+  try {
+    const workspaceId = (req as AuthRequest).auth.workspaceId;
+    res.json({ current: await getCurrentSearchProgress(workspaceId) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/search/brave", async (req, res, next) => {
+  let progressContext:
+    { workspaceId: string; progress: CurrentSearchProgress } | undefined;
+  const publishProgress = (
+    context: NonNullable<typeof progressContext>,
+    patch: Partial<CurrentSearchProgress>,
+  ) => {
+    const progress: CurrentSearchProgress = {
+      ...context.progress,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+    context.progress = progress;
+    void setCurrentSearchProgress(context.workspaceId, progress);
+    emit("brave-search-progress", progress, context.workspaceId);
+    return progress;
+  };
   try {
     await scannerReady;
     const input = z
@@ -739,10 +985,60 @@ app.post("/api/search/brave", async (req, res, next) => {
           .positive()
           .max(MAX_SEARCH_TARGET_RESULTS)
           .default(25),
+        operationId: z.string().uuid().optional(),
       })
       .parse(req.body);
     const auth = (req as AuthRequest).auth;
-    const discovery = await searchBrave(input.query, input.maxResults);
+    const now = new Date().toISOString();
+    progressContext = {
+      workspaceId: auth.workspaceId,
+      progress: {
+        operationId: input.operationId || randomUUID(),
+        query: input.query,
+        status: "RUNNING",
+        phase: "Starting web discovery",
+        requested: input.maxResults,
+        discovered: 0,
+        queued: 0,
+        duplicates: 0,
+        rejected: 0,
+        excluded: 0,
+        leadsAdded: 0,
+        requests: 0,
+        failedRequests: 0,
+        queryPagesChecked: 0,
+        totalVariants: 0,
+        activeVariants: 0,
+        progressPercent: 2,
+        startedAt: now,
+        updatedAt: now,
+      },
+    };
+    publishProgress(progressContext, {});
+    const discovery = await searchBrave(input.query, input.maxResults, {
+      onProgress: (progress) => {
+        if (!progressContext) return;
+        publishProgress(progressContext, {
+          status: "RUNNING",
+          phase: "Discovering unique business websites",
+          ...progress,
+          progressPercent: discoveryProgressPercent({
+            ...progress,
+            maxRequests: MAX_BRAVE_SEARCH_REQUESTS,
+          }),
+        });
+      },
+    });
+    publishProgress(progressContext, {
+      status: "RUNNING",
+      phase: "Queuing discovered websites for scanning",
+      requested: input.maxResults,
+      discovered: discovery.results.length,
+      excluded: discovery.excluded,
+      requests: discovery.requests,
+      failedRequests: discovery.failedRequests,
+      progressPercent: 94,
+    });
     const imported = await persistImport({
       workspaceId: auth.workspaceId,
       actorId: auth.id,
@@ -776,7 +1072,29 @@ app.post("/api/search/brave", async (req, res, next) => {
         discoveredResults: discovery.results.length,
         excludedPlatforms: discovery.excluded + imported.excluded,
         requests: discovery.requests,
+        failedRequests: discovery.failedRequests,
       },
+    );
+    await setCurrentSearchProgress(
+      auth.workspaceId,
+      publishProgress(progressContext, {
+        status: "COMPLETED",
+        phase:
+          discovery.results.length >= input.maxResults
+            ? "Target reached and websites queued"
+            : "Provider search space exhausted",
+        requested: input.maxResults,
+        discovered: discovery.results.length,
+        queued: imported.created,
+        duplicates: imported.duplicates,
+        rejected: imported.rejected,
+        excluded: discovery.excluded + imported.excluded,
+        leadsAdded: imported.leadsAdded,
+        requests: discovery.requests,
+        failedRequests: discovery.failedRequests,
+        progressPercent: 100,
+        stopReason: discovery.stopReason,
+      }),
     );
     res.status(201).json({
       ...imported,
@@ -785,8 +1103,876 @@ app.post("/api/search/brave", async (req, res, next) => {
       excluded: discovery.excluded + imported.excluded,
       complete: discovery.results.length >= input.maxResults,
       requests: discovery.requests,
+      failedRequests: discovery.failedRequests,
+      stopReason: discovery.stopReason,
       scanner,
     });
+  } catch (error) {
+    if (progressContext)
+      await setCurrentSearchProgress(
+        progressContext.workspaceId,
+        publishProgress(progressContext, {
+          status: "FAILED",
+          phase: error instanceof Error ? error.message : "Search failed",
+        }),
+      );
+    next(error);
+  }
+});
+
+const marketProductSchema = z.object({
+  productName: z.string().trim().min(2).max(120).default("Rust NFA accounts"),
+  productType: z.enum(marketProductTypes).default("RUST_NFA"),
+});
+
+function parsedMarketProduct(value: unknown): MarketProduct {
+  const parsed = marketProductSchema.parse(value);
+  return marketProduct(
+    parsed.productName,
+    parsed.productType as MarketProductType,
+  );
+}
+
+const rustPriceImportSchema = marketProductSchema.extend({
+  urls: z.array(z.string().trim().min(1)).min(1).max(2_000),
+});
+
+const rustPriceSourceConsolidations = new Map<string, Promise<number>>();
+
+async function runRustPriceSourceConsolidation(
+  workspaceId: string,
+  productKey: string,
+) {
+  let removed = 0;
+  const existingSources = await prisma.rustPriceSource.findMany({
+    where: { workspaceId, productKey },
+    include: { _count: { select: { listings: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  const groupedExisting = new Map<string, typeof existingSources>();
+  for (const source of existingSources) {
+    const key = canonicalSiteKey(source.normalizedUrl);
+    const group = groupedExisting.get(key) ?? [];
+    group.push(source);
+    groupedExisting.set(key, group);
+  }
+  // Keep the source with the most retained evidence, then prefer a root URL.
+  // Listings and diagnostic history are moved before the duplicate is removed.
+  for (const group of groupedExisting.values()) {
+    if (group.length < 2) continue;
+    const ranked = [...group].sort(
+      (a, b) =>
+        b._count.listings - a._count.listings ||
+        new URL(a.normalizedUrl).pathname.length -
+          new URL(b.normalizedUrl).pathname.length ||
+        a.createdAt.getTime() - b.createdAt.getTime(),
+    );
+    const keeper = ranked[0]!;
+    for (const duplicate of ranked.slice(1)) {
+      await prisma.$transaction([
+        prisma.rustAccountListing.updateMany({
+          where: { sourceId: duplicate.id },
+          data: { sourceId: keeper.id },
+        }),
+        prisma.rustPriceScanDiagnostic.updateMany({
+          where: { sourceId: duplicate.id },
+          data: { sourceId: keeper.id },
+        }),
+        prisma.rustPriceSource.delete({ where: { id: duplicate.id } }),
+      ]);
+      removed++;
+    }
+  }
+  return removed;
+}
+
+async function consolidateRustPriceSources(
+  workspaceId: string,
+  productKey: string,
+) {
+  const key = `${workspaceId}:${productKey}`;
+  const running = rustPriceSourceConsolidations.get(key);
+  if (running) return running;
+  const task = runRustPriceSourceConsolidation(workspaceId, productKey);
+  rustPriceSourceConsolidations.set(key, task);
+  try {
+    return await task;
+  } finally {
+    rustPriceSourceConsolidations.delete(key);
+  }
+}
+
+async function importRustPriceSources(
+  workspaceId: string,
+  urls: string[],
+  product: MarketProduct,
+) {
+  let created = 0;
+  let duplicates = 0;
+  let rejected = 0;
+
+  duplicates += await consolidateRustPriceSources(workspaceId, product.key);
+
+  type Candidate = {
+    input: string;
+    normalized: string;
+    domain: string;
+    siteKey: string;
+  };
+  const validateOne = async (input: string): Promise<Candidate | undefined> => {
+    try {
+      const approved = await assertPublicUrl(input);
+      const normalized = normalizeUrl(approved.toString());
+      return {
+        input: approved.toString(),
+        normalized,
+        domain: extractDomain(normalized),
+        siteKey: canonicalSiteKey(normalized),
+      };
+    } catch {
+      rejected++;
+      return undefined;
+    }
+  };
+  const validated: Candidate[] = [];
+  const validationConcurrency = 12;
+  for (let offset = 0; offset < urls.length; offset += validationConcurrency) {
+    const batch = await Promise.all(
+      urls.slice(offset, offset + validationConcurrency).map(validateOne),
+    );
+    validated.push(
+      ...batch.filter((candidate): candidate is Candidate =>
+        Boolean(candidate),
+      ),
+    );
+  }
+
+  const uniqueCandidates = new Map<string, Candidate>();
+  for (const candidate of validated) {
+    const current = uniqueCandidates.get(candidate.siteKey);
+    if (!current) uniqueCandidates.set(candidate.siteKey, candidate);
+    else {
+      duplicates++;
+      // Prefer a root/shorter path because the scanner discovers priority
+      // product pages from there and can recover from stale search-result URLs.
+      if (
+        new URL(candidate.normalized).pathname.length <
+        new URL(current.normalized).pathname.length
+      )
+        uniqueCandidates.set(candidate.siteKey, candidate);
+    }
+  }
+
+  const refreshedExisting = await prisma.rustPriceSource.findMany({
+    where: { workspaceId, productKey: product.key },
+  });
+  const existingBySite = new Map(
+    refreshedExisting.map((source) => [
+      canonicalSiteKey(source.normalizedUrl),
+      source,
+    ]),
+  );
+  for (const candidate of uniqueCandidates.values()) {
+    const existing = existingBySite.get(candidate.siteKey);
+    if (existing) {
+      duplicates++;
+      const replaceUrl =
+        ["Failed", "Blocked", "Timeout"].includes(existing.scanStatus) ||
+        new URL(candidate.normalized).pathname.length <
+          new URL(existing.normalizedUrl).pathname.length;
+      await prisma.rustPriceSource.update({
+        where: { id: existing.id },
+        data: {
+          scanStatus: "Pending",
+          error: null,
+          ...(replaceUrl
+            ? {
+                url: candidate.input,
+                normalizedUrl: candidate.normalized,
+                domain: candidate.domain,
+              }
+            : {}),
+        },
+      });
+      continue;
+    }
+    const source = await prisma.rustPriceSource.create({
+      data: {
+        workspaceId,
+        productKey: product.key,
+        productName: product.name,
+        productType: product.type,
+        url: candidate.input,
+        normalizedUrl: candidate.normalized,
+        domain: candidate.domain,
+        scanStatus: "Pending",
+      },
+    });
+    existingBySite.set(candidate.siteKey, source);
+    created++;
+  }
+  return { imported: urls.length, created, duplicates, rejected };
+}
+
+app.get("/api/rust-prices", async (req, res, next) => {
+  try {
+    const product = parsedMarketProduct({
+      productName: req.query.productName || "Rust NFA accounts",
+      productType: req.query.productType || "RUST_NFA",
+    });
+    await consolidateRustPriceSources(
+      (req as unknown as AuthRequest).auth.workspaceId,
+      product.key,
+    );
+    const supportedCurrencies = ["DKK", "EUR", "USD", "RUB"] as const;
+    const requestedCurrency = String(req.query.currency || "USD").toUpperCase();
+    if (
+      !supportedCurrencies.includes(
+        requestedCurrency as (typeof supportedCurrencies)[number],
+      )
+    )
+      return res
+        .status(400)
+        .json({ error: "Currency must be DKK, EUR, USD, or RUB" });
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const pageSize = Math.min(
+      100,
+      Math.max(10, Number(req.query.pageSize) || 50),
+    );
+    const optionalMoney = (value: unknown) => {
+      if (value === undefined || value === "") return undefined;
+      const amount = Number(value);
+      if (!Number.isFinite(amount) || amount < 0) return Number.NaN;
+      return Math.round(amount * 100);
+    };
+    const minPrice = optionalMoney(req.query.minPrice);
+    const maxPrice = optionalMoney(req.query.maxPrice);
+    if (Number.isNaN(minPrice) || Number.isNaN(maxPrice))
+      return res
+        .status(400)
+        .json({ error: "Price filters must be positive numbers" });
+    if (minPrice !== undefined && maxPrice !== undefined && minPrice > maxPrice)
+      return res
+        .status(400)
+        .json({ error: "Minimum price cannot exceed maximum price" });
+    res.json(
+      await rustPriceSnapshot(
+        (req as AuthRequest).auth.workspaceId,
+        page,
+        pageSize,
+        String(req.query.search || ""),
+        {
+          preset: String(req.query.preset || "All NFA"),
+          minPrice,
+          maxPrice,
+          sort: String(req.query.sort || "newest"),
+          displayCurrency:
+            requestedCurrency as (typeof supportedCurrencies)[number],
+          product,
+        },
+      ),
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get(
+  "/api/lzt-tracker",
+  requireRankPermission("LZT_ACCESS"),
+  async (req, res, next) => {
+    try {
+      const query = z
+        .object({
+          page: z.coerce.number().int().positive().default(1),
+          pageSize: z.coerce.number().int().positive().max(200).default(50),
+          search: z.string().max(300).default(""),
+          minEur: z
+            .union([z.literal(""), z.coerce.number().nonnegative()])
+            .optional(),
+          maxEur: z
+            .union([z.literal(""), z.coerce.number().nonnegative()])
+            .optional(),
+          maxHours: z
+            .union([z.literal(""), z.coerce.number().nonnegative()])
+            .optional(),
+          sort: z
+            .enum(["newest", "price-asc", "price-desc", "hours-asc"])
+            .default("newest"),
+          currency: z.enum(["DKK", "EUR", "USD", "RUB"]).default("EUR"),
+        })
+        .parse(req.query);
+      const minEur =
+        query.minEur === "" || query.minEur === undefined
+          ? undefined
+          : Math.round(query.minEur * 100);
+      const maxEur =
+        query.maxEur === "" || query.maxEur === undefined
+          ? undefined
+          : Math.round(query.maxEur * 100);
+      if (minEur !== undefined && maxEur !== undefined && minEur > maxEur)
+        return res
+          .status(400)
+          .json({ error: "Minimum EUR price cannot exceed maximum EUR price" });
+      res.json(
+        await lztTrackerSnapshot({
+          page: query.page,
+          pageSize: query.pageSize,
+          search: query.search,
+          minEur,
+          maxEur,
+          maxHours: query.maxHours === "" ? undefined : query.maxHours,
+          sort: query.sort,
+          displayCurrency: query.currency,
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.post(
+  "/api/lzt-tracker/start",
+  requireRankPermission("LZT_ACCESS"),
+  async (req, res, next) => {
+    try {
+      const options = z
+        .object({
+          importBaseline: z.boolean().default(true),
+          notifyExisting: z.boolean().default(false),
+        })
+        .parse(req.body || {});
+      res.status(202).json(await startLztTracker(options));
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.post(
+  "/api/lzt-tracker/stop",
+  requireRankPermission("LZT_ACCESS"),
+  async (_req, res, next) => {
+    try {
+      await stopLztTracker();
+      res.json(await lztTrackerSnapshot());
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.post(
+  "/api/lzt-tracker/restart",
+  requireRankPermission("LZT_ACCESS"),
+  async (_req, res, next) => {
+    try {
+      res.status(202).json(await restartLztTracker());
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.post(
+  "/api/lzt-tracker/test",
+  requireRole("ADMIN"),
+  async (_req, res, next) => {
+    try {
+      res.json(await testLztConnection());
+    } catch (error) {
+      if (error instanceof LztApiError)
+        return res
+          .status(error.status || 503)
+          .json({ status: error.code, error: error.message });
+      next(error);
+    }
+  },
+);
+app.post(
+  "/api/lzt-tracker/test-alert",
+  requireRole("ADMIN"),
+  async (req, res, next) => {
+    try {
+      const criteria = z
+        .object({
+          maximumPriceUsd: z.number().positive().max(1_000),
+          minimumGames: z.number().int().min(0).max(10_000),
+          minimumRustHours: z.number().int().min(0).max(100_000),
+        })
+        .parse(req.body);
+      res.status(202).json(await queueLztHighHoursTestAlert(criteria));
+    } catch (error) {
+      if (error instanceof LztApiError)
+        return res
+          .status(error.status || 503)
+          .json({ status: error.code, error: error.message });
+      next(error);
+    }
+  },
+);
+app.post(
+  "/api/lzt-tracker/haze-message",
+  requireRole("ADMIN"),
+  async (req, res, next) => {
+    try {
+      const { content } = z
+        .object({ content: z.string().trim().min(1).max(2_000) })
+        .parse(req.body);
+      res.status(202).json(await queueHazeManualMessage(content));
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.post(
+  "/api/lzt-tracker/retry-test-alert",
+  requireRole("ADMIN"),
+  async (_req, res, next) => {
+    try {
+      res.status(202).json(await retryLatestFailedHazeTestAlert());
+    } catch (error) {
+      if (error instanceof LztApiError)
+        return res
+          .status(error.status || 503)
+          .json({ status: error.code, error: error.message });
+      next(error);
+    }
+  },
+);
+app.post(
+  "/api/lzt-tracker/recalculate",
+  requireRankPermission("LZT_ACCESS"),
+  async (_req, res, next) => {
+    try {
+      res.json(await recalculateLztAverage());
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.get(
+  "/api/admin/lzt-tracker/health",
+  requireRole("ADMIN"),
+  async (_req, res, next) => {
+    try {
+      const snapshot = await lztTrackerSnapshot({ pageSize: 1 });
+      res.json({
+        state: snapshot.state,
+        metrics: snapshot.metrics,
+        queueLength: snapshot.queueLength,
+        configured: snapshot.configured,
+        database: "connected",
+        liveDelivery: "SSE",
+        pollIntervalMs: snapshot.pollIntervalMs,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.post("/api/rust-prices/import", async (req, res, next) => {
+  try {
+    const body = rustPriceImportSchema.parse(req.body);
+    const auth = (req as AuthRequest).auth;
+    const product = marketProduct(body.productName, body.productType);
+    const result = await importRustPriceSources(
+      auth.workspaceId,
+      body.urls,
+      product,
+    );
+    await audit(
+      req,
+      "RUST_PRICE_SOURCES_IMPORTED",
+      "Workspace",
+      auth.workspaceId,
+      result,
+    );
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/rust-prices/search", async (req, res, next) => {
+  try {
+    const input = z
+      .object({
+        query: z.string().trim().min(2).max(300),
+        maxResults: z
+          .number()
+          .int()
+          .positive()
+          .max(MAX_SEARCH_TARGET_RESULTS)
+          .default(25),
+        productName: z
+          .string()
+          .trim()
+          .min(2)
+          .max(120)
+          .default("Rust NFA accounts"),
+        productType: z.enum(marketProductTypes).default("RUST_NFA"),
+      })
+      .parse(req.body);
+    const auth = (req as AuthRequest).auth;
+    const product = marketProduct(input.productName, input.productType);
+    const discovery = await searchBrave(input.query, input.maxResults);
+    const imported = await importRustPriceSources(
+      auth.workspaceId,
+      discovery.results.map((result) => result.url),
+      product,
+    );
+    const settings = await getSettings(auth.workspaceId);
+    const scanner = await startRustPriceScanner(auth.workspaceId, {
+      crawlerConcurrency: Number(settings.crawlerConcurrency),
+      timeoutSeconds: Number(settings.timeoutSeconds),
+      retries: Number(settings.retries),
+      dynamicFallback: Boolean(settings.dynamicFallback),
+      robotsRespect: Boolean(settings.robotsRespect),
+      maxPages: settings.deepScan ? Number(settings.maxPages) : 4,
+    });
+    await audit(
+      req,
+      "RUST_PRICE_SEARCH_STARTED",
+      "Workspace",
+      auth.workspaceId,
+      {
+        query: input.query,
+        requested: input.maxResults,
+        discovered: discovery.results.length,
+        ...imported,
+      },
+    );
+    res.status(201).json({
+      ...imported,
+      requested: input.maxResults,
+      discovered: discovery.results.length,
+      complete: discovery.results.length >= input.maxResults,
+      excluded: discovery.excluded,
+      requests: discovery.requests,
+      scanner,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/rust-prices/start", async (req, res, next) => {
+  try {
+    const auth = (req as AuthRequest).auth;
+    parsedMarketProduct(req.body);
+    const settings = await getSettings(auth.workspaceId);
+    res.status(202).json(
+      await startRustPriceScanner(auth.workspaceId, {
+        crawlerConcurrency: Number(settings.crawlerConcurrency),
+        timeoutSeconds: Number(settings.timeoutSeconds),
+        retries: Number(settings.retries),
+        dynamicFallback: Boolean(settings.dynamicFallback),
+        robotsRespect: Boolean(settings.robotsRespect),
+        maxPages: settings.deepScan ? Number(settings.maxPages) : 4,
+      }),
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/rust-prices/stop", async (req, res, next) => {
+  try {
+    res.json(await stopRustPriceScanner((req as AuthRequest).auth.workspaceId));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post(
+  "/api/rust-prices/reset",
+  requireRole("ADMIN", "MANAGER"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      const product = parsedMarketProduct(req.body);
+      await resetRustPriceScanner(auth.workspaceId, product.key);
+      await audit(
+        req,
+        "RUST_PRICE_SCANNER_RESET",
+        "Workspace",
+        auth.workspaceId,
+      );
+      res.json({ reset: true });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.post(
+  "/api/rust-prices/delete-results",
+  requireRole("ADMIN", "MANAGER"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      const input = marketProductSchema
+        .extend({ confirm: z.literal("DELETE") })
+        .parse(req.body);
+      const state = await prisma.rustPriceScannerState.findUnique({
+        where: { workspaceId: auth.workspaceId },
+        select: { status: true },
+      });
+      if (["RUNNING", "STOPPING"].includes(state?.status || ""))
+        return res
+          .status(409)
+          .json({ error: "Stop the price scanner before deleting results" });
+      const product = marketProduct(input.productName, input.productType);
+      const deleted = await deleteRustPriceResults(
+        auth.workspaceId,
+        product.key,
+      );
+      await audit(
+        req,
+        "MARKET_PRICE_RESULTS_DELETED",
+        "Workspace",
+        auth.workspaceId,
+        {
+          productKey: product.key,
+          deleted,
+        },
+      );
+      res.json({ deleted });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.post("/api/rust-prices/retry-failed", async (req, res, next) => {
+  try {
+    const auth = (req as AuthRequest).auth;
+    const product = parsedMarketProduct(req.body);
+    const updated = await prisma.rustPriceSource.updateMany({
+      where: {
+        workspaceId: auth.workspaceId,
+        productKey: product.key,
+        scanStatus: { in: ["Failed", "Blocked", "Timeout"] },
+      },
+      data: { scanStatus: "Pending", error: null },
+    });
+    if (!updated.count) return res.json({ queued: 0, scanner: null });
+    const settings = await getSettings(auth.workspaceId);
+    const scanner = await startRustPriceScanner(auth.workspaceId, {
+      crawlerConcurrency: Number(settings.crawlerConcurrency),
+      timeoutSeconds: Number(settings.timeoutSeconds),
+      retries: Number(settings.retries),
+      dynamicFallback: Boolean(settings.dynamicFallback),
+      robotsRespect: Boolean(settings.robotsRespect),
+      maxPages: settings.deepScan ? Number(settings.maxPages) : 4,
+    });
+    res.status(202).json({ queued: updated.count, scanner });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/rust-prices/rescan-all", async (req, res, next) => {
+  try {
+    const auth = (req as AuthRequest).auth;
+    const product = parsedMarketProduct(req.body);
+    const state = await prisma.rustPriceScannerState.findUnique({
+      where: { workspaceId: auth.workspaceId },
+      select: { status: true },
+    });
+    if (["RUNNING", "STOPPING"].includes(state?.status || ""))
+      return res
+        .status(409)
+        .json({ error: "Stop the current price scan first" });
+    const queued = await prisma.rustPriceSource.updateMany({
+      where: { workspaceId: auth.workspaceId, productKey: product.key },
+      data: { scanStatus: "Pending", error: null },
+    });
+    const settings = await getSettings(auth.workspaceId);
+    const scanner = await startRustPriceScanner(auth.workspaceId, {
+      crawlerConcurrency: Number(settings.crawlerConcurrency),
+      timeoutSeconds: Number(settings.timeoutSeconds),
+      retries: Number(settings.retries),
+      dynamicFallback: Boolean(settings.dynamicFallback),
+      robotsRespect: Boolean(settings.robotsRespect),
+      maxPages: settings.deepScan ? Number(settings.maxPages) : 4,
+    });
+    await audit(
+      req,
+      "RUST_PRICE_DIAGNOSTIC_RESCAN_STARTED",
+      "Workspace",
+      auth.workspaceId,
+      {
+        queued: queued.count,
+      },
+    );
+    res.status(202).json({ queued: queued.count, scanner });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/rust-prices/sources/:id/rescan", async (req, res, next) => {
+  try {
+    const auth = (req as unknown as AuthRequest).auth;
+    const source = await prisma.rustPriceSource.findFirst({
+      where: {
+        id: String(req.params.id),
+        workspaceId: auth.workspaceId,
+      },
+    });
+    if (!source) return res.status(404).json({ error: "Not found" });
+    await prisma.rustPriceSource.update({
+      where: { id: source.id },
+      data: { scanStatus: "Pending", error: null },
+    });
+    const settings = await getSettings(auth.workspaceId);
+    const scanner = await startRustPriceScanner(auth.workspaceId, {
+      crawlerConcurrency: Number(settings.crawlerConcurrency),
+      timeoutSeconds: Number(settings.timeoutSeconds),
+      retries: Number(settings.retries),
+      dynamicFallback: Boolean(settings.dynamicFallback),
+      robotsRespect: Boolean(settings.robotsRespect),
+      maxPages: settings.deepScan ? Number(settings.maxPages) : 4,
+    });
+    res.status(202).json({ queued: 1, scanner });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/export/rust-prices.csv", async (req, res) => {
+  const product = parsedMarketProduct({
+    productName: req.query.productName || "Rust NFA accounts",
+    productType: req.query.productType || "RUST_NFA",
+  });
+  const listings = await prisma.rustAccountListing.findMany({
+    where: {
+      workspaceId: (req as AuthRequest).auth.workspaceId,
+      productKey: product.key,
+      active: true,
+    },
+    select: { name: true, priceText: true, link: true },
+    orderBy: { lastSeenAt: "desc" },
+  });
+  const rows = [
+    ["Name", "Price", "Link"],
+    ...listings.map((listing) => [
+      listing.name,
+      listing.priceText,
+      listing.link,
+    ]),
+  ];
+  res
+    .set({
+      "content-type": "text/csv",
+      "content-disposition": `attachment; filename="${product.key}-prices.csv"`,
+    })
+    .send(rows.map((row) => row.map(csvEscape).join(",")).join("\n"));
+});
+
+app.get("/api/export/rust-price-debug.json", async (req, res, next) => {
+  try {
+    const report = await rustPriceDiagnosticExport(
+      (req as AuthRequest).auth.workspaceId,
+    );
+    res
+      .set({
+        "content-type": "application/json; charset=utf-8",
+        "content-disposition":
+          'attachment; filename="rust-price-scan-debug.json"',
+        "cache-control": "no-store",
+      })
+      .send(`${JSON.stringify(report, null, 2)}\n`);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/export/rust-price-debug.csv", async (req, res, next) => {
+  try {
+    const report = await rustPriceDiagnosticExport(
+      (req as AuthRequest).auth.workspaceId,
+    );
+    const rows: unknown[][] = [
+      [
+        "Scan ID",
+        "Source",
+        "Domain",
+        "Scan Status",
+        "Scan Outcome",
+        "Started At",
+        "Completed At",
+        "Total Duration Ms",
+        "Pages Checked",
+        "Total Listings Found",
+        "Page Number",
+        "Requested URL",
+        "Final URL",
+        "Page Outcome",
+        "HTTP Status",
+        "Fetch Mode",
+        "Static Fetch",
+        "Dynamic Fetch",
+        "Dynamic Error",
+        "Page Duration Ms",
+        "Listings Extracted",
+        "Extraction Methods JSON",
+        "Listing Samples JSON",
+        "Internal Links Found",
+        "Priority Links Queued",
+        "Fetch Attempts JSON",
+        "Redirects JSON",
+        "Error Code",
+        "Error",
+      ],
+    ];
+    for (const scan of report.scans) {
+      const diagnostic = scan.report as {
+        pages?: Array<Record<string, unknown>>;
+      };
+      const pages = diagnostic.pages?.length ? diagnostic.pages : [{}];
+      pages.forEach((page, index) => {
+        rows.push([
+          scan.id,
+          scan.source.normalizedUrl,
+          scan.source.domain,
+          scan.status,
+          scan.outcomeCode,
+          scan.startedAt.toISOString(),
+          scan.completedAt.toISOString(),
+          scan.durationMs,
+          scan.pagesChecked,
+          scan.listingsFound,
+          index + 1,
+          page.requestedUrl || "",
+          page.finalUrl || "",
+          page.outcome || "",
+          page.httpStatus || "",
+          page.fetchMode || "",
+          page.staticFetchResult || "",
+          page.dynamicFetchResult || "",
+          page.dynamicError || "",
+          page.durationMs || 0,
+          page.listingsExtracted || 0,
+          JSON.stringify(page.extractionMethods || {}),
+          JSON.stringify(page.listingSamples || []),
+          page.internalLinksFound || 0,
+          page.priorityLinksQueued || 0,
+          JSON.stringify(page.attempts || []),
+          JSON.stringify(page.redirects || []),
+          page.errorCode || scan.errorCode || "",
+          page.error || scan.error || "",
+        ]);
+      });
+    }
+    res
+      .set({
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition":
+          'attachment; filename="rust-price-scan-debug.csv"',
+        "cache-control": "no-store",
+      })
+      .send(rows.map((row) => row.map(csvEscape).join(",")).join("\n"));
   } catch (error) {
     next(error);
   }
@@ -808,6 +1994,48 @@ app.get("/api/scanner", async (req, res, next) => {
     );
   } catch (e) {
     next(e);
+  }
+});
+app.get("/api/scanner/results/:id", async (req, res, next) => {
+  try {
+    await scannerReady;
+    const item = await scannerResultDetail(
+      (req as unknown as AuthRequest).auth.workspaceId,
+      String(req.params.id),
+    );
+    item ? res.json(item) : res.status(404).json({ error: "Not found" });
+  } catch (error) {
+    next(error);
+  }
+});
+app.get("/api/scanner/discord-links/reconcile", async (req, res, next) => {
+  try {
+    await scannerReady;
+    const workspaceId = (req as AuthRequest).auth.workspaceId;
+    res.json(await getDiscordReconciliationProgress(workspaceId));
+  } catch (error) {
+    next(error);
+  }
+});
+app.post("/api/scanner/discord-links/reconcile", async (req, res, next) => {
+  try {
+    await scannerReady;
+    const auth = (req as AuthRequest).auth;
+    const result = await startWorkspaceDiscordInviteReconciliation(
+      auth.workspaceId,
+    );
+    await audit(
+      req,
+      result.started
+        ? "DISCORD_INVITE_RECONCILIATION_STARTED"
+        : "DISCORD_INVITE_RECONCILIATION_ALREADY_RUNNING",
+      "Workspace",
+      auth.workspaceId,
+      { operationId: result.progress?.operationId },
+    );
+    res.status(result.started ? 202 : 200).json(result);
+  } catch (error) {
+    next(error);
   }
 });
 app.get("/api/clients", async (_req, res) => {
@@ -859,14 +2087,85 @@ app.post(
 );
 app.post("/api/scanner/retry-failed", async (req, res, next) => {
   try {
+    const auth = (req as AuthRequest).auth;
+    // Retry failures that can plausibly change on a later, slower pass. A 403,
+    // robots restriction, or safe redirect-boundary rejection is terminal until
+    // the target owner changes it; immediately replaying those rows only steals
+    // capacity from timeouts and temporary infrastructure failures.
+    const retryableReasons = [
+      "",
+      "CONTACT_NOT_FOUND",
+      "DISCORD_NOT_FOUND",
+      "NO_DISCORD_FOUND",
+      "TIMEOUT",
+      "HTTP_408",
+      "HTTP_425",
+      "HTTP_429",
+      "HTTP_5XX",
+      "DNS_FAILURE",
+      "CONNECTION_FAILURE",
+      "TLS_FAILURE",
+      "REDIRECT_LIMIT",
+      "INVALID_RESPONSE",
+      "SCRAPER_OFFLINE",
+      "SCRAPER_BUSY",
+      "SCRAPER_ERROR",
+      "UNEXPECTED_SCAN_FAILURE",
+    ];
     const updated = await prisma.scannerResult.updateMany({
       where: {
-        workspaceId: (req as AuthRequest).auth.workspaceId,
-        scanStatus: { in: ["Failed", "Timeout"] },
+        workspaceId: auth.workspaceId,
+        quarantinedAt: null,
+        OR: [
+          { scanStatus: "Timeout" },
+          {
+            scanStatus: { in: ["Failed", "Blocked"] },
+            discoveryFailureReason: { in: retryableReasons },
+          },
+        ],
       },
       data: { scanStatus: "Pending", error: null },
     });
-    res.json({ queued: updated.count });
+    const skippedPermanent = await prisma.scannerResult.count({
+      where: {
+        workspaceId: auth.workspaceId,
+        quarantinedAt: null,
+        scanStatus: { in: ["Failed", "Blocked"] },
+        NOT: { discoveryFailureReason: { in: retryableReasons } },
+      },
+    });
+    const settings = await getSettings(auth.workspaceId);
+    const recoverySettings = {
+      crawlerConcurrency: Math.max(
+        1,
+        Math.min(8, Number(settings.crawlerConcurrency)),
+      ),
+      adaptiveConcurrency: true,
+      timeoutSeconds: Math.max(15, Number(settings.timeoutSeconds)),
+      retries: Math.max(2, Number(settings.retries)),
+      dynamicFallback: Boolean(settings.dynamicFallback),
+      robotsRespect: Boolean(settings.robotsRespect),
+      deepScan: Boolean(settings.deepScan),
+      maxPages: Number(settings.maxPages),
+      maxDepth: Number(settings.maxDepth),
+    };
+    const scanner = updated.count
+      ? await startScanner(auth.workspaceId, recoverySettings)
+      : null;
+    res
+      .status(updated.count ? 202 : 200)
+      .json({
+        queued: updated.count,
+        skippedPermanent,
+        recoveryProfile: updated.count
+          ? {
+              concurrency: recoverySettings.crawlerConcurrency,
+              timeoutSeconds: recoverySettings.timeoutSeconds,
+              retries: recoverySettings.retries,
+            }
+          : null,
+        scanner,
+      });
   } catch (e) {
     next(e);
   }
@@ -881,11 +2180,28 @@ app.post("/api/scanner/results/:id/rescan", async (req, res, next) => {
       },
     });
     if (!item) return res.status(404).json({ error: "Not found" });
+    if (item.quarantinedAt)
+      return res.status(409).json({
+        error:
+          "This website was removed after five unsuccessful contact extraction attempts. Its failures remain available in Failed history.",
+      });
     await prisma.scannerResult.update({
       where: { id: item.id },
       data: { scanStatus: "Pending", error: null },
     });
-    res.status(202).json({ queued: 1 });
+    const settings = await getSettings(auth.workspaceId);
+    const scanner = await startScanner(auth.workspaceId, {
+      crawlerConcurrency: Number(settings.crawlerConcurrency),
+      adaptiveConcurrency: Boolean(settings.adaptiveConcurrency),
+      timeoutSeconds: Number(settings.timeoutSeconds),
+      retries: Number(settings.retries),
+      dynamicFallback: Boolean(settings.dynamicFallback),
+      robotsRespect: Boolean(settings.robotsRespect),
+      deepScan: Boolean(settings.deepScan),
+      maxPages: Number(settings.maxPages),
+      maxDepth: Number(settings.maxDepth),
+    });
+    res.status(202).json({ queued: 1, scanner });
   } catch (e) {
     next(e);
   }
@@ -958,89 +2274,76 @@ app.get("/api/export/scanner.csv", async (req, res) => {
     .send(rows.map((r) => r.map(csvEscape).join(",")).join("\n"));
 });
 
+app.get("/api/export/scanner-failures.csv", async (req, res) => {
+  const items = await prisma.scannerFailureHistory.findMany({
+    where: { workspaceId: (req as AuthRequest).auth.workspaceId },
+    orderBy: { occurredAt: "desc" },
+  });
+  const rows = [
+    [
+      "Website",
+      "Normalized URL",
+      "Domain",
+      "Status",
+      "Failure Reason",
+      "Error",
+      "HTTP Status",
+      "Contact Failure Count",
+      "Occurred At",
+      "Scanner Result ID",
+    ],
+    ...items.map((item) => [
+      item.url,
+      item.normalizedUrl,
+      item.domain,
+      item.status,
+      item.failureReason,
+      item.error,
+      item.httpStatus ?? "",
+      item.contactFailureCount,
+      item.occurredAt.toISOString(),
+      item.scannerResultId || "",
+    ]),
+  ];
+  res
+    .set({
+      "content-type": "text/csv",
+      "content-disposition":
+        'attachment; filename="scanner-failure-history.csv"',
+      "cache-control": "no-store",
+    })
+    .send(rows.map((row) => row.map(csvEscape).join(",")).join("\n"));
+});
+
 app.post("/api/scanner/leads", async (req, res, next) => {
   try {
     const auth = (req as AuthRequest).auth;
     const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
     const results = await prisma.scannerResult.findMany({
-      where: { id: { in: ids }, workspaceId: auth.workspaceId },
-      include: { discordLinks: true, sources: true },
+      where: {
+        id: { in: ids },
+        workspaceId: auth.workspaceId,
+      },
+      select: { id: true },
     });
     let added = 0;
+    let skipped = 0;
     for (const result of results) {
-      let discoveredEmails: string[] = [];
-      let discoveredSocials: { type: string; url: string }[] = [];
-      try {
-        discoveredEmails = JSON.parse(result.emailsJson);
-      } catch {}
-      try {
-        discoveredSocials = JSON.parse(result.socialLinksJson);
-      } catch {}
-      const discoveredTelegram = discoveredSocials.find(
-        (link) => link.type === "telegram",
-      )?.url;
-      const otherSocials = discoveredSocials
-        .filter((link) => link.type !== "telegram")
-        .map((link) => link.url)
-        .join("\n");
-      const existing = await prisma.lead.findUnique({
-        where: {
-          workspaceId_domainId: {
-            workspaceId: auth.workspaceId,
-            domainId: result.domainId,
-          },
-        },
+      const synced = await syncScannerResultToLead({
+        workspaceId: auth.workspaceId,
+        scannerResultId: result.id,
+        actorId: auth.id,
+        sourceLabel: "Scanner selection",
       });
-      await prisma.lead.upsert({
-        where: {
-          workspaceId_domainId: {
-            workspaceId: auth.workspaceId,
-            domainId: result.domainId,
-          },
-        },
-        create: {
-          workspaceId: auth.workspaceId,
-          domainId: result.domainId,
-          scannerResultId: result.id,
-          status: "New",
-          priority: "Medium",
-          website: result.finalUrl || result.url,
-          discordInvite:
-            result.discordLinks.find(
-              (link) => discordDestinationKind(link.url) === "invite",
-            )?.url || "",
-          email: discoveredEmails[0] || "",
-          telegram: discoveredTelegram || "",
-          otherContact: otherSocials,
-          activities: {
-            create: {
-              actorId: auth.id,
-              type: "created",
-              description: `Lead added from scanner${result.sources[0]?.query ? ` · ${result.sources[0].query}` : ""}`,
-            },
-          },
-        },
-        update: {
-          scannerResultId: result.id,
-          website: existing?.website
-            ? undefined
-            : result.finalUrl || result.url,
-          discordInvite: existing?.discordInvite
-            ? undefined
-            : result.discordLinks.find(
-                (link) => discordDestinationKind(link.url) === "invite",
-              )?.url || undefined,
-          email: existing?.email ? undefined : discoveredEmails[0] || undefined,
-          telegram: existing?.telegram ? undefined : discoveredTelegram,
-          otherContact: existing?.otherContact
-            ? undefined
-            : otherSocials || undefined,
-        },
-      });
-      if (!existing) added++;
+      if (synced.created) added++;
+      if (synced.skipped) skipped++;
     }
     emit("lead-update", { count: results.length }, auth.workspaceId);
-    res.json({ processed: results.length, added });
+    res.json({
+      processed: results.length,
+      added,
+      skipped: ids.length - results.length + skipped,
+    });
   } catch (e) {
     next(e);
   }
@@ -1092,6 +2395,25 @@ const leadInclude = {
   },
   tags: { include: { tag: true } },
 };
+const leadListInclude = {
+  domain: { include: { location: true } },
+  scannerResult: {
+    select: {
+      discordLinks: {
+        take: 1,
+        orderBy: { createdAt: "desc" as const },
+        select: { id: true, url: true },
+      },
+    },
+  },
+  assignedTo: { select: { id: true, username: true, role: true } },
+  activities: {
+    take: 25,
+    orderBy: { createdAt: "desc" as const },
+    include: { actor: { select: { id: true, username: true } } },
+  },
+  tags: { include: { tag: true } },
+};
 app.get("/api/leads", async (req, res) => {
   const auth = (req as AuthRequest).auth;
   const tag = String(req.query.tag || "");
@@ -1101,13 +2423,25 @@ app.get("/api/leads", async (req, res) => {
         workspaceId: auth.workspaceId,
         OR: [
           { scannerResultId: null },
-          { scannerResult: { scanStatus: { not: "Excluded" } } },
+          {
+            AND: [
+              { scannerResult: { scanStatus: { not: "Excluded" } } },
+              {
+                OR: [
+                  { discordInvite: { not: "" } },
+                  { telegram: { not: "" } },
+                  { email: { not: "" } },
+                  { scannerResult: { discordLinks: { some: {} } } },
+                ],
+              },
+            ],
+          },
         ],
         ...(auth.role === "RESEARCHER" ? { assignedToId: auth.id } : {}),
         ...(tag ? { tags: { some: { tag: { name: tag } } } } : {}),
       },
       orderBy: { updatedAt: "desc" },
-      include: leadInclude,
+      include: leadListInclude,
     }),
   );
 });
@@ -1162,6 +2496,29 @@ app.post("/api/leads", async (req, res, next) => {
     next(e);
   }
 });
+app.delete(
+  "/api/leads",
+  requireRole("ADMIN", "MANAGER"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      const deleted = await prisma.lead.deleteMany({
+        where: { workspaceId: auth.workspaceId },
+      });
+      await audit(req, "LEADS_CLEARED", "Workspace", auth.workspaceId, {
+        deleted: deleted.count,
+      });
+      emit(
+        "lead-update",
+        { cleared: true, count: deleted.count },
+        auth.workspaceId,
+      );
+      res.json({ deleted: deleted.count });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 app.patch("/api/leads/:id", async (req, res, next) => {
   try {
     const auth = (req as unknown as AuthRequest).auth;
@@ -1564,8 +2921,8 @@ app.post("/api/auth/change-password", async (req, res, next) => {
     const input = z
       .object({
         currentPassword: z.string().min(1).max(200),
-        newPassword: z.string().min(PASSWORD_MIN_LENGTH).max(200),
-        confirmPassword: z.string().min(PASSWORD_MIN_LENGTH).max(200),
+        newPassword: newPasswordSchema,
+        confirmPassword: z.string().min(1).max(200),
       })
       .refine((value) => value.newPassword === value.confirmPassword, {
         message: "New passwords do not match",
@@ -1638,7 +2995,19 @@ app.get("/api/export/leads.csv", async (req, res) => {
       workspaceId: auth.workspaceId,
       OR: [
         { scannerResultId: null },
-        { scannerResult: { scanStatus: { not: "Excluded" } } },
+        {
+          AND: [
+            { scannerResult: { scanStatus: { not: "Excluded" } } },
+            {
+              OR: [
+                { discordInvite: { not: "" } },
+                { telegram: { not: "" } },
+                { email: { not: "" } },
+                { scannerResult: { discordLinks: { some: {} } } },
+              ],
+            },
+          ],
+        },
       ],
       ...(auth.role === "RESEARCHER" ? { assignedToId: auth.id } : {}),
     },
@@ -1649,6 +3018,7 @@ app.get("/api/export/leads.csv", async (req, res) => {
       "Website",
       "Domain",
       "Discord",
+      "Telegram",
       "Company",
       "Contact",
       "Email",
@@ -1666,6 +3036,7 @@ app.get("/api/export/leads.csv", async (req, res) => {
       l.discordInvite ||
         l.scannerResult?.discordLinks.map((d) => d.url).join(" ") ||
         "",
+      l.telegram,
       l.companyName,
       l.contactName,
       l.email,
@@ -1686,6 +3057,195 @@ app.get("/api/export/leads.csv", async (req, res) => {
       "content-disposition": 'attachment; filename="leads.csv"',
     })
     .send(rows.map((r) => r.map(csvEscape).join(",")).join("\n"));
+});
+app.get("/api/export/discord-links.csv", async (req, res) => {
+  const auth = (req as AuthRequest).auth;
+  const [scannerLinks, historyLinks, savedLeads] = await Promise.all([
+    prisma.scannerDiscordLink.findMany({
+      where: {
+        scannerResult: {
+          workspaceId: auth.workspaceId,
+          scanStatus: { not: "Excluded" },
+        },
+      },
+      include: {
+        scannerResult: {
+          select: {
+            url: true,
+            finalUrl: true,
+            domain: { select: { hostname: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.discordLink.findMany({
+      where: {
+        searchResult: {
+          searchSession: { workspaceId: auth.workspaceId },
+        },
+      },
+      include: {
+        searchResult: {
+          select: {
+            url: true,
+            domain: { select: { hostname: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.lead.findMany({
+      where: {
+        workspaceId: auth.workspaceId,
+        discordInvite: { not: "" },
+      },
+      select: {
+        discordInvite: true,
+        website: true,
+        createdAt: true,
+        domain: { select: { hostname: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+  const unique = new Map<
+    string,
+    [string, string, string, string, string, string, string, string, string]
+  >();
+  const add = (
+    rawUrl: string,
+    domain: string,
+    website: string,
+    evidenceSource: string,
+    sourcePage: string,
+    discoveryMethod: string,
+    validationStatus: string,
+    firstSeen: Date,
+  ) => {
+    const normalized = normalizeDiscordUrl(rawUrl);
+    if (!normalized || unique.has(normalized)) return;
+    unique.set(normalized, [
+      normalized,
+      discordDestinationKind(normalized) || "unknown",
+      domain,
+      website,
+      evidenceSource,
+      sourcePage,
+      discoveryMethod,
+      validationStatus,
+      firstSeen.toISOString(),
+    ]);
+  };
+  scannerLinks.forEach((link) =>
+    add(
+      link.url,
+      link.scannerResult.domain.hostname,
+      link.scannerResult.finalUrl || link.scannerResult.url,
+      "Scanner",
+      link.sourcePage,
+      link.discoveryMethod,
+      link.validationStatus,
+      link.createdAt,
+    ),
+  );
+  historyLinks.forEach((link) =>
+    add(
+      link.url,
+      link.searchResult.domain.hostname,
+      link.searchResult.url,
+      "Search history",
+      link.sourcePage,
+      "legacy-search",
+      "",
+      link.createdAt,
+    ),
+  );
+  savedLeads.forEach((lead) =>
+    add(
+      lead.discordInvite,
+      lead.domain.hostname,
+      lead.website,
+      "Saved lead",
+      lead.website,
+      "manual-or-saved",
+      "",
+      lead.createdAt,
+    ),
+  );
+  const rows = [
+    [
+      "Discord URL",
+      "Type",
+      "Domain",
+      "Website",
+      "Evidence Source",
+      "Source Page",
+      "Discovery Method",
+      "Validation Status",
+      "First Seen",
+    ],
+    ...unique.values(),
+  ];
+  res
+    .set({
+      "content-type": "text/csv",
+      "content-disposition": 'attachment; filename="discord-links.csv"',
+    })
+    .send(rows.map((row) => row.map(csvEscape).join(",")).join("\n"));
+});
+app.get("/api/export/lead-discord-links.txt", async (req, res) => {
+  const auth = (req as AuthRequest).auth;
+  const leads = await prisma.lead.findMany({
+    where: {
+      workspaceId: auth.workspaceId,
+      OR: [
+        { scannerResultId: null },
+        {
+          AND: [
+            { scannerResult: { scanStatus: { not: "Excluded" } } },
+            {
+              OR: [
+                { discordInvite: { not: "" } },
+                { telegram: { not: "" } },
+                { email: { not: "" } },
+                { scannerResult: { discordLinks: { some: {} } } },
+              ],
+            },
+          ],
+        },
+      ],
+      ...(auth.role === "RESEARCHER" ? { assignedToId: auth.id } : {}),
+    },
+    select: {
+      discordInvite: true,
+      scannerResult: {
+        select: {
+          discordLinks: {
+            select: { url: true },
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      },
+    },
+  });
+  const links = new Set<string>();
+  for (const lead of leads)
+    for (const rawUrl of [
+      lead.discordInvite,
+      ...(lead.scannerResult?.discordLinks.map((link) => link.url) || []),
+    ]) {
+      const normalized = normalizeDiscordUrl(rawUrl);
+      if (normalized) links.add(normalized);
+    }
+  const body = [...links].sort().join("\n");
+  res
+    .set({
+      "content-type": "text/plain; charset=utf-8",
+      "content-disposition": 'attachment; filename="discord-links.txt"',
+      "cache-control": "no-store",
+    })
+    .send(body ? `${body}\n` : "");
 });
 app.get("/api/export/history.csv", async (req, res) => {
   const sessions = await prisma.searchSession.findMany({
@@ -1735,13 +3295,19 @@ app.post(
         .object({ confirm: z.literal("REGENERATE") })
         .parse(req.body);
       void confirmation;
-      let scannerId = generateReadableId();
+      let scannerId = generateScannerId();
       while (await prisma.workspace.findUnique({ where: { scannerId } }))
-        scannerId = generateReadableId();
-      const workspace = await prisma.workspace.update({
-        where: { id: auth.workspaceId },
-        data: { scannerId },
-      });
+        scannerId = generateScannerId();
+      const [workspace] = await prisma.$transaction([
+        prisma.workspace.update({
+          where: { id: auth.workspaceId },
+          data: { scannerId },
+        }),
+        prisma.extensionInstance.updateMany({
+          where: { workspaceId: auth.workspaceId, revokedAt: null },
+          data: { revokedAt: new Date(), scannerState: "STOPPED" },
+        }),
+      ]);
       await audit(req, "SCANNER_ID_REGENERATED", "Workspace", auth.workspaceId);
       res.json({ scannerId: workspace.scannerId });
     } catch (error) {
@@ -1788,6 +3354,161 @@ app.get("/api/admin/overview", requireRole("ADMIN"), async (req, res) => {
     lastBackup: backup?.createdAt || null,
   });
 });
+app.get("/api/members", async (req, res, next) => {
+  try {
+    res.json(
+      await workspaceMemberDirectory((req as AuthRequest).auth.workspaceId),
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+app.get("/api/admin/ranks", requireRole("ADMIN"), async (req, res, next) => {
+  try {
+    const workspaceId = (req as AuthRequest).auth.workspaceId;
+    await ensureWorkspaceRanks(workspaceId);
+    const ranks = await prisma.workspaceRank.findMany({
+      where: { workspaceId },
+      orderBy: { position: "desc" },
+      include: { _count: { select: { users: true } } },
+    });
+    res.json(
+      ranks.map((rank) => ({
+        ...rank,
+        permissions: JSON.parse(rank.permissionsJson),
+        permissionsJson: undefined,
+      })),
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+app.post("/api/admin/ranks", requireRole("ADMIN"), async (req, res, next) => {
+  try {
+    const auth = (req as AuthRequest).auth;
+    const input = z
+      .object({
+        name: z.string().trim().min(1).max(40),
+        color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+        position: z.number().int().min(-1000).max(1000).default(0),
+        permissions: z.array(z.enum(rankPermissions)).default([]),
+      })
+      .parse(req.body);
+    const rank = await prisma.workspaceRank.create({
+      data: {
+        workspaceId: auth.workspaceId,
+        name: input.name,
+        color: input.color.toUpperCase(),
+        position: input.position,
+        permissionsJson: JSON.stringify(input.permissions),
+      },
+    });
+    await audit(req, "RANK_CREATED", "WorkspaceRank", rank.id, {
+      name: rank.name,
+      permissions: input.permissions,
+    });
+    res.status(201).json(rank);
+  } catch (error) {
+    next(error);
+  }
+});
+app.patch(
+  "/api/admin/ranks/:id",
+  requireRole("ADMIN"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      const rank = await prisma.workspaceRank.findFirst({
+        where: { id: String(req.params.id), workspaceId: auth.workspaceId },
+      });
+      if (!rank) return res.status(404).json({ error: "Rank not found" });
+      const input = z
+        .object({
+          name: z.string().trim().min(1).max(40).optional(),
+          color: z
+            .string()
+            .regex(/^#[0-9A-Fa-f]{6}$/)
+            .optional(),
+          position: z.number().int().min(-1000).max(1000).optional(),
+          permissions: z.array(z.enum(rankPermissions)).optional(),
+        })
+        .parse(req.body);
+      const updated = await prisma.workspaceRank.update({
+        where: { id: rank.id },
+        data: {
+          name: input.name,
+          color: input.color?.toUpperCase(),
+          position: input.position,
+          permissionsJson: input.permissions
+            ? JSON.stringify(input.permissions)
+            : undefined,
+        },
+      });
+      await audit(req, "RANK_UPDATED", "WorkspaceRank", rank.id, input);
+      res.json(updated);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.delete(
+  "/api/admin/ranks/:id",
+  requireRole("ADMIN"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      const rank = await prisma.workspaceRank.findFirst({
+        where: { id: String(req.params.id), workspaceId: auth.workspaceId },
+      });
+      if (!rank) return res.status(404).json({ error: "Rank not found" });
+      if (rank.managed)
+        return res
+          .status(400)
+          .json({ error: "Built-in ranks cannot be deleted" });
+      await prisma.workspaceRank.delete({ where: { id: rank.id } });
+      await audit(req, "RANK_DELETED", "WorkspaceRank", rank.id, {
+        name: rank.name,
+      });
+      res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.put(
+  "/api/admin/users/:id/ranks",
+  requireRole("ADMIN"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      const user = await prisma.user.findFirst({
+        where: { id: String(req.params.id), workspaceId: auth.workspaceId },
+      });
+      if (!user) return res.status(404).json({ error: "User not found" });
+      const input = z
+        .object({ rankIds: z.array(z.string()).max(25) })
+        .parse(req.body);
+      const valid = await prisma.workspaceRank.findMany({
+        where: { workspaceId: auth.workspaceId, id: { in: input.rankIds } },
+        select: { id: true },
+      });
+      if (valid.length !== new Set(input.rankIds).size)
+        return res.status(400).json({ error: "One or more ranks are invalid" });
+      await prisma.$transaction([
+        prisma.userRank.deleteMany({ where: { userId: user.id } }),
+        prisma.userRank.createMany({
+          data: valid.map((rank) => ({ userId: user.id, rankId: rank.id })),
+        }),
+      ]);
+      await audit(req, "USER_RANKS_UPDATED", "User", user.id, {
+        rankIds: valid.map((rank) => rank.id),
+      });
+      res.json({ ranks: await publicRanksForUser(user.id) });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 app.get("/api/admin/users", requireRole("ADMIN"), async (req, res) => {
   const workspaceId = (req as AuthRequest).auth.workspaceId;
   res.json(
@@ -1802,6 +3523,13 @@ app.get("/api/admin/users", requireRole("ADMIN"), async (req, res) => {
         requirePasswordChange: true,
         lastLoginAt: true,
         createdAt: true,
+        rankAssignments: {
+          select: {
+            rank: {
+              select: { id: true, name: true, color: true, position: true },
+            },
+          },
+        },
         _count: { select: { assignedLeads: true, extensionInstances: true } },
       },
     }),
@@ -1853,11 +3581,7 @@ app.patch(
           username: usernameSchema.optional(),
           role: z.enum(roles).optional(),
           status: z.enum(["ACTIVE", "DISABLED"]).optional(),
-          temporaryPassword: z
-            .string()
-            .min(PASSWORD_MIN_LENGTH)
-            .max(200)
-            .optional(),
+          temporaryPassword: newPasswordSchema.optional(),
         })
         .parse(req.body);
       if (target.id === auth.id && input.status === "DISABLED")
@@ -2160,18 +3884,33 @@ app.use(
     const duplicateUsername =
       err?.code === "P2002" &&
       JSON.stringify(err?.meta?.target || "").includes("username");
+    const validationMessage =
+      err?.name === "ZodError" && Array.isArray(err?.issues)
+        ? err.issues.find(
+            (issue: unknown) =>
+              typeof issue === "object" &&
+              issue !== null &&
+              "message" in issue &&
+              typeof issue.message === "string",
+          )?.message
+        : undefined;
     const status =
       err?.statusCode ??
       (err?.name === "ZodError" ? 400 : duplicateUsername ? 409 : 500);
     if (status >= 500) console.error(err);
+    const exposedError = err?.expose === true;
     res.status(status).json({
       error: duplicateUsername
         ? "Username is already in use."
-        : status >= 500 && process.env.NODE_ENV === "production"
-          ? "Unexpected server error"
-          : err instanceof Error
-            ? err.message
-            : "Unexpected server error",
+        : validationMessage
+          ? validationMessage
+          : status >= 500 &&
+              process.env.NODE_ENV === "production" &&
+              !exposedError
+            ? "Unexpected server error"
+            : err instanceof Error
+              ? err.message
+              : "Unexpected server error",
     });
   },
 );

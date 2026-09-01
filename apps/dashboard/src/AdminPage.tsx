@@ -29,7 +29,9 @@ type UserRow = {
   lastLoginAt?: string;
   createdAt: string;
   _count: { assignedLeads: number; extensionInstances: number };
+  rankAssignments: Array<{ rank: { id: string; name: string; color: string; position: number } }>;
 };
+type RankRow = { id: string; name: string; color: string; position: number; permissions: string[]; managed: boolean; _count: { users: number } };
 type ExtensionRow = {
   id: string;
   instanceId: string;
@@ -65,20 +67,23 @@ export default function AdminPage() {
   const [extensions, setExtensions] = useState<ExtensionRow[]>([]);
   const [backups, setBackups] = useState<BackupRow[]>([]);
   const [audit, setAudit] = useState<AuditRow[]>([]);
+  const [ranks, setRanks] = useState<RankRow[]>([]);
   const [message, setMessage] = useState("");
   const load = async () => {
-    const [a, b, c, d, e] = await Promise.all([
+    const [a, b, c, d, e, f] = await Promise.all([
       api.get<Overview>("/admin/overview"),
       api.get<UserRow[]>("/admin/users"),
       api.get<ExtensionRow[]>("/admin/extensions"),
       api.get<BackupRow[]>("/admin/backups"),
       api.get<AuditRow[]>("/admin/audit"),
+      api.get<RankRow[]>("/admin/ranks"),
     ]);
     setOverview(a);
     setUsers(b);
     setExtensions(c);
     setBackups(d);
     setAudit(e);
+    setRanks(f);
   };
   useEffect(() => {
     void load();
@@ -99,6 +104,24 @@ export default function AdminPage() {
   }
   async function userAction(id: string, data: unknown) {
     await api.send(`/admin/users/${id}`, "PATCH", data);
+    await load();
+  }
+  async function assignRanks(id: string, rankIds: string[]) {
+    await api.send(`/admin/users/${id}/ranks`, "PUT", { rankIds });
+    await load();
+  }
+  async function createRank(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    await api.send("/admin/ranks", "POST", { name: form.get("name"), color: form.get("color"), position: Number(form.get("position")), permissions: form.get("lztAccess") ? ["LZT_ACCESS"] : [] });
+    event.currentTarget.reset(); await load();
+  }
+  async function updateRank(id: string, data: unknown) {
+    await api.send(`/admin/ranks/${id}`, "PATCH", data);
+    await load();
+  }
+  async function deleteRank(id: string) {
+    await api.send(`/admin/ranks/${id}`, "DELETE");
     await load();
   }
   async function extensionAction(id: string, force = false) {
@@ -186,6 +209,11 @@ export default function AdminPage() {
       <div className="section-title">
         <h2>Team members</h2>
       </div>
+      <article className="card table-card rank-manager">
+        <div className="card-head"><div><h2>Workspace ranks</h2><p>Visual groups and feature permissions. System administrator roles remain separate.</p></div></div>
+        <form className="admin-form" onSubmit={createRank}><input name="name" required maxLength={40} placeholder="Rank name" /><input name="color" type="color" defaultValue="#8792A6" aria-label="Rank color" /><input name="position" type="number" defaultValue="50" min="-1000" max="1000" aria-label="Rank position" /><label className="rank-permission-check"><input name="lztAccess" type="checkbox" /> LZT Access</label><Button><Plus /> Add rank</Button></form>
+        <div className="rank-chip-list">{ranks.map((rank) => <span key={rank.id} style={{ borderColor: rank.color, color: rank.color }}><i style={{ background: rank.color }} />{rank.name}<small>{rank._count.users} members{rank.permissions.includes("LZT_ACCESS") ? " · LZT" : ""}</small>{!rank.managed && <><label title="Toggle LZT Access"><input type="checkbox" checked={rank.permissions.includes("LZT_ACCESS")} onChange={(event) => void updateRank(rank.id, { permissions: event.target.checked ? ["LZT_ACCESS"] : [] })} /> LZT</label><input type="color" value={rank.color} aria-label={`Color for ${rank.name}`} onChange={(event) => void updateRank(rank.id, { color: event.target.value })} /><button className="rank-delete" onClick={() => confirm(`Delete the ${rank.name} rank?`) && void deleteRank(rank.id)}>Delete</button></>}</span>)}</div>
+      </article>
       <article className="card table-card">
         <form className="admin-form" onSubmit={createUser}>
           <input
@@ -202,7 +230,6 @@ export default function AdminPage() {
             name="password"
             required
             type="password"
-            minLength={12}
             placeholder="Temporary password"
             aria-label="New member temporary password"
           />
@@ -225,6 +252,7 @@ export default function AdminPage() {
               <tr>
                 <th>User</th>
                 <th>Role</th>
+                <th>Ranks</th>
                 <th>Status</th>
                 <th>Assigned</th>
                 <th>Last login</th>
@@ -250,6 +278,7 @@ export default function AdminPage() {
                       <option>RESEARCHER</option>
                     </select>
                   </td>
+                  <td><div className="rank-assignment-list">{ranks.map((rank) => { const checked = user.rankAssignments.some((item) => item.rank.id === rank.id); return <label key={rank.id} style={{ color: rank.color }}><input type="checkbox" checked={checked} onChange={(event) => void assignRanks(user.id, event.target.checked ? [...user.rankAssignments.map((item) => item.rank.id), rank.id] : user.rankAssignments.map((item) => item.rank.id).filter((id) => id !== rank.id))} />{rank.name}</label>; })}</div></td>
                   <td>
                     <Badge
                       tone={user.status === "ACTIVE" ? "connected" : "failed"}

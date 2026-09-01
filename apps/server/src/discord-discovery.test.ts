@@ -2,7 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const fetchPage = vi.fn();
 const robotsDecision = vi.fn();
-vi.mock("./crawler.js", () => ({ fetchPage, robotsDecision }));
+const classifyFetchError = (message: string) =>
+  /timeout|timed out/i.test(message)
+    ? "TIMEOUT"
+    : /worker busy/i.test(message)
+      ? "SCRAPER_BUSY"
+      : /cross-domain|redirect blocked/i.test(message)
+        ? "REDIRECT_BLOCKED"
+        : "INVALID_RESPONSE";
+vi.mock("./crawler.js", () => ({
+  fetchPage,
+  robotsDecision,
+  classifyFetchError,
+}));
 
 function page(url: string, overrides: Record<string, unknown> = {}) {
   return {
@@ -41,6 +53,72 @@ beforeEach(() => {
 });
 
 describe("layered Discord discovery", () => {
+  it("reuses the scanner entry page and follows its declared contact link first", async () => {
+    const initialPage = page("https://example.com/", {
+      priorityLinks: ["https://example.com/community"],
+      internalLinks: ["https://example.com/community"],
+    });
+    fetchPage.mockImplementation((url: string) =>
+      Promise.resolve(
+        new URL(url).pathname === "/community"
+          ? page(url, {
+              discordLinks: ["https://discord.gg/seeded"],
+              discordDetections: [
+                { url: "https://discord.gg/seeded", method: "anchor" },
+              ],
+            })
+          : page(url, { httpStatus: 404 }),
+      ),
+    );
+    const { discoverDiscord } = await import("./discord-discovery.js");
+    const result = await discoverDiscord("https://example.com/", {
+      timeoutMs: 1_000,
+      maxPages: 6,
+      initialPage: initialPage as never,
+    });
+
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+    expect(fetchPage.mock.calls[0]?.[0]).toBe("https://example.com/community");
+    expect(result.discordFound).toBe(true);
+  });
+
+  it("retains dynamic recovery when the reused entry page is a JS shell", async () => {
+    const initialPage = page("https://example.com/", { looksDynamic: true });
+    fetchPage.mockImplementation(
+      (url: string, options: { forceDynamic?: boolean }) =>
+        Promise.resolve(
+          page(url, {
+            fetchMode: options.forceDynamic ? "Dynamic" : "HTTP",
+            dynamicFetchResult: options.forceDynamic
+              ? "SUCCESS"
+              : "NOT_ATTEMPTED",
+            discordLinks: options.forceDynamic
+              ? ["https://discord.gg/rendered-seed"]
+              : [],
+            discordDetections: options.forceDynamic
+              ? [
+                  {
+                    url: "https://discord.gg/rendered-seed",
+                    method: "rendered-dom",
+                  },
+                ]
+              : [],
+          }),
+        ),
+    );
+    const { discoverDiscord } = await import("./discord-discovery.js");
+    const result = await discoverDiscord("https://example.com/", {
+      timeoutMs: 1_000,
+      maxPages: 2,
+      dynamicFallback: true,
+      initialPage: initialPage as never,
+    });
+
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+    expect(fetchPage.mock.calls[0]?.[1].forceDynamic).toBe(true);
+    expect(result.discordFound).toBe(true);
+  });
+
   it("records the exact extraction method on the requested page", async () => {
     fetchPage.mockImplementation((url: string) =>
       Promise.resolve(
@@ -160,6 +238,39 @@ describe("layered Discord discovery", () => {
     ).toHaveLength(1);
   });
 
+  it("returns Telegram and email contacts found on recovery pages", async () => {
+    fetchPage.mockImplementation((url: string) => {
+      const path = new URL(url).pathname;
+      return Promise.resolve(
+        path === "/contact"
+          ? page(url, {
+              emails: ["support@example.com"],
+              socialLinks: [
+                {
+                  type: "telegram",
+                  url: "https://t.me/example_support",
+                  sourcePage: url,
+                },
+              ],
+            })
+          : page(url),
+      );
+    });
+    const { discoverDiscord } = await import("./discord-discovery.js");
+    const result = await discoverDiscord("https://example.com/", {
+      timeoutMs: 1_000,
+      maxPages: 4,
+    });
+
+    expect(result.discordFound).toBe(false);
+    expect(result.contactFound).toBe(true);
+    expect(result.emails).toEqual(["support@example.com"]);
+    expect(result.socialLinks).toContainEqual(
+      expect.objectContaining({ url: "https://t.me/example_support" }),
+    );
+    expect(result.failureReason).toBeUndefined();
+  });
+
   it("labels a soft 404 independently and completes normally at the scan cap", async () => {
     fetchPage.mockImplementation((url: string) =>
       Promise.resolve(page(url, { isSoft404: true })),
@@ -277,19 +388,149 @@ describe("layered Discord discovery", () => {
     expect(result.pages[0]?.error).toBe("HTTP_5XX");
   });
 
-  it("keeps browser rendering in a separate bounded tier", async () => {
-    fetchPage.mockImplementation((url: string) =>
-      Promise.resolve(
-        page(url, {
-          fetchMode: "Dynamic",
-          dynamicFetchResult: "SUCCESS",
-          internalLinks: [
-            "https://example.com/about",
-            "https://example.com/contact",
-            "https://example.com/community",
-          ],
-        }),
+  it("retries high-value recovery pages instead of treating them as one-shot guesses", async () => {
+    const initialPage = page("https://example.com/", {
+      priorityLinks: ["https://example.com/discord"],
+      internalLinks: ["https://example.com/discord"],
+    });
+    fetchPage.mockResolvedValue(
+      page("https://example.com/discord", {
+        discordLinks: ["https://discord.gg/retried-route"],
+        discordDetections: [
+          { url: "https://discord.gg/retried-route", method: "anchor" },
+        ],
+      }),
+    );
+    const { discoverDiscord } = await import("./discord-discovery.js");
+    const result = await discoverDiscord("https://example.com/", {
+      timeoutMs: 8_000,
+      maxPages: 3,
+      retries: 2,
+      initialPage: initialPage as never,
+    });
+
+    expect(result.discordFound).toBe(true);
+    expect(fetchPage.mock.calls[0]?.[1].retries).toBe(2);
+    expect(fetchPage.mock.calls[0]?.[1].timeoutMs).toBe(8_000);
+  });
+
+  it("renders a declared Discord route after a transient static 503", async () => {
+    const initialPage = page("https://example.com/", {
+      priorityLinks: ["https://example.com/discord"],
+      internalLinks: ["https://example.com/discord"],
+    });
+    fetchPage.mockImplementation(
+      (url: string, options: { forceDynamic?: boolean }) =>
+        Promise.resolve(
+          options.forceDynamic
+            ? page(url, {
+                fetchMode: "Dynamic",
+                dynamicFetchResult: "SUCCESS",
+                discordLinks: ["https://discord.gg/rendered-after-503"],
+                discordDetections: [
+                  {
+                    url: "https://discord.gg/rendered-after-503",
+                    method: "rendered-dom",
+                  },
+                ],
+              })
+            : page(url, { httpStatus: 503 }),
+        ),
+    );
+    const { discoverDiscord } = await import("./discord-discovery.js");
+    const result = await discoverDiscord("https://example.com/", {
+      timeoutMs: 12_000,
+      maxPages: 3,
+      maxDynamicPages: 1,
+      dynamicFallback: true,
+      initialPage: initialPage as never,
+    });
+
+    expect(result.discordFound).toBe(true);
+    expect(
+      fetchPage.mock.calls.some(
+        (call) =>
+          call[0] === "https://example.com/discord" && call[1].forceDynamic,
       ),
+    ).toBe(true);
+  });
+
+  it("continues to recovery routes after the homepage worker times out", async () => {
+    fetchPage.mockImplementation((url: string) => {
+      const path = new URL(url).pathname;
+      if (path === "/")
+        return Promise.reject(new Error("Scrapling worker timeout"));
+      if (path === "/discord")
+        return Promise.resolve(
+          page(url, {
+            discordLinks: ["https://discord.gg/timeout-recovery"],
+            discordDetections: [
+              { url: "https://discord.gg/timeout-recovery", method: "anchor" },
+            ],
+          }),
+        );
+      return Promise.resolve(page(url, { httpStatus: 404 }));
+    });
+    const { discoverDiscord } = await import("./discord-discovery.js");
+    const result = await discoverDiscord("https://example.com/", {
+      timeoutMs: 1_000,
+      maxPages: 6,
+    });
+
+    expect(result.discordFound).toBe(true);
+    expect(result.pages[0]).toMatchObject({
+      status: "Timeout",
+      error: "TIMEOUT",
+    });
+  });
+
+  it("does not amplify a saturated worker into fallback request bursts", async () => {
+    fetchPage.mockRejectedValue(
+      new Error("Scrapling worker busy (HTTP 503): capacity is full"),
+    );
+    const { discoverDiscord } = await import("./discord-discovery.js");
+    const result = await discoverDiscord("https://example.com/", {
+      timeoutMs: 1_000,
+      maxPages: 20,
+      deepScan: true,
+    });
+
+    expect(result.discordFound).toBe(false);
+    expect(result.failureReason).toBe("SCRAPER_BUSY");
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a persistent original 503 classified as HTTP 5XX", async () => {
+    fetchPage.mockImplementation((url: string) =>
+      Promise.resolve(page(url, { httpStatus: 503 })),
+    );
+    const { discoverDiscord } = await import("./discord-discovery.js");
+    const result = await discoverDiscord("https://example.com/", {
+      timeoutMs: 1_000,
+      maxPages: 2,
+      dynamicFallback: false,
+    });
+
+    expect(result.discordFound).toBe(false);
+    expect(result.failureReason).toBe("HTTP_5XX");
+  });
+
+  it("keeps browser rendering in a separate bounded tier", async () => {
+    fetchPage.mockImplementation(
+      (url: string, options: { forceDynamic?: boolean }) =>
+        Promise.resolve(
+          page(url, {
+            fetchMode: options.forceDynamic ? "Dynamic" : "HTTP",
+            dynamicFetchResult: options.forceDynamic
+              ? "SUCCESS"
+              : "NOT_ATTEMPTED",
+            internalLinks: [
+              "https://example.com/about",
+              "https://example.com/contact",
+              "https://example.com/community",
+            ],
+          }),
+        ),
     );
     const { discoverDiscord } = await import("./discord-discovery.js");
     await discoverDiscord("https://example.com/", {
@@ -302,6 +543,73 @@ describe("layered Discord discovery", () => {
     expect(
       fetchPage.mock.calls.filter((call) => call[1].dynamicFallback),
     ).toHaveLength(1);
+  });
+
+  it("keeps guessed common routes on the fast static tier", async () => {
+    const initialPage = page("https://example.com/");
+    const { discoverDiscord } = await import("./discord-discovery.js");
+    await discoverDiscord("https://example.com/", {
+      timeoutMs: 10_000,
+      maxPages: 4,
+      maxDynamicPages: 1,
+      dynamicFallback: true,
+      initialPage: initialPage as never,
+    });
+
+    expect(fetchPage).toHaveBeenCalled();
+    expect(
+      fetchPage.mock.calls.every(
+        (call) =>
+          call[1].dynamicFallback === false &&
+          call[1].forceDynamic === false &&
+          call[1].retries === 0 &&
+          call[1].timeoutMs <= 5_000,
+      ),
+    ).toBe(true);
+  });
+
+  it("does not turn a healthy website into a timeout when a guessed path is slow", async () => {
+    fetchPage.mockImplementation((url: string) => {
+      const path = new URL(url).pathname;
+      if (path === "/") return Promise.resolve(page(url));
+      if (path === "/discord")
+        return Promise.reject(new Error("Scrapling worker timeout"));
+      return Promise.resolve(page(url, { httpStatus: 404 }));
+    });
+    const { discoverDiscord } = await import("./discord-discovery.js");
+    const result = await discoverDiscord("https://example.com/", {
+      timeoutMs: 1_000,
+      maxPages: 2,
+      dynamicFallback: false,
+    });
+
+    expect(result.discordFound).toBe(false);
+    expect(
+      result.pages.some((candidate) => candidate.status === "Timeout"),
+    ).toBe(true);
+    expect(result.failureReason).toBe("DISCORD_NOT_FOUND");
+  });
+
+  it("does not turn a healthy website into blocked because a guessed path returns 403", async () => {
+    fetchPage.mockImplementation((url: string) =>
+      Promise.resolve(
+        page(url, {
+          httpStatus: new URL(url).pathname === "/discord" ? 403 : 200,
+        }),
+      ),
+    );
+    const { discoverDiscord } = await import("./discord-discovery.js");
+    const result = await discoverDiscord("https://example.com/", {
+      timeoutMs: 1_000,
+      maxPages: 2,
+      dynamicFallback: false,
+    });
+
+    expect(result.discordFound).toBe(false);
+    expect(
+      result.pages.some((candidate) => candidate.status === "Blocked"),
+    ).toBe(true);
+    expect(result.failureReason).toBe("DISCORD_NOT_FOUND");
   });
 
   it("tries real internal links before guessed common paths", async () => {
@@ -333,7 +641,6 @@ describe("layered Discord discovery", () => {
     expect(result.discordFound).toBe(true);
     expect(result.pages.map((candidate) => candidate.url)).toEqual([
       "https://example.com/",
-      "https://example.com/sitemap.xml",
       "https://example.com/products/community-edition",
     ]);
   });

@@ -1,6 +1,41 @@
 import dns from "node:dns/promises";
 import net from "node:net";
 
+const publicDnsCache = new Map<
+  string,
+  { expiresAt: number; records: Array<{ address: string }> }
+>();
+const publicDnsLookups = new Map<string, Promise<Array<{ address: string }>>>();
+const PUBLIC_DNS_CACHE_MS = 60_000;
+
+async function publicDnsRecords(hostname: string) {
+  const cached = publicDnsCache.get(hostname);
+  if (cached && cached.expiresAt > Date.now()) return cached.records;
+  let pending = publicDnsLookups.get(hostname);
+  if (!pending) {
+    pending = dns
+      .lookup(hostname, { all: true, verbatim: true })
+      .then((records) => {
+        const compact = records.map(({ address }) => ({ address }));
+        if (
+          !compact.length ||
+          compact.some((record) => isPrivateIp(record.address))
+        )
+          throw new Error("Private or internal address blocked");
+        if (publicDnsCache.size >= 2_048)
+          publicDnsCache.delete(publicDnsCache.keys().next().value as string);
+        publicDnsCache.set(hostname, {
+          expiresAt: Date.now() + PUBLIC_DNS_CACHE_MS,
+          records: compact,
+        });
+        return compact;
+      })
+      .finally(() => publicDnsLookups.delete(hostname));
+    publicDnsLookups.set(hostname, pending);
+  }
+  return pending;
+}
+
 export function isPrivateIp(ip: string) {
   if (net.isIPv4(ip)) {
     const p = ip.split(".").map(Number);
@@ -56,7 +91,7 @@ export async function assertPublicUrl(value: string) {
     throw new Error("Internal host blocked");
   const records = net.isIP(hostname)
     ? [{ address: hostname }]
-    : await dns.lookup(hostname, { all: true, verbatim: true });
+    : await publicDnsRecords(hostname);
   if (!records.length || records.some((r) => isPrivateIp(r.address)))
     throw new Error("Private or internal address blocked");
   return url;

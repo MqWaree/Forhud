@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -21,11 +22,16 @@ import {
   Square,
   Trash2,
   Users,
-  Wifi,
   Zap,
 } from "lucide-react";
 import { discordDestinationKind, extractHttpUrls } from "@lead/shared";
-import { api, type ScannerItem, type ScannerSnapshot } from "./api";
+import {
+  api,
+  type DiscordReconciliationProgress,
+  type DiscordReconciliationStart,
+  type ScannerItem,
+  type ScannerSnapshot,
+} from "./api";
 import {
   Badge,
   Button,
@@ -53,12 +59,41 @@ const formatDuration = (milliseconds: number) =>
       ? `${milliseconds} ms`
       : `${(milliseconds / 1_000).toFixed(1)} s`
     : "—";
+const retryableStatuses = new Set(["Failed", "Timeout", "Blocked"]);
+type DiscoveryProgress = {
+  operationId: string;
+  query?: string;
+  status: "RUNNING" | "COMPLETED" | "FAILED";
+  phase: string;
+  requested: number;
+  discovered: number;
+  queued?: number;
+  duplicates?: number;
+  rejected?: number;
+  excluded: number;
+  leadsAdded?: number;
+  requests: number;
+  failedRequests: number;
+  progressPercent?: number;
+  startedAt?: string;
+  updatedAt?: string;
+  queryPagesChecked?: number;
+  totalVariants?: number;
+  activeVariants?: number;
+  stopReason?:
+    | "TARGET_REACHED"
+    | "RESULTS_EXHAUSTED"
+    | "REQUEST_LIMIT_REACHED"
+    | "PROVIDER_DEGRADED";
+};
 export default function SearcherPage() {
   const [data, setData] = useState<ScannerSnapshot>(),
     [page, setPage] = useState(1),
     [search, setSearch] = useState(""),
+    [debouncedSearch, setDebouncedSearch] = useState(""),
     [status, setStatus] = useState("All"),
     [detail, setDetail] = useState<ScannerItem>(),
+    [detailLoading, setDetailLoading] = useState(false),
     [busy, setBusy] = useState(false),
     [showImport, setShowImport] = useState(false),
     [importText, setImportText] = useState(""),
@@ -70,23 +105,43 @@ export default function SearcherPage() {
       discovered: number;
       requested: number;
     }>(),
+    [discoveryProgress, setDiscoveryProgress] = useState<DiscoveryProgress>(),
     [braveStatus, setBraveStatus] = useState<{
       configured: boolean;
       provider: string;
       maxRequests?: number;
       maxResults?: number;
-    }>();
-  const load = useCallback(
-    async () =>
-      setData(
-        await api.get<ScannerSnapshot>(
-          `/scanner?page=${page}&pageSize=50&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}`,
-        ),
-      ),
-    [page, search, status],
-  );
+    }>(),
+    [discordProgress, setDiscordProgress] =
+      useState<DiscordReconciliationProgress>();
+  const loadController = useRef<AbortController>();
+  const activeSearchOperation = useRef("");
+  const lastDiscordProgressStatus =
+    useRef<DiscordReconciliationProgress["status"]>();
+  const load = useCallback(async () => {
+    loadController.current?.abort();
+    const controller = new AbortController();
+    loadController.current = controller;
+    try {
+      const snapshot = await api.get<ScannerSnapshot>(
+        `/scanner?page=${page}&pageSize=50&search=${encodeURIComponent(debouncedSearch)}&status=${encodeURIComponent(status)}`,
+        { signal: controller.signal },
+      );
+      if (!controller.signal.aborted) setData(snapshot);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError"))
+        notify(
+          error instanceof Error ? error.message : "Scanner could not load.",
+        );
+    }
+  }, [page, debouncedSearch, status]);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
   useEffect(() => {
     void load();
+    return () => loadController.current?.abort();
   }, [load]);
   useEffect(() => {
     void api
@@ -102,18 +157,123 @@ export default function SearcherPage() {
       );
   }, []);
   useEffect(() => {
+    void api
+      .get<{ current: DiscoveryProgress | null }>("/search/brave/current")
+      .then(({ current }) => {
+        if (!current) return;
+        activeSearchOperation.current = current.operationId;
+        setDiscoveryProgress(current);
+        if (current.status !== "RUNNING")
+          setSearchOutcome({
+            discovered: current.discovered,
+            requested: current.requested,
+          });
+      })
+      .catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    void api
+      .get<DiscordReconciliationProgress | null>(
+        "/scanner/discord-links/reconcile",
+      )
+      .then((current) => {
+        if (!current) return;
+        lastDiscordProgressStatus.current = current.status;
+        setDiscordProgress(current);
+      })
+      .catch(() => undefined);
+  }, []);
+  useEffect(() => {
     const es = new EventSource("/api/events");
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleLoad = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = undefined;
+        void load();
+      }, 900);
+    };
+    const updateDiscoveryProgress = (event: Event) => {
+      try {
+        const progress = JSON.parse(
+          (event as MessageEvent<string>).data,
+        ) as DiscoveryProgress;
+        if (!progress.operationId) return;
+        activeSearchOperation.current = progress.operationId;
+        setDiscoveryProgress(progress);
+      } catch {
+        // Ignore malformed progress payloads and keep discovery running.
+      }
+    };
+    const updateDiscordProgress = (event: Event) => {
+      try {
+        const progress = JSON.parse(
+          (event as MessageEvent<string>).data,
+        ) as DiscordReconciliationProgress;
+        if (!progress.operationId) return;
+        const previousStatus = lastDiscordProgressStatus.current;
+        lastDiscordProgressStatus.current = progress.status;
+        setDiscordProgress(progress);
+        if (previousStatus === "RUNNING" && progress.status === "COMPLETED") {
+          const failureDetail = progress.failed
+            ? ` · ${progress.failed.toLocaleString()} temporary errors`
+            : "";
+          notify(
+            `Discord check completed · ${(progress.uniqueServers || 0).toLocaleString()} unique servers · ${(progress.alternateInvites || 0).toLocaleString()} alternate invites${failureDetail}`,
+          );
+          scheduleLoad();
+        } else if (
+          previousStatus === "RUNNING" &&
+          progress.status === "FAILED"
+        ) {
+          notify(progress.error || "Discord link check failed.");
+        }
+      } catch {
+        // Ignore malformed progress payloads; the persisted status is reloaded.
+      }
+    };
+    es.addEventListener("brave-search-progress", updateDiscoveryProgress);
+    es.addEventListener(
+      "discord-reconciliation-progress",
+      updateDiscordProgress,
+    );
     [
       "import",
       "scanner-progress",
       "scanner-performance",
       "scanner-state",
       "scanner-reset",
+      "discord-links-reconciled",
       "lead-update",
-    ].forEach((name) => es.addEventListener(name, () => void load()));
-    return () => es.close();
+    ].forEach((name) => es.addEventListener(name, scheduleLoad));
+    return () => {
+      clearTimeout(timer);
+      es.removeEventListener("brave-search-progress", updateDiscoveryProgress);
+      es.removeEventListener(
+        "discord-reconciliation-progress",
+        updateDiscordProgress,
+      );
+      es.close();
+    };
   }, [load]);
+  async function openDetail(item: ScannerItem) {
+    setDetail(item);
+    setDetailLoading(true);
+    try {
+      setDetail(await api.get<ScannerItem>(`/scanner/results/${item.id}`));
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "Result details could not load.",
+      );
+    } finally {
+      setDetailLoading(false);
+    }
+  }
   const running = ["RUNNING", "STOPPING"].includes(data?.state.status || ""),
+    searchRunning = discoveryProgress?.status === "RUNNING",
+    discordReconciling = discordProgress?.status === "RUNNING",
     progress = data?.stats.websites
       ? (data.stats.scanned / data.stats.websites) * 100
       : 0,
@@ -141,8 +301,58 @@ export default function SearcherPage() {
       await api.send(path);
       notify(message);
       await load();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Scanner action failed.");
     } finally {
       setBusy(false);
+    }
+  }
+  async function retryRecoverable() {
+    setBusy(true);
+    try {
+      const result = await api.send<{
+        queued: number;
+        skippedPermanent: number;
+        recoveryProfile: {
+          concurrency: number;
+          timeoutSeconds: number;
+          retries: number;
+        } | null;
+      }>("/scanner/retry-failed");
+      const queuedMessage = result.queued
+        ? `${result.queued.toLocaleString()} recoverable failure${result.queued === 1 ? "" : "s"} queued with the safer retry profile`
+        : "No recoverable failures were waiting";
+      const skippedMessage = result.skippedPermanent
+        ? ` · ${result.skippedPermanent.toLocaleString()} explicit access block${result.skippedPermanent === 1 ? " was" : "s were"} left untouched`
+        : "";
+      notify(`${queuedMessage}${skippedMessage}.`);
+      await load();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Retry could not start.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function reconcileDiscordInvites() {
+    try {
+      const result = await api.send<DiscordReconciliationStart>(
+        "/scanner/discord-links/reconcile",
+      );
+      if (result.progress) {
+        lastDiscordProgressStatus.current = result.progress.status;
+        setDiscordProgress(result.progress);
+      }
+      notify(
+        result.started
+          ? "Discord link checker started in the background."
+          : "The Discord link checker is already running.",
+      );
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "Discord invites could not be checked.",
+      );
     }
   }
   async function reset() {
@@ -174,7 +384,7 @@ export default function SearcherPage() {
       });
       await api.send("/scanner/start");
       notify(
-        `${result.created} new website${result.created === 1 ? "" : "s"} queued · ${result.leadsAdded} new lead${result.leadsAdded === 1 ? "" : "s"} synced automatically · ${result.duplicates} duplicate · ${result.excluded} platform link${result.excluded === 1 ? "" : "s"} ignored · ${result.rejected} rejected.`,
+        `${result.created} new website${result.created === 1 ? "" : "s"} queued · Discord- or Telegram-qualified leads will appear as soon as contacts are found · ${result.duplicates} duplicate · ${result.excluded} platform link${result.excluded === 1 ? "" : "s"} ignored · ${result.rejected} rejected.`,
       );
       setShowImport(false);
       setImportText("");
@@ -205,6 +415,26 @@ export default function SearcherPage() {
       return;
     }
     setBusy(true);
+    const operationId = crypto.randomUUID();
+    activeSearchOperation.current = operationId;
+    setDiscoveryProgress({
+      operationId,
+      query: query.trim(),
+      status: "RUNNING",
+      phase: "Starting web discovery",
+      requested: maxResults,
+      discovered: 0,
+      queued: 0,
+      duplicates: 0,
+      rejected: 0,
+      excluded: 0,
+      leadsAdded: 0,
+      requests: 0,
+      failedRequests: 0,
+      progressPercent: 2,
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
     try {
       const result = await api.send<{
         discovered: number;
@@ -215,22 +445,74 @@ export default function SearcherPage() {
         excluded: number;
         complete: boolean;
         requests: number;
+        failedRequests: number;
         leadsAdded: number;
+        stopReason:
+          | "TARGET_REACHED"
+          | "RESULTS_EXHAUSTED"
+          | "REQUEST_LIMIT_REACHED"
+          | "PROVIDER_DEGRADED";
       }>("/search/brave", "POST", {
         query: query.trim(),
         maxResults,
+        operationId,
       });
       notify(
-        `${result.discovered} of ${result.requested} unique business websites found${result.complete ? "" : " (no more unique results available)"} · ${result.leadsAdded} new lead${result.leadsAdded === 1 ? "" : "s"} synced automatically · ${result.created} new queued · ${result.excluded} platform result${result.excluded === 1 ? "" : "s"} ignored · ${result.requests} API request${result.requests === 1 ? "" : "s"}.`,
+        `${result.discovered} of ${result.requested} unique business websites found${result.complete ? "" : result.stopReason === "REQUEST_LIMIT_REACHED" ? " (provider request ceiling reached)" : result.stopReason === "PROVIDER_DEGRADED" ? " (Brave was partially unavailable; successful results were preserved)" : " (provider results exhausted)"} · ${result.created} new queued · Discord- or Telegram-qualified leads will appear as soon as contacts are found · ${result.excluded} platform result${result.excluded === 1 ? "" : "s"} ignored · ${result.requests} API request${result.requests === 1 ? "" : "s"}${result.failedRequests ? ` · ${result.failedRequests} failed after retry` : ""}.`,
       );
       setSearchOutcome({
         discovered: result.discovered,
         requested: result.requested,
       });
+      setDiscoveryProgress((currentProgress) => ({
+        operationId,
+        query: currentProgress?.query || query.trim(),
+        status: "COMPLETED",
+        phase: result.complete
+          ? "Target reached and websites queued"
+          : result.stopReason === "REQUEST_LIMIT_REACHED"
+            ? "Provider request ceiling reached"
+            : result.stopReason === "PROVIDER_DEGRADED"
+              ? "Provider partially unavailable"
+              : "Provider search space exhausted",
+        requested: result.requested,
+        discovered: result.discovered,
+        queued: result.created,
+        duplicates: result.duplicates,
+        rejected: result.rejected,
+        excluded: result.excluded,
+        leadsAdded: result.leadsAdded,
+        requests: result.requests,
+        failedRequests: result.failedRequests,
+        progressPercent: 100,
+        startedAt: currentProgress?.startedAt,
+        updatedAt: new Date().toISOString(),
+        queryPagesChecked: currentProgress?.queryPagesChecked,
+        totalVariants: currentProgress?.totalVariants,
+        activeVariants: currentProgress?.activeVariants,
+        stopReason: result.stopReason,
+      }));
       setPage(1);
       setSearch("");
       await load();
     } catch (error) {
+      setDiscoveryProgress((currentProgress) => ({
+        operationId,
+        query: currentProgress?.query || query.trim(),
+        status: "FAILED",
+        phase: error instanceof Error ? error.message : "Search failed",
+        requested: maxResults,
+        discovered: currentProgress?.discovered || 0,
+        excluded: currentProgress?.excluded || 0,
+        requests: currentProgress?.requests || 0,
+        failedRequests: currentProgress?.failedRequests || 0,
+        progressPercent: currentProgress?.progressPercent || 0,
+        startedAt: currentProgress?.startedAt,
+        updatedAt: new Date().toISOString(),
+        queryPagesChecked: currentProgress?.queryPagesChecked,
+        totalVariants: currentProgress?.totalVariants,
+        activeVariants: currentProgress?.activeVariants,
+      }));
       notify(error instanceof Error ? error.message : "Search failed.");
     } finally {
       setBusy(false);
@@ -262,6 +544,15 @@ export default function SearcherPage() {
             </Button>
             <a className="btn secondary" href="/api/export/scanner.csv">
               <Download /> Export
+            </a>
+            <a className="btn secondary" href="/api/export/discord-links.csv">
+              <Download /> Export Discord
+            </a>
+            <a
+              className="btn secondary"
+              href="/api/export/scanner-failures.csv"
+            >
+              <Download /> Failed history
             </a>
             <Button
               disabled={busy || running}
@@ -345,9 +636,15 @@ export default function SearcherPage() {
         )}
         <Button
           type="submit"
-          disabled={busy || !braveStatus?.configured || query.trim().length < 2}
+          disabled={
+            busy ||
+            searchRunning ||
+            !braveStatus?.configured ||
+            query.trim().length < 2
+          }
         >
-          {busy ? <RefreshCw className="spin" /> : <Zap />} Find &amp; scan
+          {busy || searchRunning ? <RefreshCw className="spin" /> : <Zap />}{" "}
+          {searchRunning ? "Searching…" : "Find & scan"}
         </Button>
         <div
           className={`provider-status ${braveStatus?.configured ? "ready" : "offline"}`}
@@ -372,6 +669,84 @@ export default function SearcherPage() {
           )}
         </div>
       </form>
+      {discoveryProgress && (
+        <article
+          className={`card brave-discovery-progress ${discoveryProgress.status.toLowerCase()}`}
+          aria-live="polite"
+        >
+          <header>
+            <div>
+              <span className="brave-discovery-pulse" />
+              <div>
+                <b>{discoveryProgress.phase}</b>
+                <small>
+                  {discoveryProgress.discovered.toLocaleString()} of{" "}
+                  {discoveryProgress.requested.toLocaleString()} unique business
+                  websites
+                  {discoveryProgress.query
+                    ? ` · ${discoveryProgress.query}`
+                    : ""}
+                </small>
+              </div>
+            </div>
+            <strong>
+              {discoveryProgress.progressPercent ??
+                Math.min(
+                  100,
+                  Math.round(
+                    (discoveryProgress.discovered /
+                      Math.max(1, discoveryProgress.requested)) *
+                      100,
+                  ),
+                )}
+              %
+            </strong>
+          </header>
+          <Progress
+            value={
+              discoveryProgress.progressPercent ??
+              (discoveryProgress.discovered /
+                Math.max(1, discoveryProgress.requested)) *
+                100
+            }
+          />
+          <footer className="current-search-stats">
+            <span>
+              <small>Found</small>
+              <b>
+                {discoveryProgress.discovered.toLocaleString()} /{" "}
+                {discoveryProgress.requested.toLocaleString()}
+              </b>
+            </span>
+            <span>
+              <small>Queued</small>
+              <b>{(discoveryProgress.queued || 0).toLocaleString()}</b>
+            </span>
+            <span>
+              <small>Duplicates</small>
+              <b>{(discoveryProgress.duplicates || 0).toLocaleString()}</b>
+            </span>
+            <span>
+              <small>Filtered</small>
+              <b>
+                {(
+                  discoveryProgress.excluded + (discoveryProgress.rejected || 0)
+                ).toLocaleString()}
+              </b>
+            </span>
+            <span>
+              <small>API</small>
+              <b>{discoveryProgress.requests.toLocaleString()}</b>
+            </span>
+            {discoveryProgress.failedRequests > 0 && (
+              <span className="warning">
+                <small>Errors</small>
+                <b>{discoveryProgress.failedRequests.toLocaleString()}</b>
+              </span>
+            )}
+          </footer>
+        </article>
+      )}
       <article className="scanner-state card">
         <div className={`state-orb ${data.state.status.toLowerCase()}`}>
           <Activity />
@@ -470,8 +845,19 @@ export default function SearcherPage() {
         <Stat
           label="Discord links"
           value={data.stats.discord.toLocaleString()}
-          detail="Normalized invites"
-          icon={<Wifi />}
+          detail={`${data.stats.discordServers.toLocaleString()} servers · ${data.stats.discordAlternateInvites.toLocaleString()} alternate${data.stats.discordUnresolved ? ` · ${data.stats.discordUnresolved.toLocaleString()} unresolved` : ""}`}
+          icon={
+            <button
+              type="button"
+              className="stat-refresh"
+              onClick={() => void reconcileDiscordInvites()}
+              disabled={discordReconciling || data.stats.discord === 0}
+              aria-label="Check Discord invites for duplicate servers"
+              title="Check invite codes and group links that belong to the same Discord server"
+            >
+              <RefreshCw className={discordReconciling ? "spin" : ""} />
+            </button>
+          }
         />
         <Stat
           label="Leads added"
@@ -480,20 +866,108 @@ export default function SearcherPage() {
           icon={<Users />}
         />
       </div>
-      <article className="card scan-progress enhanced">
-        <div>
-          <b>
-            {data.state.status === "RUNNING"
-              ? "Scanning"
-              : "Workspace progress"}
-          </b>
-          <span>
-            {data.stats.scanned.toLocaleString()} /{" "}
-            {data.stats.websites.toLocaleString()} · {data.stats.failed} failed
-            · {data.stats.timeouts} timeout
-          </span>
-        </div>
+      {discordProgress && (
+        <article
+          className={`card discord-check-progress ${discordProgress.status.toLowerCase()}`}
+          aria-live="polite"
+          aria-label={`Discord link checker ${discordProgress.progressPercent} percent`}
+        >
+          <header>
+            <div>
+              <span className="discord-check-pulse">
+                <RefreshCw className={discordReconciling ? "spin" : ""} />
+              </span>
+              <div>
+                <b>{discordProgress.phase}</b>
+                <small>
+                  {discordProgress.checked.toLocaleString()} of{" "}
+                  {discordProgress.total.toLocaleString()} links checked ·{" "}
+                  {discordProgress.uniqueDestinations.toLocaleString()} unique
+                  destinations
+                </small>
+              </div>
+            </div>
+            <strong>{discordProgress.progressPercent}%</strong>
+          </header>
+          <Progress value={discordProgress.progressPercent} />
+          <footer>
+            <span>
+              <small>Valid</small>
+              <b>{discordProgress.valid.toLocaleString()}</b>
+            </span>
+            <span>
+              <small>Invalid</small>
+              <b>{discordProgress.invalid.toLocaleString()}</b>
+            </span>
+            <span>
+              <small>Errors</small>
+              <b>{discordProgress.failed.toLocaleString()}</b>
+            </span>
+            <span>
+              <small>Rate limited</small>
+              <b>{discordProgress.rateLimited.toLocaleString()}</b>
+            </span>
+            <span>
+              <small>Requests saved</small>
+              <b>{discordProgress.requestsSaved.toLocaleString()}</b>
+            </span>
+            {discordProgress.status === "FAILED" && discordProgress.error && (
+              <span className="discord-check-error">
+                <small>Error</small>
+                <b>{discordProgress.error}</b>
+              </span>
+            )}
+          </footer>
+        </article>
+      )}
+      <article
+        className="card scan-progress enhanced"
+        aria-label={`Scanner progress ${Math.round(progress)} percent`}
+      >
+        <header className="scan-progress-heading">
+          <div>
+            <b>
+              {data.state.status === "RUNNING"
+                ? "Scanning"
+                : "Workspace progress"}
+            </b>
+            <span>
+              {data.stats.scanned.toLocaleString()} of{" "}
+              {data.stats.websites.toLocaleString()} websites processed
+            </span>
+          </div>
+          <strong>{Math.min(100, Math.max(0, Math.round(progress)))}%</strong>
+        </header>
         <Progress value={progress} />
+        <footer
+          className="scan-progress-summary"
+          aria-label="Scanner statistics"
+        >
+          <span>
+            <small>Pending</small>
+            <b>{data.stats.pending.toLocaleString()}</b>
+          </span>
+          <span>
+            <small>Active</small>
+            <b>{data.stats.scanning.toLocaleString()}</b>
+          </span>
+          <span>
+            <small>Discord</small>
+            <b>{data.stats.discord.toLocaleString()}</b>
+          </span>
+          <span>
+            <small>Failed</small>
+            <b>{data.stats.failed.toLocaleString()}</b>
+          </span>
+          <span>
+            <small>Timeout</small>
+            <b>{data.stats.timeouts.toLocaleString()}</b>
+          </span>
+          <span>
+            <small>Blocked</small>
+            <b>{data.stats.blocked.toLocaleString()}</b>
+          </span>
+        </footer>
         {current && <small>Current: {current.domain.hostname}</small>}
       </article>
       <div className="toolbar card scanner-toolbar">
@@ -531,14 +1005,10 @@ export default function SearcherPage() {
         </select>
         <Button
           variant="ghost"
-          onClick={() =>
-            action(
-              "/scanner/retry-failed",
-              "Failed results returned to the queue.",
-            )
-          }
+          disabled={busy}
+          onClick={() => void retryRecoverable()}
         >
-          <RotateCcw /> Retry failed
+          <RotateCcw /> Retry recoverable
         </Button>
         <span className="count auto-lead-sync">
           Leads sync automatically · {data.pagination.total.toLocaleString()}{" "}
@@ -562,7 +1032,7 @@ export default function SearcherPage() {
               </thead>
               <tbody>
                 {data.items.map((item) => (
-                  <tr key={item.id} onClick={() => setDetail(item)}>
+                  <tr key={item.id} onClick={() => void openDetail(item)}>
                     <td>
                       <div className="domain-cell">
                         <span>{item.domain.hostname[0]?.toUpperCase()}</span>
@@ -574,7 +1044,7 @@ export default function SearcherPage() {
                     </td>
                     <td>
                       <span className="source-count">
-                        {item.sources.length}
+                        {item.sourceCount ?? item.sources.length}
                       </span>{" "}
                       {item.sources[0]?.query || "—"}
                     </td>
@@ -591,7 +1061,24 @@ export default function SearcherPage() {
                       <Badge>{formatScanStatus(item.scanStatus)}</Badge>
                     </td>
                     <td>
-                      <ArrowRight />
+                      {retryableStatuses.has(item.scanStatus) ? (
+                        <button
+                          className="btn ghost retry-row-btn"
+                          disabled={busy}
+                          aria-label={`Retry ${item.domain.hostname}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void action(
+                              `/scanner/results/${item.id}/rescan`,
+                              `${item.domain.hostname} queued for retry.`,
+                            );
+                          }}
+                        >
+                          <RotateCcw /> Retry
+                        </button>
+                      ) : (
+                        <ArrowRight />
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -630,6 +1117,11 @@ export default function SearcherPage() {
           onClose={() => setDetail(undefined)}
         >
           <div className="drawer-body">
+            {detailLoading && (
+              <div className="loading inline-loading">
+                <RefreshCw className="spin" /> Loading complete diagnostics…
+              </div>
+            )}
             <div className="engine-summary">
               <span>
                 <small>Scan engine</small>
@@ -784,18 +1276,29 @@ export default function SearcherPage() {
               </div>
             )}
             {detail.error && <div className="error-box">{detail.error}</div>}
-            {[
-              "SCAN_LIMIT_REACHED",
-              "NO_DISCORD_FOUND",
-              "DISCORD_NOT_FOUND",
-            ].includes(detail.discoveryFailureReason) ? (
+            {detail.discoveryFailureReason === "CONTACT_NOT_FOUND" ? (
+              <div className="discovery-notice">
+                <b>No supported contact found</b>
+                <span>
+                  No public Discord, Telegram, or email contact was detected
+                  after checking {detail.pages.length} permitted relevant page
+                  {detail.pages.length === 1 ? "" : "s"}. This result was not
+                  added to Leads and can be rescanned later.
+                </span>
+              </div>
+            ) : [
+                "SCAN_LIMIT_REACHED",
+                "NO_DISCORD_FOUND",
+                "DISCORD_NOT_FOUND",
+              ].includes(detail.discoveryFailureReason) ? (
               <div className="discovery-notice">
                 <b>Discovery scan completed</b>
                 <span>
                   No public Discord link was detected after checking{" "}
                   {detail.pages.length} permitted relevant page
                   {detail.pages.length === 1 ? "" : "s"}. The website is still
-                  saved as a lead and can be rescanned later.
+                  eligible when another supported contact exists and can be
+                  rescanned later.
                 </span>
               </div>
             ) : detail.discoveryFailureReason ? (

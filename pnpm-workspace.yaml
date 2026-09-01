@@ -1,13 +1,17 @@
 packages:
   - apps/*
   - packages/*
+overrides:
+  nanoid@<3.3.17: 3.3.17
 onlyBuiltDependencies:
-  - '@prisma/client'
-  - '@prisma/engines'
+  - "@prisma/client"
+  - "@prisma/engines"
   - prisma
   - esbuild
+  - sharp
 allowBuilds:
-  '@prisma/client': true
-  '@prisma/engines': true
+  "@prisma/client": true
+  "@prisma/engines": true
   esbuild: true
+  sharp: true
   prisma: true

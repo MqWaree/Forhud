@@ -1,4 +1,4 @@
-import { normalizeDiscordUrl } from "@lead/shared";
+import { canonicalSiteKey, normalizeDiscordUrl } from "@lead/shared";
 import { assertPublicUrl } from "./security.js";
 import {
   fetchRobotsResource,
@@ -14,6 +14,8 @@ export type CrawlOptions = {
   forceDynamic?: boolean;
   allowedHostname?: string;
   retries?: number;
+  discoveryMode?: "discord" | "rust-price";
+  product?: { name: string; type: string };
 };
 
 export type FetchErrorCode =
@@ -24,7 +26,9 @@ export type FetchErrorCode =
   | "REDIRECT_LIMIT"
   | "REDIRECT_BLOCKED"
   | "INVALID_RESPONSE"
-  | "SCRAPER_OFFLINE";
+  | "SCRAPER_OFFLINE"
+  | "SCRAPER_BUSY"
+  | "SCRAPER_ERROR";
 
 export type FetchAttempt = {
   attempt: number;
@@ -56,24 +60,50 @@ function wait(ms: number) {
 
 export function classifyFetchError(message: string): FetchErrorCode {
   if (/redirect limit/i.test(message)) return "REDIRECT_LIMIT";
-  if (/redirect|cross-domain|private|internal/i.test(message))
-    return "REDIRECT_BLOCKED";
   if (/timeout|timed out|abort/i.test(message)) return "TIMEOUT";
-  if (/dns|getaddrinfo|name.*resolve|enotfound|eai_again|querya/i.test(message))
+  // Preserve the remote network cause reported by the worker. These checks
+  // must run before the generic worker-5xx classification or DNS/TLS/connect
+  // failures are incorrectly counted as scanner bugs.
+  if (
+    /dns_failure|dns|getaddrinfo|name.*resolve|enotfound|eai_again|querya/i.test(
+      message,
+    )
+  )
     return "DNS_FAILURE";
-  if (/tls|certificate|ssl/i.test(message)) return "TLS_FAILURE";
+  if (/tls_failure|tls|certificate|ssl/i.test(message)) return "TLS_FAILURE";
   if (/worker unavailable|scraper.*offline|connect.*3011/i.test(message))
     return "SCRAPER_OFFLINE";
-  if (/connect|socket|network|reset|refused/i.test(message))
+  if (/connection_failure|connect|socket|network|reset|refused/i.test(message))
     return "CONNECTION_FAILURE";
+  if (
+    /worker busy|scraper.*(?:429|503)|service failed \((?:429|503)\)/i.test(
+      message,
+    )
+  )
+    return "SCRAPER_BUSY";
+  if (/scrapling worker error|service failed \(5\d\d\)/i.test(message))
+    return "SCRAPER_ERROR";
+  if (/redirect|cross-domain|private|internal/i.test(message))
+    return "REDIRECT_BLOCKED";
   return "INVALID_RESPONSE";
+}
+
+export function isRetryableFetchError(code: FetchErrorCode) {
+  return [
+    "DNS_FAILURE",
+    "CONNECTION_FAILURE",
+    "TIMEOUT",
+    "SCRAPER_OFFLINE",
+    "SCRAPER_BUSY",
+    "SCRAPER_ERROR",
+  ].includes(code);
 }
 
 function assertAllowedHostname(value: URL, allowedHostname?: string) {
   if (
     allowedHostname &&
-    value.hostname.toLowerCase().replace(/^www\./, "") !==
-      allowedHostname.toLowerCase().replace(/^www\./, "")
+    canonicalSiteKey(value.toString()) !==
+      canonicalSiteKey(`https://${allowedHostname}`)
   )
     throw new Error("Deep scan cross-domain redirect blocked");
 }
@@ -94,6 +124,8 @@ const CONTROLLED_SOCIAL_REDIRECT_HOSTS = new Set([
   "guns.lol",
   "t.me",
   "telegram.me",
+  "telegram.dog",
+  "telegram.org",
   "vk.com",
 ]);
 
@@ -127,7 +159,8 @@ export async function fetchPage(
         break;
       } catch (error) {
         approvalError = error;
-        const message = error instanceof Error ? error.message : "URL validation failed";
+        const message =
+          error instanceof Error ? error.message : "URL validation failed";
         const errorCode = classifyFetchError(message);
         attempts.push({
           attempt: attempts.length + 1,
@@ -157,6 +190,8 @@ export async function fetchPage(
           timeoutMs: opts.timeoutMs,
           dynamicFallback: opts.dynamicFallback,
           forceDynamic: opts.forceDynamic,
+          discoveryMode: opts.discoveryMode,
+          product: opts.product,
         });
         attempts.push({
           attempt: attempts.length + 1,
@@ -166,17 +201,23 @@ export async function fetchPage(
           staticResult: page.staticFetchResult,
           dynamicResult: page.dynamicFetchResult,
           durationMs: page.durationMs || Date.now() - started,
-          ...(page.retryAfterSeconds !== null
+          ...(page.retryAfterSeconds != null
             ? { retryAfterSeconds: page.retryAfterSeconds }
             : {}),
         });
         if (
-          (page.httpStatus === 429 || page.httpStatus >= 500) &&
+          ([403, 408, 425, 429].includes(page.httpStatus) ||
+            page.httpStatus >= 500) &&
           retry < retries
         ) {
           const backoff = page.retryAfterSeconds
             ? page.retryAfterSeconds * 1_000
-            : 400 * 2 ** retry;
+            : (page.httpStatus === 403 || page.httpStatus === 429
+                ? 1_000
+                : page.httpStatus >= 500
+                  ? 400
+                  : 500) *
+              2 ** retry;
           await wait(Math.min(10_000, backoff));
           continue;
         }
@@ -184,17 +225,39 @@ export async function fetchPage(
       } catch (error) {
         lastError = error;
         const message = error instanceof Error ? error.message : "Fetch failed";
+        const errorCode = classifyFetchError(message);
+        const retryAfterSeconds = Number.isFinite(
+          Number((error as { retryAfterSeconds?: number }).retryAfterSeconds),
+        )
+          ? Math.max(
+              0,
+              Math.min(
+                300,
+                Number(
+                  (error as { retryAfterSeconds?: number }).retryAfterSeconds,
+                ),
+              ),
+            )
+          : undefined;
         attempts.push({
           attempt: attempts.length + 1,
           url: approved.toString(),
-          errorCode: classifyFetchError(message),
+          errorCode,
           error: message,
           durationMs: Date.now() - started,
+          ...(retryAfterSeconds != null ? { retryAfterSeconds } : {}),
         });
-        if (retry < retries) {
-          await wait(Math.min(2_000, 250 * 2 ** retry));
+        if (retry < retries && isRetryableFetchError(errorCode)) {
+          const backoff =
+            retryAfterSeconds != null
+              ? retryAfterSeconds * 1_000
+              : errorCode === "SCRAPER_BUSY"
+                ? 1_000 * 2 ** retry
+                : 250 * 2 ** retry;
+          await wait(Math.min(30_000, backoff));
           continue;
         }
+        break;
       }
     }
     if (!page) {
@@ -249,9 +312,9 @@ async function fetchRobots(
     const resource = await fetchRobotsResource(approved.toString(), timeoutMs);
     if (!resource.redirectUrl) return resource;
     if (redirects >= 3) throw new Error("robots.txt redirect limit exceeded");
-    current = (await assertPublicUrl(
-      new URL(resource.redirectUrl, approved).toString(),
-    )).toString();
+    current = (
+      await assertPublicUrl(new URL(resource.redirectUrl, approved).toString())
+    ).toString();
   }
 }
 

@@ -85,7 +85,7 @@ export const leadPatchSchema = z
   .refine((v) => Object.keys(v).length > 0);
 export const settingsSchema = z
   .object({
-    crawlerConcurrency: z.number().int().min(1).max(20),
+    crawlerConcurrency: z.number().int().min(1).max(32),
     adaptiveConcurrency: z.boolean(),
     timeoutSeconds: z.number().int().min(2).max(60),
     retries: z.number().int().min(0).max(3),
@@ -130,6 +130,60 @@ export function normalizeUrl(value: string) {
 export function extractDomain(value: string) {
   const host = new URL(value).hostname.toLowerCase().replace(/^www\./, "");
   return host;
+}
+
+const COMMON_SITE_PREFIXES = new Set([
+  "account",
+  "accounts",
+  "app",
+  "en",
+  "fr",
+  "de",
+  "m",
+  "market",
+  "marketplace",
+  "mobile",
+  "ru",
+  "shop",
+  "store",
+]);
+const MULTI_TENANT_HOST_SUFFIXES = [
+  "blogspot.com",
+  "carrd.co",
+  "github.io",
+  "gitlab.io",
+  "myshopify.com",
+  "netlify.app",
+  "notion.site",
+  "pages.dev",
+  "square.site",
+  "vercel.app",
+  "webflow.io",
+  "wixsite.com",
+  "wordpress.com",
+];
+
+/**
+ * Returns a stable website identity without merging unrelated hosted tenants.
+ * Paths, ports and common presentation/shop prefixes do not create another
+ * site, while arbitrary subdomains remain distinct unless they are a known
+ * prefix. This is intentionally narrower than guessing from a short TLD list.
+ */
+export function canonicalSiteKey(value: string) {
+  const hostname = new URL(value).hostname
+    .toLowerCase()
+    .replace(/\.$/, "")
+    .replace(/^www\d*\./, "");
+  if (
+    MULTI_TENANT_HOST_SUFFIXES.some(
+      (suffix) => hostname !== suffix && hostname.endsWith(`.${suffix}`),
+    )
+  )
+    return hostname;
+  const labels = hostname.split(".").filter(Boolean);
+  while (labels.length > 2 && COMMON_SITE_PREFIXES.has(labels[0]!))
+    labels.shift();
+  return labels.join(".");
 }
 export function extractHttpUrls(input: string) {
   const urls: string[] = [];
@@ -254,6 +308,47 @@ export function normalizeDiscordUrl(value: string) {
     );
   if (!channel?.[1]) return null;
   return `https://discord.com/channels/${channel[1]}${channel[2] ? `/${channel[2]}` : ""}`;
+}
+export function normalizeTelegramUrl(value: string) {
+  const decoded = value
+    .replace(/&amp;/gi, "&")
+    .replace(/\\u002[fF]|\\x2[fF]/g, "/")
+    .replace(/\\\//g, "/")
+    .trim()
+    .replace(/[),.;\]}]+$/, "");
+  const match = decoded.match(
+    /(?:(?:https?:)?\/\/)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog|(?:web\.)?telegram\.org)\/[^\s"'<>]+/i,
+  );
+  if (!match) return null;
+  const candidate = /^https?:\/\//i.test(match[0])
+    ? match[0]
+    : match[0].startsWith("//")
+      ? `https:${match[0]}`
+      : `https://${match[0]}`;
+  try {
+    const parsed = new URL(candidate);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    const path = parsed.pathname.replace(/\/{2,}/g, "/").replace(/\/$/, "");
+    if (["t.me", "telegram.me", "telegram.dog"].includes(host)) {
+      if (!path || path === "/") return null;
+      return `https://t.me${path}${parsed.search}${parsed.hash}`;
+    }
+    if (host === "telegram.org" || host === "web.telegram.org") {
+      if ((!path || path === "/") && !parsed.hash) return null;
+      return `https://${host}${path || "/"}${parsed.search}${parsed.hash}`;
+    }
+  } catch {}
+  return null;
+}
+export function detectTelegramUrls(input: string) {
+  const found = new Set<string>();
+  const re =
+    /(?:(?:https?:)?\/\/)?(?:www\.)?(?:t\.me|telegram\.me|telegram\.dog|(?:web\.)?telegram\.org)\/[^\s"'<>]+/gi;
+  for (const match of input.matchAll(re)) {
+    const url = normalizeTelegramUrl(match[0]);
+    if (url) found.add(url);
+  }
+  return [...found];
 }
 export type DiscordDestinationKind = "invite" | "channel";
 export function discordDestinationKind(

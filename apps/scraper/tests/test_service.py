@@ -2,13 +2,31 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import socket
 import threading
 import time
 import unittest
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from apps.scraper.src.service import extract_page, normalize_discord, scrape_url, validate_public_url
+from curl_cffi.const import CurlOpt
+
+from apps.scraper.src.service import (
+    ScraperError,
+    _curl_resolve_entry,
+    _dynamic_page,
+    _retry_after_seconds,
+    configured_scraper_token,
+    extract_page,
+    normalize_discord,
+    normalize_telegram,
+    resolve_public_target,
+    scrape_url,
+    validate_public_url,
+)
 from scrapling.parser import Selector
 
 
@@ -64,6 +82,15 @@ class FixtureHandler(BaseHTTPRequestHandler):
                 'b.addEventListener("click",()=>window.open(["late-code","discord.gg/","https://"].reverse().join("")));'
                 '},{once:true});</script></body></html>',
             ),
+            "/dynamic-nfa": (
+                200,
+                "text/html",
+                '<html><head><title>Rust NFA Accounts</title></head><body><h1>Rust NFA Accounts</h1>'
+                '<div style="height:3000px">Public variants</div><div id="variants"></div>'
+                '<script>window.addEventListener("scroll",()=>{document.getElementById("variants").innerHTML='
+                '"<label>Premium, Inactive 15 Days <span class=\\"price\\">$4.10</span></label>";},{once:true});'
+                '</script></body></html>',
+            ),
         }
         status, content_type, body = routes.get(self.path, (404, "text/html", "missing"))
         self.send_response(status)
@@ -80,6 +107,116 @@ class FixtureHandler(BaseHTTPRequestHandler):
 
 
 class ExtractionTests(unittest.TestCase):
+    def test_retry_after_supports_seconds_and_http_dates(self):
+        self.assertEqual(_retry_after_seconds({"retry-after": "12"}), 12)
+        future = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=60))
+        parsed_delay = _retry_after_seconds({"retry-after": future})
+        self.assertIsNotNone(parsed_delay)
+        self.assertGreaterEqual(parsed_delay, 55)
+        self.assertLessEqual(parsed_delay, 60)
+        self.assertIsNone(_retry_after_seconds({"retry-after": "invalid"}))
+
+    def test_dns_pin_entries_preserve_hostname_and_port(self):
+        self.assertEqual(
+            _curl_resolve_entry(
+                "https://example.com/contact",
+                ["1.1.1.1", "2606:4700:4700::1111"],
+            ),
+            "example.com:443:1.1.1.1,[2606:4700:4700::1111]",
+        )
+
+    def test_public_dns_results_are_reused_for_repeated_same_host_pages(self):
+        records = [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("1.1.1.1", 443)),
+        ]
+        with patch("apps.scraper.src.service.socket.getaddrinfo", return_value=records) as lookup:
+            first = resolve_public_target("https://scanner-cache-test.invalid/")
+            second = resolve_public_target("https://scanner-cache-test.invalid/contact")
+
+        self.assertEqual(first[1], ["1.1.1.1"])
+        self.assertEqual(second[1], ["1.1.1.1"])
+        self.assertEqual(lookup.call_count, 1)
+
+    def test_dynamic_fetch_uses_one_bounded_browser_attempt(self):
+        captured = {}
+
+        class FakeFetcher:
+            @staticmethod
+            async def async_fetch(_url, **kwargs):
+                captured.update(kwargs)
+                return object()
+
+        with patch(
+            "apps.scraper.src.service._load_dynamic_fetcher",
+            return_value=FakeFetcher,
+        ):
+            asyncio.run(
+                _dynamic_page(
+                    "https://example.com/",
+                    1_000,
+                    allow_private=False,
+                    pinned_addresses=["93.184.216.34"],
+                )
+            )
+        self.assertEqual(captured["retries"], 1)
+
+    def test_production_worker_requires_a_unique_strong_token(self):
+        with patch.dict("os.environ", {"NODE_ENV": "production"}, clear=True):
+            with self.assertRaises(ScraperError):
+                configured_scraper_token()
+        with patch.dict(
+            "os.environ",
+            {
+                "NODE_ENV": "production",
+                "SCRAPER_TOKEN": "production-scraper-secret-123456789",
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                configured_scraper_token(),
+                "production-scraper-secret-123456789",
+            )
+
+    def test_static_fetch_is_pinned_to_the_validated_dns_answer(self):
+        page = parsed("<html><title>Pinned</title></html>", "https://example.com/")
+        page.status = 200
+        page.headers = {"content-type": "text/html"}
+        dns_answer = [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+        ]
+        response = MagicMock()
+        response.url = "https://example.com/"
+        response.content = b"<html><title>Pinned</title></html>"
+        response.status_code = 200
+        response.reason = "OK"
+        response.encoding = "utf-8"
+        response.cookies = {}
+        response.headers = {"content-type": "text/html"}
+        response.request = None
+        response.history = []
+        session = MagicMock()
+        session.get = AsyncMock(return_value=response)
+        session.close = AsyncMock()
+        session_factory = MagicMock(return_value=session)
+        with (
+            patch("apps.scraper.src.service.socket.getaddrinfo", return_value=dns_answer),
+            patch("apps.scraper.src.service.CurlAsyncSession", session_factory),
+        ):
+            result = asyncio.run(
+                scrape_url(
+                    "https://example.com/",
+                    dynamic_fallback=False,
+                )
+            )
+        self.assertEqual(result["title"], "Pinned")
+        curl_options = session_factory.call_args.kwargs["curl_options"]
+        self.assertEqual(
+            curl_options[CurlOpt.RESOLVE],
+            ["example.com:443:93.184.216.34"],
+        )
+        self.assertNotIn("curl_options", session.get.await_args.kwargs)
+        session.close.assert_awaited_once()
+
     def test_static_contact_and_metadata_extraction(self):
         html = """<html><head><title>Acme</title><meta name="description" content="Widgets">
         <link rel="canonical" href="/home"><link rel="icon" href="/favicon.ico"></head><body>
@@ -93,6 +230,88 @@ class ExtractionTests(unittest.TestCase):
         self.assertIn("contact@acme.example", result["emails"])
         self.assertEqual(result["socialLinks"][0]["type"], "telegram")
         self.assertIn("https://example.com/contact", result["internalLinks"])
+
+    def test_telegram_variants_are_normalized_from_links_text_and_embedded_data(self):
+        html = """<html><body>
+        <a href="https://telegram.me/AcmeSupport">Telegram</a>
+        <span>Backup: t.me/+Invite_Code.</span>
+        <script>window.contact = "https:\\/\\/telegram.dog\\/AcmeDog";</script>
+        <div data-link="https://web.telegram.org/k/#@acme"></div>
+        <p>News https://telegram.org/blog/acme</p>
+        </body></html>"""
+        result = extract_page(parsed(html), "https://example.com/", fetch_mode="HTTP", duration_ms=1)
+        urls = {link["url"] for link in result["socialLinks"] if link["type"] == "telegram"}
+        self.assertEqual(
+            urls,
+            {
+                "https://t.me/AcmeSupport",
+                "https://t.me/+Invite_Code",
+                "https://t.me/AcmeDog",
+                "https://web.telegram.org/k#@acme",
+                "https://telegram.org/blog/acme",
+            },
+        )
+        self.assertEqual(normalize_telegram("telegram.me/AcmeSupport"), "https://t.me/AcmeSupport")
+        self.assertIsNone(normalize_telegram("https://telegram.org"))
+
+    def test_rust_nfa_screenshot_variants_are_separate_and_clean(self):
+        result = extract_page(
+            parsed(fixture("rust-nfa-variants.html"), "https://example.com/rust-nfa"),
+            "https://example.com/rust-nfa",
+            fetch_mode="HTTP",
+            duration_ms=2,
+        )
+        listings = result["rustPriceListings"]
+        self.assertEqual(len(listings), 20)
+        self.assertEqual(len({item["name"] for item in listings}), 20)
+        self.assertEqual({item["link"] for item in listings}, {"https://example.com/rust-nfa"})
+        by_name = {item["name"]: item for item in listings}
+        self.assertEqual(by_name["500-1000 Hours"]["priceText"], "$1.70")
+        self.assertEqual(by_name["Premium, $100+ Inventory"]["priceText"], "$3.10")
+        self.assertTrue(all("Out of Stock" not in item["name"] and "Unavailable" not in item["name"] for item in listings))
+        self.assertTrue(all(set(item) == {"name", "priceMinor", "currency", "priceText", "link", "method"} for item in listings))
+
+    def test_generalized_rust_nfa_controls_are_extracted(self):
+        result = extract_page(
+            parsed(fixture("rust-nfa-generalized.html")),
+            "https://example.com/rust-nfa-generalized",
+            fetch_mode="HTTP",
+            duration_ms=1,
+        )
+        names = {item["name"] for item in result["rustPriceListings"]}
+        self.assertEqual(len(names), 9)
+        self.assertIn("Rust NFA 100-300 Hours", names)
+        self.assertIn("NFA Inactive 30 Days", names)
+        self.assertIn("Rust NFA $200+ Inventory", names)
+        inventory = next(item for item in result["rustPriceListings"] if item["name"] == "Rust NFA $200+ Inventory")
+        self.assertEqual(inventory["priceText"], "$3.25")
+
+    def test_unrelated_prices_are_not_treated_as_rust_accounts(self):
+        result = extract_page(
+            parsed('<article><h2>Rust game server hosting</h2><span class="price">$9.99</span></article>'),
+            "https://example.com/hosting",
+            fetch_mode="HTTP",
+            duration_ms=1,
+        )
+        self.assertEqual(result["rustPriceListings"], [])
+
+    def test_generic_game_account_product_is_extracted_when_requested(self):
+        html = """<html><head><title>Fortnite Accounts Marketplace</title></head><body>
+        <article data-product-id="fortnite-elite"><h2>Fortnite Elite Account</h2>
+        <a href="/fortnite-elite">View account</a><span class="price">$24.95</span></article>
+        <article><h2>Unrelated hosting plan</h2><span class="price">$8.00</span></article>
+        </body></html>"""
+        result = extract_page(
+            parsed(html),
+            "https://example.com/accounts",
+            fetch_mode="HTTP",
+            duration_ms=1,
+            product_name="Fortnite accounts",
+            product_type="GAME_ACCOUNTS",
+        )
+        listings = result["rustPriceListings"]
+        self.assertTrue(any(item["name"] == "Fortnite Elite Account" for item in listings))
+        self.assertFalse(any("hosting" in item["name"].lower() for item in listings))
 
     def test_discord_plain_text_and_href_are_normalized_and_deduplicated(self):
         html = '<a href="http://discord.com/invite/example">Chat</a> Join discord.gg/example'
@@ -414,6 +633,24 @@ class FetcherTests(unittest.TestCase):
         )
         self.assertEqual(result["fetchMode"], "Dynamic")
         self.assertEqual(result["discordLinks"], ["https://discord.gg/late-code"])
+
+    def test_dynamic_rust_nfa_variant_loaded_after_scroll_is_extracted(self):
+        result = asyncio.run(
+            scrape_url(
+                f"{self.base}/dynamic-nfa",
+                allow_private=True,
+                force_dynamic=True,
+                discovery_mode="rust-price",
+                timeout_ms=20_000,
+            )
+        )
+        self.assertTrue(
+            any(
+                listing["name"] == "Premium, Inactive 15 Days"
+                and listing["priceText"] == "$4.10"
+                for listing in result["rustPriceListings"]
+            )
+        )
 
 
 if __name__ == "__main__":

@@ -12,45 +12,80 @@ datasource db {
 }
 
 model Workspace {
-  id             String              @id @default(cuid())
-  name           String
-  scannerId      String              @unique
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  users          User[]
-  searchSessions SearchSession[]
-  scannerResults ScannerResult[]
-  scannerState   ScannerState?
-  leads          Lead[]
-  tags           Tag[]
-  extensions     ExtensionInstance[]
-  settings       WorkspaceSetting[]
-  notifications  Notification[]
-  auditLogs      AuditLog[]
+  id                       String                    @id @default(cuid())
+  name                     String
+  scannerId                String                    @unique
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  users                    User[]
+  searchSessions           SearchSession[]
+  scannerResults           ScannerResult[]
+  scannerFailureHistory    ScannerFailureHistory[]
+  scannerState             ScannerState?
+  leads                    Lead[]
+  tags                     Tag[]
+  extensions               ExtensionInstance[]
+  settings                 WorkspaceSetting[]
+  notifications            Notification[]
+  auditLogs                AuditLog[]
+  rustPriceSources         RustPriceSource[]
+  rustPriceListings        RustAccountListing[]
+  rustPriceScannerState    RustPriceScannerState?
+  rustPriceScanDiagnostics RustPriceScanDiagnostic[]
+  ranks                    WorkspaceRank[]
 }
 
 model User {
-  id                    String         @id @default(cuid())
+  id                    String              @id @default(cuid())
   workspaceId           String
-  workspace             Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace             Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name                  String
-  username              String         @unique
+  username              String              @unique
   passwordHash          String
-  role                  String         @default("RESEARCHER")
-  status                String         @default("ACTIVE")
-  requirePasswordChange Boolean        @default(false)
+  role                  String              @default("RESEARCHER")
+  status                String              @default("ACTIVE")
+  requirePasswordChange Boolean             @default(false)
   lastLoginAt           DateTime?
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
   sessions              AuthSession[]
-  assignedLeads         Lead[]         @relation("LeadAssignee")
-  activities            LeadActivity[] @relation("ActivityActor")
+  assignedLeads         Lead[]              @relation("LeadAssignee")
+  activities            LeadActivity[]      @relation("ActivityActor")
   notifications         Notification[]
-  auditLogs             AuditLog[]     @relation("AuditActor")
+  auditLogs             AuditLog[]          @relation("AuditActor")
   extensionInstances    ExtensionInstance[] @relation("ExtensionOwner")
+  rankAssignments       UserRank[]
 
   @@index([workspaceId])
   @@index([role, status])
+}
+
+model WorkspaceRank {
+  id              String     @id @default(cuid())
+  workspaceId     String
+  workspace       Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name            String
+  color           String     @default("#8792A6")
+  position        Int        @default(0)
+  permissionsJson String     @default("[]")
+  managed         Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  users           UserRank[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, position])
+}
+
+model UserRank {
+  userId     String
+  rankId     String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rank       WorkspaceRank @relation(fields: [rankId], references: [id], onDelete: Cascade)
+  assignedAt DateTime      @default(now())
+
+  @@id([userId, rankId])
+  @@index([rankId])
 }
 
 model AuthSession {
@@ -64,6 +99,15 @@ model AuthSession {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model SecurityRateLimit {
+  keyHash   String   @id
+  count     Int
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
 }
 
 model ExtensionInstance {
@@ -81,7 +125,7 @@ model ExtensionInstance {
   pagesScanned      Int             @default(0)
   resultsFound      Int             @default(0)
   uniqueUrlsSent    Int             @default(0)
-  duplicatesSkipped Int            @default(0)
+  duplicatesSkipped Int             @default(0)
   lastSeen          DateTime        @default(now())
   revokedAt         DateTime?
   createdAt         DateTime        @default(now())
@@ -105,7 +149,7 @@ model SearchSession {
   pages               Int                @default(1)
   durationMs          Int?
   status              String             @default("Captured")
-  createdAt           DateTime            @default(now())
+  createdAt           DateTime           @default(now())
   completedAt         DateTime?
   results             SearchResult[]
   scannerSources      ScannerSource[]
@@ -149,10 +193,10 @@ model DiscordLink {
 }
 
 model Domain {
-  id             String            @id @default(cuid())
-  hostname       String            @unique
-  firstSeen      DateTime          @default(now())
-  lastSeen       DateTime          @updatedAt
+  id             String           @id @default(cuid())
+  hostname       String           @unique
+  firstSeen      DateTime         @default(now())
+  lastSeen       DateTime         @updatedAt
   results        SearchResult[]
   location       HostingLocation?
   leads          Lead[]
@@ -175,32 +219,32 @@ model HostingLocation {
 }
 
 model Lead {
-  id                String         @id @default(cuid())
-  workspaceId       String
-  workspace         Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  domainId          String
-  domain            Domain         @relation(fields: [domainId], references: [id])
-  searchResultId    String?
-  searchResult      SearchResult?  @relation(fields: [searchResultId], references: [id], onDelete: SetNull)
-  scannerResultId   String?
-  scannerResult     ScannerResult? @relation(fields: [scannerResultId], references: [id], onDelete: SetNull)
-  assignedToId      String?
-  assignedTo        User?          @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
-  status            String         @default("New")
-  priority          String         @default("Medium")
-  notes             String         @default("")
-  companyName       String         @default("")
-  contactName       String         @default("")
-  email             String         @default("")
-  discordUsername   String         @default("")
-  telegram          String         @default("")
-  otherContact      String         @default("")
-  website           String         @default("")
-  discordInvite     String         @default("")
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  activities        LeadActivity[]
-  tags              LeadTag[]
+  id              String         @id @default(cuid())
+  workspaceId     String
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  domainId        String
+  domain          Domain         @relation(fields: [domainId], references: [id])
+  searchResultId  String?
+  searchResult    SearchResult?  @relation(fields: [searchResultId], references: [id], onDelete: SetNull)
+  scannerResultId String?
+  scannerResult   ScannerResult? @relation(fields: [scannerResultId], references: [id], onDelete: SetNull)
+  assignedToId    String?
+  assignedTo      User?          @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  status          String         @default("New")
+  priority        String         @default("Medium")
+  notes           String         @default("")
+  companyName     String         @default("")
+  contactName     String         @default("")
+  email           String         @default("")
+  discordUsername String         @default("")
+  telegram        String         @default("")
+  otherContact    String         @default("")
+  website         String         @default("")
+  discordInvite   String         @default("")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  activities      LeadActivity[]
+  tags            LeadTag[]
 
   @@unique([workspaceId, domainId])
   @@index([workspaceId, status])
@@ -253,48 +297,72 @@ model ScannerState {
 }
 
 model ScannerResult {
-  id             String               @id @default(cuid())
-  workspaceId    String
-  workspace      Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  url            String
-  normalizedUrl  String
-  title          String               @default("")
-  domainId       String
-  domain         Domain               @relation(fields: [domainId], references: [id])
-  scanStatus     String               @default("Pending")
-  scanEngine     String               @default("Scrapling")
-  fetchMode      String               @default("")
-  httpStatus     Int?
-  originalHttpStatus Int?
-  scanDuration   Int?
-  finalUrl       String               @default("")
-  fallbackUsed   Boolean              @default(false)
-  fallbackUrl    String               @default("")
-  fallbackHttpStatus Int?
-  discoveryFailureReason String       @default("")
-  robotsStatus   String               @default("")
-  metaDescription String              @default("")
-  canonicalUrl   String               @default("")
-  faviconUrl     String               @default("")
-  contentType    String               @default("")
-  pagesVisited   Int                  @default(0)
-  emailsJson     String               @default("[]")
-  socialLinksJson String              @default("[]")
-  pagesJson      String               @default("[]")
-  crawlCheckpoint String              @default("")
-  error          String?
-  scannedAt      DateTime?
-  firstSeen      DateTime             @default(now())
-  lastSeen       DateTime             @updatedAt
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
-  sources        ScannerSource[]
-  discordLinks   ScannerDiscordLink[]
-  leads          Lead[]
+  id                     String                  @id @default(cuid())
+  workspaceId            String
+  workspace              Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  url                    String
+  normalizedUrl          String
+  title                  String                  @default("")
+  domainId               String
+  domain                 Domain                  @relation(fields: [domainId], references: [id])
+  scanStatus             String                  @default("Pending")
+  scanEngine             String                  @default("Scrapling")
+  fetchMode              String                  @default("")
+  httpStatus             Int?
+  originalHttpStatus     Int?
+  scanDuration           Int?
+  finalUrl               String                  @default("")
+  fallbackUsed           Boolean                 @default(false)
+  fallbackUrl            String                  @default("")
+  fallbackHttpStatus     Int?
+  discoveryFailureReason String                  @default("")
+  contactFailureCount    Int                     @default(0)
+  quarantinedAt          DateTime?
+  robotsStatus           String                  @default("")
+  metaDescription        String                  @default("")
+  canonicalUrl           String                  @default("")
+  faviconUrl             String                  @default("")
+  contentType            String                  @default("")
+  pagesVisited           Int                     @default(0)
+  emailsJson             String                  @default("[]")
+  socialLinksJson        String                  @default("[]")
+  pagesJson              String                  @default("[]")
+  crawlCheckpoint        String                  @default("")
+  error                  String?
+  scannedAt              DateTime?
+  firstSeen              DateTime                @default(now())
+  lastSeen               DateTime                @updatedAt
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  sources                ScannerSource[]
+  discordLinks           ScannerDiscordLink[]
+  failureHistory         ScannerFailureHistory[]
+  leads                  Lead[]
 
   @@unique([workspaceId, normalizedUrl])
   @@unique([workspaceId, domainId])
   @@index([workspaceId, scanStatus])
+}
+
+model ScannerFailureHistory {
+  id                  String         @id @default(cuid())
+  workspaceId         String
+  workspace           Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  scannerResultId     String?
+  scannerResult       ScannerResult? @relation(fields: [scannerResultId], references: [id], onDelete: SetNull)
+  url                 String
+  normalizedUrl       String
+  domain              String
+  status              String
+  failureReason       String         @default("")
+  error               String         @default("")
+  httpStatus          Int?
+  contactFailureCount Int            @default(0)
+  occurredAt          DateTime       @default(now())
+
+  @@index([workspaceId, occurredAt])
+  @@index([scannerResultId, occurredAt])
+  @@index([workspaceId, status])
 }
 
 model ScannerSource {
@@ -313,21 +381,128 @@ model ScannerSource {
 }
 
 model ScannerDiscordLink {
-  id              String        @id @default(cuid())
-  scannerResultId String
-  scannerResult   ScannerResult @relation(fields: [scannerResultId], references: [id], onDelete: Cascade)
-  url             String
-  inviteCode      String
-  sourcePage      String
-  discoveryMethod String        @default("unknown")
-  discoverySection String       @default("UNKNOWN")
-  interaction      String       @default("NONE")
-  fetchMode       String        @default("")
-  validationStatus String       @default("UNVALIDATED")
-  originalUrl     String        @default("")
-  createdAt       DateTime      @default(now())
+  id               String        @id @default(cuid())
+  scannerResultId  String
+  scannerResult    ScannerResult @relation(fields: [scannerResultId], references: [id], onDelete: Cascade)
+  url              String
+  inviteCode       String
+  sourcePage       String
+  discoveryMethod  String        @default("unknown")
+  discoverySection String        @default("UNKNOWN")
+  interaction      String        @default("NONE")
+  fetchMode        String        @default("")
+  validationStatus String        @default("UNVALIDATED")
+  discordGuildId   String        @default("")
+  discordGuildName String        @default("")
+  lastValidatedAt  DateTime?
+  originalUrl      String        @default("")
+  createdAt        DateTime      @default(now())
 
   @@unique([scannerResultId, url])
+  @@index([discordGuildId])
+}
+
+model RustPriceScannerState {
+  id              String    @id @default(cuid())
+  workspaceId     String    @unique
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  status          String    @default("IDLE")
+  stopRequested   Boolean   @default(false)
+  currentSourceId String?
+  startedAt       DateTime?
+  stoppedAt       DateTime?
+  updatedAt       DateTime  @updatedAt
+}
+
+model RustPriceSource {
+  id            String                    @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  productKey    String                    @default("rust-nfa-accounts")
+  productName   String                    @default("Rust NFA accounts")
+  productType   String                    @default("RUST_NFA")
+  url           String
+  normalizedUrl String
+  domain        String
+  title         String                    @default("")
+  scanStatus    String                    @default("Pending")
+  fetchMode     String                    @default("")
+  httpStatus    Int?
+  finalUrl      String                    @default("")
+  pagesChecked  Int                       @default(0)
+  durationMs    Int?
+  error         String?
+  scannedAt     DateTime?
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  listings      RustAccountListing[]
+  diagnostics   RustPriceScanDiagnostic[]
+
+  @@unique([workspaceId, productKey, normalizedUrl])
+  @@index([workspaceId, productKey, scanStatus])
+  @@index([workspaceId, domain])
+}
+
+model RustPriceScanDiagnostic {
+  id            String          @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sourceId      String
+  source        RustPriceSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  status        String
+  outcomeCode   String
+  pagesChecked  Int             @default(0)
+  listingsFound Int             @default(0)
+  durationMs    Int
+  errorCode     String?
+  error         String?
+  reportJson    String
+  startedAt     DateTime
+  completedAt   DateTime        @default(now())
+
+  @@index([workspaceId, completedAt])
+  @@index([sourceId, completedAt])
+  @@index([workspaceId, status])
+}
+
+model RustAccountListing {
+  id           String              @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  productKey   String              @default("rust-nfa-accounts")
+  sourceId     String
+  source       RustPriceSource     @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  fingerprint  String
+  name         String              @map("title")
+  priceAmount  Int                 @map("priceMinor")
+  currency     String
+  priceText    String
+  accountType  String              @default("")
+  seller       String              @default("")
+  availability String              @default("")
+  link         String              @map("listingUrl")
+  sourcePage   String
+  method       String
+  active       Boolean             @default(true)
+  firstSeenAt  DateTime            @default(now())
+  lastSeenAt   DateTime            @updatedAt
+  snapshots    RustPriceSnapshot[]
+
+  @@unique([workspaceId, productKey, fingerprint])
+  @@index([workspaceId, productKey, active, lastSeenAt])
+  @@index([sourceId])
+  @@index([currency, priceAmount])
+}
+
+model RustPriceSnapshot {
+  id         String             @id @default(cuid())
+  listingId  String
+  listing    RustAccountListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  priceMinor Int
+  currency   String
+  observedAt DateTime           @default(now())
+
+  @@index([listingId, observedAt])
 }
 
 model Tag {
@@ -367,17 +542,17 @@ model Notification {
 }
 
 model AuditLog {
-  id          String    @id @default(cuid())
+  id          String     @id @default(cuid())
   workspaceId String?
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   actorId     String?
-  actor       User?     @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actor       User?      @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
   action      String
   targetType  String
   targetId    String?
-  metadata    String    @default("{}")
+  metadata    String     @default("{}")
   ipAddress   String?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime   @default(now())
 
   @@index([workspaceId, createdAt])
   @@index([actorId])
@@ -394,4 +569,134 @@ model BackupMetadata {
   manifest    String
 
   @@index([createdAt])
+}
+
+model LztTrackerState {
+  id                    String    @id @default("global")
+  state                 String    @default("STOPPED")
+  enabled               Boolean   @default(false)
+  initialized           Boolean   @default(false)
+  stopRequested         Boolean   @default(false)
+  importBaseline        Boolean   @default(true)
+  notifyExisting        Boolean   @default(false)
+  watermarkPublishedAt  DateTime?
+  recentItemIdsJson     String    @default("[]")
+  lastSuccessfulPollAt  DateTime?
+  lastCompleteCatchupAt DateTime?
+  lastNewListingAt      DateTime?
+  nextPollAt            DateTime?
+  startedAt             DateTime?
+  stoppedAt             DateTime?
+  leaseOwner            String?
+  leaseUntil            DateTime?
+  apiLatencyMs          Int?
+  rateLimitLimit        Int?
+  rateLimitRemaining    Int?
+  rateLimitResetAt      DateTime?
+  lastErrorCode         String?
+  lastError             String?
+  pollCount             Int       @default(0)
+  successfulPolls       Int       @default(0)
+  failedPolls           Int       @default(0)
+  newListings           Int       @default(0)
+  duplicatesSkipped     Int       @default(0)
+  rateLimitedCount      Int       @default(0)
+  enrichmentSuccesses   Int       @default(0)
+  enrichmentFailures    Int       @default(0)
+  workerRestarts        Int       @default(0)
+  totalApiLatencyMs     Int       @default(0)
+  totalDetectionMs      BigInt    @default(0)
+  maxDetectionMs        BigInt    @default(0)
+  updatedAt             DateTime  @updatedAt
+
+  @@index([leaseUntil])
+}
+
+model LztRustListing {
+  id                     String        @id @default(cuid())
+  lztItemId              String        @unique
+  title                  String
+  publicUrl              String
+  itemState              String        @default("ACTIVE")
+  soldAt                 DateTime?
+  originalPriceMinor     Int
+  originalCurrency       String
+  priceEurMinor          Int
+  priceUsdMinor          Int?
+  conversionSource       String
+  conversionTimestamp    DateTime
+  gamesCount             Int?
+  rustHours              Int?
+  inventoryCs2EurMinor   Int?
+  inventoryRustEurMinor  Int?
+  inventoryTotalEurMinor Int?
+  publishedAt            DateTime
+  firstSeenAt            DateTime      @default(now())
+  lastSeenAt             DateTime      @default(now())
+  originalApiPosition    Int
+  baseline               Boolean       @default(false)
+  enriched               Boolean       @default(false)
+  enrichmentFailure      String?
+  rawResponseHash        String?
+  reconciliationMisses   Int           @default(0)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  hazeAlert              LztHazeAlert?
+
+  @@index([publishedAt])
+  @@index([firstSeenAt])
+  @@index([priceEurMinor])
+  @@index([priceUsdMinor])
+  @@index([rustHours])
+  @@index([itemState])
+  @@index([soldAt])
+}
+
+model LztHazeAlert {
+  id               String         @id @default(cuid())
+  listingId        String         @unique
+  listing          LztRustListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  alertCode        String
+  alertLabel       String
+  status           String         @default("PENDING")
+  attempts         Int            @default(0)
+  claimedAt        DateTime?
+  nextAttemptAt    DateTime?
+  sentAt           DateTime?
+  discordMessageId String?
+  lastError        String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([status, createdAt])
+}
+
+model HazeManualMessage {
+  id               String    @id @default(cuid())
+  content          String
+  status           String    @default("PENDING")
+  attempts         Int       @default(0)
+  claimedAt        DateTime?
+  nextAttemptAt    DateTime?
+  sentAt           DateTime?
+  discordMessageId String?
+  lastError        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([status, createdAt])
+}
+
+model LztMarketAverageSnapshot {
+  id                   String   @id @default(cuid())
+  date                 String
+  timezone             String
+  maxPriceUsdMinor     Int
+  eligibleCount        Int
+  averagePriceEurMinor Int?
+  lowestPriceEurMinor  Int?
+  calculatedAt         DateTime
+  createdAt            DateTime @default(now())
+
+  @@index([date, calculatedAt])
 }

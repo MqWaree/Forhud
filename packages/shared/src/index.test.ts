@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  canonicalSiteKey,
   csvEscape,
   detectDiscordUrls,
+  detectTelegramUrls,
   discordDestinationKind,
   extractDomain,
   extractHttpUrls,
   importLinksSchema,
   leadPatchSchema,
   normalizeDiscordUrl,
+  normalizeTelegramUrl,
   normalizeUrl,
   splitRows,
   splitWebsiteDiscordRows,
@@ -28,6 +31,22 @@ describe("URL utilities", () => {
     ));
   it("extracts a normalized domain", () =>
     expect(extractDomain("https://www.Example.com/a")).toBe("example.com"));
+  it("uses paths and common shop prefixes as one website", () => {
+    expect(canonicalSiteKey("https://shop.example.com/rust/accounts")).toBe(
+      "example.com",
+    );
+    expect(canonicalSiteKey("https://www.example.com/store/rust")).toBe(
+      "example.com",
+    );
+  });
+  it("does not merge separate tenants on hosted-site platforms", () => {
+    expect(canonicalSiteKey("https://shop.myshopify.com/products/rust")).toBe(
+      "shop.myshopify.com",
+    );
+    expect(canonicalSiteKey("https://store.myshopify.com/products/rust")).toBe(
+      "store.myshopify.com",
+    );
+  });
   it("normalizes and deduplicates Discord invites", () =>
     expect(
       detectDiscordUrls(
@@ -50,6 +69,23 @@ describe("URL utilities", () => {
       ),
     ).toBe("channel");
     expect(discordDestinationKind("https://example.com")).toBeNull();
+  });
+  it("normalizes Telegram contact variants and preserves app and web destinations", () => {
+    expect(normalizeTelegramUrl("telegram.me/AcmeSupport")).toBe(
+      "https://t.me/AcmeSupport",
+    );
+    expect(normalizeTelegramUrl("https://telegram.dog/+Invite_Code")).toBe(
+      "https://t.me/+Invite_Code",
+    );
+    expect(normalizeTelegramUrl("https://web.telegram.org/k/#@acme")).toBe(
+      "https://web.telegram.org/k#@acme",
+    );
+    expect(normalizeTelegramUrl("https://telegram.org")).toBeNull();
+    expect(
+      detectTelegramUrls(
+        "Join t.me/AcmeSupport or https://telegram.me/AcmeSupport and https://telegram.org/blog/acme",
+      ),
+    ).toEqual(["https://t.me/AcmeSupport", "https://telegram.org/blog/acme"]);
   });
 });
 describe("manual URL extraction", () => {

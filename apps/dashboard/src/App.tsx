@@ -4,6 +4,7 @@ import {
   NavLink,
   Route,
   Routes,
+  useLocation,
   useNavigate,
 } from "react-router-dom";
 import {
@@ -33,6 +34,7 @@ import {
   Save,
   Scissors,
   Search,
+  ShoppingCart,
   Settings as SettingsIcon,
   ShieldCheck,
   Square,
@@ -51,6 +53,8 @@ import {
 import SearcherPage from "./SearcherPage";
 import LeadsPage from "./LeadsPage";
 import AdminPage from "./AdminPage";
+import RustPricesPage from "./RustPricesPage";
+import MemberSidebar from "./MemberSidebar";
 import { useAuth } from "./Auth";
 import {
   Badge,
@@ -83,7 +87,14 @@ const nav = [
   ["History", "/history", HistoryIcon],
   ["Settings", "/settings", SettingsIcon],
 ] as const;
-function useData() {
+const priceNav = [
+  ["Price Scanner", "/rust-prices", ShoppingCart],
+  ["Settings", "/settings", SettingsIcon],
+] as const;
+function useData(pathname: string) {
+  const needsLeads = ["/", "/leads", "/my-leads"].includes(pathname);
+  const needsSessions = ["/", "/history"].includes(pathname);
+  const needsLocations = ["/", "/location"].includes(pathname);
   const [sessions, setSessions] = useState<Session[]>([]),
     [leads, setLeads] = useState<ExpandedLead[]>([]),
     [locations, setLocations] = useState<any[]>([]),
@@ -101,33 +112,50 @@ function useData() {
     [workspace, setWorkspace] = useState<any>({});
   const refresh = useCallback(async () => {
     const [a, b, c, d, e, f, g] = await Promise.allSettled([
-      api.get<Session[]>("/search/sessions"),
-      api.get<ExpandedLead[]>("/leads"),
-      api.get<any[]>("/location"),
+      needsSessions
+        ? api.get<Session[]>("/search/sessions")
+        : Promise.resolve(undefined),
+      needsLeads
+        ? api.get<ExpandedLead[]>("/leads")
+        : Promise.resolve(undefined),
+      needsLocations ? api.get<any[]>("/location") : Promise.resolve(undefined),
       api.get("/health"),
       api.get<string[]>("/clients"),
       api.get<any>("/workspace"),
       api.get<typeof notifications>("/notifications"),
     ]);
-    if (a.status === "fulfilled") setSessions(a.value);
-    if (b.status === "fulfilled") setLeads(b.value);
-    if (c.status === "fulfilled") setLocations(c.value);
+    if (a.status === "fulfilled" && a.value) setSessions(a.value);
+    if (b.status === "fulfilled" && b.value) setLeads(b.value);
+    if (c.status === "fulfilled" && c.value) setLocations(c.value);
     if (d.status === "fulfilled") setHealth(d.value);
     if (e.status === "fulfilled") setClients(e.value);
     if (f.status === "fulfilled") setWorkspace(f.value);
     if (g.status === "fulfilled") setNotifications(g.value);
-  }, []);
+  }, [needsLeads, needsLocations, needsSessions]);
   useEffect(() => {
     void refresh();
+    const eventNames = [
+      ...(needsSessions ? ["import", "scan-complete"] : []),
+      ...(needsLeads ? ["lead-update"] : []),
+      ...(needsLocations ? ["location-complete"] : []),
+    ];
+    if (!eventNames.length) return;
     const es = new EventSource("/api/events");
-    [
-      "import",
-      "scan-progress",
-      "scan-complete",
-      "lead-update",
-      "location-complete",
-    ].forEach((e) => es.addEventListener(e, () => void refresh()));
-    return () => es.close();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleRefresh = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = undefined;
+        void refresh();
+      }, 1_000);
+    };
+    eventNames.forEach((eventName) =>
+      es.addEventListener(eventName, scheduleRefresh),
+    );
+    return () => {
+      if (timer) clearTimeout(timer);
+      es.close();
+    };
   }, [refresh]);
   return {
     sessions,
@@ -144,7 +172,12 @@ type Ctx = ReturnType<typeof useData>;
 let ctx: Ctx;
 export default function App() {
   const { user, logout } = useAuth();
-  ctx = useData();
+  const location = useLocation();
+  const priceMode = location.pathname.startsWith("/rust-prices");
+  const hasLztAccess =
+    user.role === "ADMIN" ||
+    user.ranks?.some((rank) => rank.permissions.includes("LZT_ACCESS"));
+  ctx = useData(location.pathname);
   const [mobile, setMobile] = useState(false),
     [notificationsOpen, setNotificationsOpen] = useState(false),
     [toast, setToast] = useState("");
@@ -159,6 +192,49 @@ export default function App() {
     window.addEventListener("toast", fn);
     return () => window.removeEventListener("toast", fn);
   }, []);
+  useEffect(() => {
+    if (!hasLztAccess) return;
+    const events = new EventSource("/api/events");
+    events.addEventListener("LZT_LISTING_CREATED", (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent<string>).data) as {
+          listing?: { title?: string; priceEurMinor?: number; link?: string };
+        };
+        if (
+          !payload.listing ||
+          typeof payload.listing.priceEurMinor !== "number"
+        )
+          return;
+        const price = new Intl.NumberFormat(undefined, {
+          style: "currency",
+          currency: "EUR",
+        }).format(payload.listing.priceEurMinor / 100);
+        const message = `${payload.listing.title || "New LZT account"} listed for ${price}`;
+        window.dispatchEvent(new CustomEvent("toast", { detail: message }));
+        if (
+          "Notification" in window &&
+          window.Notification.permission === "granted"
+        ) {
+          const alert = new window.Notification("LZT price alert", {
+            body: message,
+            data: { url: payload.listing.link },
+          });
+          alert.onclick = () => {
+            if (payload.listing?.link)
+              window.open(
+                payload.listing.link,
+                "_blank",
+                "noopener,noreferrer",
+              );
+            alert.close();
+          };
+        }
+      } catch {
+        /* The persistent LZT notification feed remains available. */
+      }
+    });
+    return () => events.close();
+  }, [hasLztAccess]);
   return (
     <div className="app">
       <aside className={`sidebar ${mobile ? "open" : ""}`}>
@@ -170,7 +246,7 @@ export default function App() {
           </div>
         </div>
         <nav>
-          {nav.map(([name, to, I]) => (
+          {(priceMode ? priceNav : nav).map(([name, to, I]) => (
             <NavLink
               key={to}
               to={to}
@@ -205,6 +281,14 @@ export default function App() {
       </aside>
       <main>
         <div className="identity-bar">
+          <div className="mode-switch" aria-label="FGP workspace mode">
+            <NavLink to="/" className={!priceMode ? "active" : ""}>
+              <Globe2 /> <span>Lead Intelligence</span>
+            </NavLink>
+            <NavLink to="/rust-prices" className={priceMode ? "active" : ""}>
+              <ShoppingCart /> <span>Rust Account Prices</span>
+            </NavLink>
+          </div>
           <span className="identity-label">SCANNER ID</span>
           <b className="identity-id">
             {ctx.workspace.scannerId || user.workspace.scannerId}
@@ -300,6 +384,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/searcher" element={<SearcherPage />} />
+          <Route path="/rust-prices" element={<RustPricesPage />} />
           <Route path="/splitter" element={<Splitter />} />
           <Route
             path="/leads"
@@ -325,6 +410,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <MemberSidebar />
       {toast && (
         <div className="toast">
           <CheckCircle2 />
@@ -1551,7 +1637,7 @@ function Settings() {
               </header>
               <NumberSetting
                 label="Crawler concurrency"
-                detail="Maximum parallel domain scans"
+                detail="Parallel domains (32 recommended; automatically backs off)"
                 value={data.crawlerConcurrency}
                 onChange={(v) => set("crawlerConcurrency", v)}
               />
@@ -1820,11 +1906,9 @@ function AccountSettings() {
         <label>
           <span>
             <b>New password</b>
-            <small>Use at least 12 characters</small>
           </span>
           <input
             type="password"
-            minLength={12}
             value={newPassword}
             onChange={(event) => setNewPassword(event.target.value)}
           />
@@ -1835,7 +1919,6 @@ function AccountSettings() {
           </span>
           <input
             type="password"
-            minLength={12}
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
           />

@@ -40,6 +40,7 @@ export class AdaptiveConcurrencyController {
   private serverErrors = 0;
   private totalDurationMs = 0;
   private healthyStreak = 0;
+  private readonly pressureWindow: boolean[] = [];
   private readonly recentSamples: Array<{
     durationMs: number;
     succeeded: boolean;
@@ -54,10 +55,17 @@ export class AdaptiveConcurrencyController {
     private readonly enabled = true,
     private readonly now: () => number = Date.now,
   ) {
-    this.currentConcurrency = Math.max(
+    const boundedConfigured = Math.max(
       1,
-      Math.min(20, Math.trunc(configuredConcurrency)),
+      Math.min(32, Math.trunc(configuredConcurrency)),
     );
+    // A cold worker has no evidence that the current network, DNS resolver, or
+    // target mix can sustain the configured ceiling. Ramp from a bounded probe
+    // instead of releasing all 32 requests at once and reacting only after a
+    // timeout wave has already formed.
+    this.currentConcurrency = enabled
+      ? Math.min(8, boundedConfigured)
+      : boundedConfigured;
     this.minimumConcurrency =
       this.currentConcurrency === 1 ? 1 : Math.min(2, this.currentConcurrency);
     this.startedAt = this.now();
@@ -81,7 +89,14 @@ export class AdaptiveConcurrencyController {
         sample.httpStatus <= 599) ||
       reason.includes("HTTP_5XX") ||
       /HTTP_5\d\d/.test(reason) ||
-      reason.includes("SERVER_ERROR");
+      reason.includes("SERVER_ERROR") ||
+      reason.includes("SCRAPER_BUSY") ||
+      reason.includes("SCRAPER_OFFLINE") ||
+      reason.includes("SCRAPER_ERROR");
+    const internalPressure =
+      reason.includes("SCRAPER_BUSY") ||
+      reason.includes("SCRAPER_OFFLINE") ||
+      reason.includes("SCRAPER_ERROR");
     const succeeded = [
       "Completed",
       "CompletedWithFallback",
@@ -99,31 +114,38 @@ export class AdaptiveConcurrencyController {
     if (rateLimited) this.rateLimited += 1;
     if (timedOut) this.timeoutEvents += 1;
     if (serverError) this.serverErrors += 1;
+    const pressured = rateLimited || timedOut || serverError;
+    this.pressureWindow.push(pressured);
+    if (this.pressureWindow.length > 20) this.pressureWindow.shift();
 
     if (!this.enabled) return false;
 
-    if (rateLimited) {
+    if (pressured) {
       this.pressureEvents += 1;
       this.healthyStreak = 0;
-      this.adjust(
-        Math.max(
-          this.minimumConcurrency,
-          Math.ceil(this.currentConcurrency / 2),
-        ),
-        "Rate limit detected; concurrency reduced",
-      );
-    } else if (timedOut || serverError) {
-      this.pressureEvents += 1;
-      this.healthyStreak = 0;
-      this.adjust(
-        Math.max(this.minimumConcurrency, this.currentConcurrency - 1),
-        timedOut
-          ? "Timeout pressure detected; concurrency reduced"
-          : "Server error pressure detected; concurrency reduced",
-      );
+      const pressureCount = this.pressureWindow.filter(Boolean).length;
+      const sustainedPressure =
+        this.pressureWindow.length >= 8 &&
+        pressureCount / this.pressureWindow.length >= 0.5;
+      if (internalPressure || sustainedPressure) {
+        const reduction = Math.max(
+          1,
+          Math.ceil(this.currentConcurrency * 0.25),
+        );
+        this.adjust(
+          Math.max(
+            this.minimumConcurrency,
+            this.currentConcurrency - reduction,
+          ),
+          internalPressure
+            ? "Local scraper pressure; concurrency reduced immediately"
+            : "Sustained remote-site pressure; concurrency reduced",
+        );
+        this.pressureWindow.length = 0;
+      }
     } else if (succeeded) {
       this.healthyStreak += 1;
-      const recoveryThreshold = Math.max(6, this.currentConcurrency * 2);
+      const recoveryThreshold = Math.max(4, this.currentConcurrency);
       if (
         this.currentConcurrency < this.configuredConcurrency &&
         this.healthyStreak >= recoveryThreshold

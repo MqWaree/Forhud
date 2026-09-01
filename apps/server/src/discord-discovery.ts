@@ -6,7 +6,11 @@ import {
   type RecoveredPage,
   type RedirectHop,
 } from "./crawler.js";
-import type { DiscordDetection, ScrapedPage } from "./scraper-client.js";
+import type {
+  DiscordDetection,
+  ScrapedPage,
+  SocialLink,
+} from "./scraper-client.js";
 
 const COMMON_PATHS = [
   "/discord",
@@ -125,7 +129,10 @@ export type DiscordDiscoveryReport = {
   pagesChecked: number;
   pages: DiscordDiscoveryPage[];
   discordFound: boolean;
+  contactFound: boolean;
   detections: DiscordDiscoveryHit[];
+  emails: string[];
+  socialLinks: SocialLink[];
   discoveryMethod?: string;
   failureReason?: string;
   robotsStatus:
@@ -148,6 +155,8 @@ export type DiscordDiscoveryOptions = {
   continueAfterFound?: boolean;
   deepScan?: boolean;
   retries?: number;
+  /** Reuse the entry page fetched by the scanner instead of downloading it twice. */
+  initialPage?: RecoveredPage;
 };
 
 function normalized(value: string) {
@@ -222,6 +231,19 @@ function alternateHostRoot(value: string) {
   return url.toString();
 }
 
+function candidateRetries(candidate: Candidate, configured = 1) {
+  const retries = Math.max(0, Math.min(2, configured));
+  if (
+    !retries ||
+    candidate.kind === "script-asset" ||
+    candidate.kind === "common-page"
+  )
+    return 0;
+  if (candidate.kind === "dynamic-retry") return Math.min(1, retries);
+  if (candidate.kind !== "internal-link") return retries;
+  return RECOVERY_LINK_RE.test(new URL(candidate.url).pathname) ? retries : 0;
+}
+
 export async function discoverDiscord(
   input: string,
   options: DiscordDiscoveryOptions,
@@ -240,11 +262,13 @@ export async function discoverDiscord(
   const deadline = started + maxDurationMs;
   const fallbackPageLimit = options.deepScan
     ? Math.max(0, maxPages - 1)
-    : Math.min(5, Math.max(0, maxPages - 1));
+    : Math.min(3, Math.max(0, maxPages - 1));
   const queue: Candidate[] = [{ url: originalUrl, kind: "original" }];
   const visited = new Set<string>();
   const pages: DiscordDiscoveryPage[] = [];
   const detections = new Map<string, DiscordDiscoveryHit>();
+  const emails = new Set<string>();
+  const socialLinks = new Map<string, SocialLink>();
   let externalProfilesQueued = 0;
   let recoveryQueued = false;
   let hostFallbackQueued = false;
@@ -260,6 +284,7 @@ export async function discoverDiscord(
   let successfulContentPages = 0;
   let dynamicPagesAttempted = 0;
   let dynamicDiscordPagesAttempted = 0;
+  let originalFailureReason: string | undefined;
   let explicitDiscordAccessFailure: string | undefined;
   const maxDynamicPages = Math.max(
     0,
@@ -269,7 +294,7 @@ export async function discoverDiscord(
   // useful discovery pages. Keep an independent hard ceiling so they cannot
   // exhaust the configured content-page budget or create an unbounded crawl.
   const attemptLimit = Math.min(200, Math.max(maxPages, maxPages * 4));
-  const commonGuessLimit = options.deepScan ? 10 : 5;
+  const commonGuessLimit = options.deepScan ? 10 : 3;
 
   function enqueue(
     url: string,
@@ -308,12 +333,34 @@ export async function discoverDiscord(
     }
   }
 
-  function enqueueRecovery(includeCommonPages = true) {
+  function enqueueRecovery(
+    includeCommonPages = true,
+    prioritizeSitemap = false,
+  ) {
     if (recoveryQueued) return;
     recoveryQueued = true;
     const root = rootUrl(originalUrl);
     enqueue(root, "root-fallback");
-    enqueue(new URL("/sitemap.xml", root).toString(), "sitemap", false, true);
+    const includeSitemap = options.deepScan || prioritizeSitemap;
+    const sitemapUrl = new URL("/sitemap.xml", root).toString();
+    if (includeSitemap)
+      enqueue(sitemapUrl, "sitemap", false, prioritizeSitemap);
+    if (
+      includeSitemap &&
+      !prioritizeSitemap &&
+      !options.initialPage?.looksDynamic
+    ) {
+      const sitemapIndex = queue.findIndex(
+        (candidate) => candidate.url === normalized(sitemapUrl),
+      );
+      const dynamicIndex = queue.findIndex(
+        (candidate) => candidate.kind === "dynamic-retry",
+      );
+      if (sitemapIndex > dynamicIndex && dynamicIndex >= 0) {
+        const [sitemap] = queue.splice(sitemapIndex, 1);
+        queue.splice(dynamicIndex, 0, sitemap!);
+      }
+    }
     if (includeCommonPages)
       for (const path of COMMON_PATHS.slice(0, commonGuessLimit))
         enqueue(new URL(path, root).toString(), "common-page");
@@ -393,35 +440,56 @@ export async function discoverDiscord(
           error: "ROBOTS_RESTRICTED",
         });
         failureReason = "ROBOTS_RESTRICTED";
-        if (candidate.kind === "original") enqueueRecovery();
+        if (candidate.kind === "original") enqueueRecovery(true, true);
         continue;
       }
       if (robotsRestricted && candidate.kind !== "original")
         robotsAllowedFallback = true;
     }
 
+    const isExplicitDiscordCandidate =
+      candidate.kind !== "script-asset" &&
+      EXPLICIT_DISCORD_ROUTE_RE.test(new URL(candidate.url).pathname);
     let page: RecoveredPage;
     try {
-      const isExplicitDiscordCandidate =
-        candidate.kind !== "script-asset" &&
-        EXPLICIT_DISCORD_ROUTE_RE.test(new URL(candidate.url).pathname);
+      // Normal candidates stay on the fast HTTP tier. Chromium is launched
+      // only by a separately queued dynamic retry backed by page evidence.
       const allowDynamic =
         options.dynamicFallback !== false &&
-        candidate.kind !== "script-asset" &&
-        (candidate.kind === "dynamic-retry" ||
-          dynamicPagesAttempted < maxDynamicPages ||
-          (isExplicitDiscordCandidate && dynamicDiscordPagesAttempted < 1));
-      page = await fetchPage(candidate.url, {
-        timeoutMs: options.timeoutMs,
-        redirects: options.redirects ?? 5,
-        dynamicFallback: allowDynamic,
-        // Deep Scan deliberately renders the entry surface once even when its
-        // static HTML does not look like a JS shell. Some sites attach social
-        // actions to image banners only after hydration/scroll.
-        forceDynamic: candidate.kind === "dynamic-retry",
-        allowedHostname: new URL(candidate.url).hostname,
-        retries: options.retries ?? 1,
-      });
+        candidate.kind === "dynamic-retry" &&
+        dynamicPagesAttempted < maxDynamicPages;
+      const reusedInitialPage =
+        candidate.kind === "original" && Boolean(options.initialPage);
+      const highValueFallback =
+        [
+          "root-fallback",
+          "host-fallback",
+          "http-fallback",
+          "sitemap",
+          "social-aggregator",
+        ].includes(candidate.kind) ||
+        (candidate.kind === "internal-link" &&
+          RECOVERY_LINK_RE.test(new URL(candidate.url).pathname));
+      const candidateTimeoutMs = options.deepScan
+        ? options.timeoutMs
+        : candidate.kind === "dynamic-retry"
+          ? options.timeoutMs
+          : candidate.kind === "original"
+            ? options.timeoutMs
+            : Math.min(options.timeoutMs, highValueFallback ? 8_000 : 5_000);
+      page = reusedInitialPage
+        ? options.initialPage!
+        : await fetchPage(candidate.url, {
+            timeoutMs: candidateTimeoutMs,
+            redirects: options.redirects ?? 5,
+            dynamicFallback: allowDynamic,
+            // Deep Scan deliberately renders the entry surface once even when its
+            // static HTML does not look like a JS shell. Some sites attach social
+            // actions to image banners only after hydration/scroll.
+            forceDynamic: candidate.kind === "dynamic-retry",
+            allowedHostname: new URL(candidate.url).hostname,
+            retries: candidateRetries(candidate, options.retries ?? 1),
+          });
       // `dynamicFallback` only grants permission to render. Most healthy static
       // pages never launch Chromium, so charging them against the browser
       // budget starved later `/discord` and contact routes. Count only an
@@ -442,23 +510,39 @@ export async function discoverDiscord(
         redirectChain?: RedirectHop[];
       };
       failureReason = reason;
+      if (candidate.kind === "original") originalFailureReason = reason;
+      if (
+        candidate.kind === "internal-link" &&
+        isExplicitDiscordCandidate &&
+        ["TIMEOUT", "HTTP_403", "HTTP_429", "HTTP_5XX"].includes(reason)
+      )
+        explicitDiscordAccessFailure = reason;
       pages.push({
         url: candidate.url,
         kind: candidate.kind,
-        status: reason === "TIMEOUT" ? "Timeout" : "Failed",
+        status:
+          reason === "TIMEOUT"
+            ? "Timeout"
+            : reason === "REDIRECT_BLOCKED"
+              ? "Blocked"
+              : "Failed",
         error: reason,
         errorDetail: message,
         attempts: diagnostics.attempts,
         redirectChain: diagnostics.redirectChain,
       });
       if (candidate.kind === "original") {
+        const workerUnavailable = ["SCRAPER_OFFLINE", "SCRAPER_BUSY"].includes(
+          reason,
+        );
         if (
+          !workerUnavailable &&
           !["DNS_FAILURE", "CONNECTION_FAILURE", "SCRAPER_OFFLINE"].includes(
             reason,
           )
         )
-          enqueueRecovery(reason !== "TIMEOUT" && reason !== "TLS_FAILURE");
-        if (!hostFallbackQueued) {
+          enqueueRecovery(reason !== "TLS_FAILURE", true);
+        if (!workerUnavailable && !hostFallbackQueued) {
           hostFallbackQueued = true;
           enqueue(alternateHostRoot(originalUrl), "host-fallback");
         }
@@ -540,10 +624,13 @@ export async function discoverDiscord(
           validationStatus: "UNVALIDATED",
         });
     }
+    for (const email of page.emails) emails.add(email);
+    for (const social of page.socialLinks) socialLinks.set(social.url, social);
     if (detections.size && !options.continueAfterFound) break;
 
     if (failed) {
       failureReason = pageFailure(page);
+      if (candidate.kind === "original") originalFailureReason = failureReason;
       if (
         (candidate.kind === "internal-link" &&
           EXPLICIT_DISCORD_ROUTE_RE.test(new URL(candidate.url).pathname)) ||
@@ -553,20 +640,59 @@ export async function discoverDiscord(
           EXPLICIT_DISCORD_ROUTE_RE.test(new URL(page.finalUrl).pathname))
       )
         explicitDiscordAccessFailure = failureReason;
+      // A normal browser render can recover public pages whose static edge
+      // response is transient or JS-gated. It never solves or bypasses a
+      // login/CAPTCHA, and persistent rate limits are deliberately not retried
+      // through Chromium.
+      if (
+        candidate.kind !== "dynamic-retry" &&
+        options.dynamicFallback !== false &&
+        page.fetchMode !== "Dynamic" &&
+        page.httpStatus !== 429 &&
+        dynamicPagesAttempted < maxDynamicPages &&
+        (candidate.kind === "original" ||
+          candidate.kind === "root-fallback" ||
+          isExplicitDiscordCandidate) &&
+        (page.httpStatus === 403 ||
+          page.httpStatus >= 500 ||
+          RECOVERABLE_CHALLENGE_STATUSES.has(page.httpStatus))
+      )
+        enqueueStagedDynamicRetry(candidate.url);
       if (candidate.kind === "original") {
-        const path = new URL(candidate.url).pathname || "/";
         if (
           ["HTTP_404", "HTTP_403", "SOFT_404"].includes(failureReason) ||
           RECOVERABLE_CHALLENGE_STATUSES.has(page.httpStatus) ||
-          (path !== "/" && failureReason === "HTTP_5XX")
+          failureReason === "HTTP_5XX"
         )
-          enqueueRecovery(failureReason !== "HTTP_429");
+          enqueueRecovery(failureReason !== "HTTP_429", true);
       }
       continue;
     }
 
     if (candidate.kind !== "sitemap" && candidate.kind !== "dynamic-retry")
       successfulContentPages += 1;
+
+    // A reused static entry page still needs the normal rendered fallback when
+    // the document looks dynamic. Queue it without downloading the static page
+    // a second time.
+    if (
+      (candidate.kind === "original" || candidate.kind === "root-fallback") &&
+      options.dynamicFallback !== false &&
+      page.fetchMode !== "Dynamic" &&
+      (options.deepScan || page.looksDynamic)
+    )
+      enqueueStagedDynamicRetry(candidate.url);
+
+    // A real, site-declared Discord route gets one rendered attempt after its
+    // static HTML is checked. Guessed common paths do not launch a browser.
+    if (
+      candidate.kind === "internal-link" &&
+      isExplicitDiscordCandidate &&
+      options.dynamicFallback !== false &&
+      page.fetchMode !== "Dynamic" &&
+      dynamicDiscordPagesAttempted < 1
+    )
+      enqueueStagedDynamicRetry(candidate.url);
 
     const internalLinks = page.internalLinks.filter((internal) =>
       sameHost(internal, originalHostname),
@@ -594,11 +720,7 @@ export async function discoverDiscord(
           enqueue(internal, "internal-link", false, true);
     if (shouldExpandPriorityLinks)
       for (const internal of [...internalLinks].reverse())
-        if (
-          RECOVERY_LINK_RE.test(new URL(internal).pathname) &&
-          (!LOW_VALUE_CONTENT_PATH_RE.test(new URL(internal).pathname) ||
-            EXPLICIT_DISCORD_ROUTE_RE.test(new URL(internal).pathname))
-        )
+        if (RECOVERY_LINK_RE.test(new URL(internal).pathname))
           enqueue(internal, "internal-link", false, true);
     if (candidate.kind === "sitemap")
       for (const internal of internalLinks) {
@@ -641,15 +763,6 @@ export async function discoverDiscord(
           (EXTERNAL_SOCIAL_PRIORITY[social.type] ?? 0) >= 90,
         );
       }
-    if (
-      options.deepScan &&
-      options.dynamicFallback !== false &&
-      page.fetchMode !== "Dynamic" &&
-      (candidate.kind === "original" || candidate.kind === "root-fallback")
-    )
-      // Deep Scan still gets one guaranteed rendered entry-page pass, but only
-      // after real static links and social profiles have had a chance to win.
-      enqueueStagedDynamicRetry(candidate.url);
     // Guessed routes are the last recovery tier. Real links and script assets
     // declared by the site must be tried first so catch-all 200 pages cannot
     // consume the useful-page budget before genuine site destinations.
@@ -663,19 +776,34 @@ export async function discoverDiscord(
   // preserve how far discovery progressed, while the final outcome remains
   // the accurate user-facing result: no public Discord destination found.
   const deadlineReached = Date.now() >= deadline;
-  if (!detections.size && deadlineReached) failureReason = "TIMEOUT";
+  const originalFailure =
+    originalHttpStatus === 403
+      ? "HTTP_403"
+      : originalHttpStatus === 429
+        ? "HTTP_429"
+        : originalHttpStatus != null && originalHttpStatus >= 500
+          ? "HTTP_5XX"
+          : undefined;
+  if (!detections.size && successfulContentPages > 0) {
+    // A failed guessed path must never overwrite a healthy website result.
+    // Keep its page-level diagnostic, but report the domain as a completed
+    // contact search unless the total discovery deadline really expired.
+    failureReason = deadlineReached ? "TIMEOUT" : "DISCORD_NOT_FOUND";
+  } else if (!detections.size && recoveryQueued && failureReason === "SOFT_404")
+    failureReason = "DISCORD_NOT_FOUND";
+  else if (!detections.size && (originalFailure || originalFailureReason))
+    failureReason = originalFailure || originalFailureReason;
+  else if (!detections.size && deadlineReached) failureReason = "TIMEOUT";
   else if (
     !detections.size &&
     (successfulContentPages >= maxPages || pages.length >= attemptLimit) &&
     queue.length
   )
     failureReason = "DISCORD_NOT_FOUND";
-  else if (!detections.size && recoveryQueued && failureReason === "SOFT_404")
-    failureReason = "DISCORD_NOT_FOUND";
   if (
     !detections.size &&
     explicitDiscordAccessFailure &&
-    ["HTTP_403", "HTTP_429", "ROBOTS_RESTRICTED"].includes(
+    ["HTTP_403", "HTTP_429", "HTTP_5XX", "ROBOTS_RESTRICTED"].includes(
       explicitDiscordAccessFailure,
     )
   )
@@ -689,6 +817,10 @@ export async function discoverDiscord(
       : options.robotsRespect === false
         ? "NOT_CHECKED"
         : "ALLOWED";
+  const alternateContactFound =
+    emails.size > 0 ||
+    [...socialLinks.values()].some((social) => social.type === "telegram");
+  const contactFound = detections.size > 0 || alternateContactFound;
 
   return {
     originalUrl,
@@ -700,9 +832,12 @@ export async function discoverDiscord(
     pagesChecked: pages.length,
     pages,
     discordFound: detections.size > 0,
+    contactFound,
     detections: [...detections.values()],
+    emails: [...emails].sort(),
+    socialLinks: [...socialLinks.values()],
     discoveryMethod: detections.values().next().value?.discoveryMethod,
-    failureReason: detections.size
+    failureReason: contactFound
       ? undefined
       : failureReason || "DISCORD_NOT_FOUND",
     robotsStatus,

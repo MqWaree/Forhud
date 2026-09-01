@@ -37,6 +37,20 @@ const discordDetectionSchema = z.object({
     .enum(["NONE", "HOVER", "EXPAND_MENU", "CLICK", "SCROLL", "POPUP"])
     .default("NONE"),
 });
+const rustPriceListingSchema = z.object({
+  name: z.string().min(1).max(300),
+  priceMinor: z.number().int().positive(),
+  currency: z.string().min(3).max(4),
+  priceText: z.string().min(1).max(100),
+  link: z.string().url(),
+  method: z.enum([
+    "JSON_LD",
+    "PRODUCT_CARD",
+    "PRODUCT_META",
+    "VARIANT_CONTROL",
+    "VISIBLE_TEXT",
+  ]),
+});
 const pageResultSchema = z.object({
   requestedUrl: z.string().url(),
   finalUrl: z.string().url(),
@@ -55,6 +69,7 @@ const pageResultSchema = z.object({
   internalLinks: z.array(z.string().url()),
   priorityLinks: z.array(z.string().url()).default([]),
   scriptLinks: z.array(z.string().url()).default([]),
+  rustPriceListings: z.array(rustPriceListingSchema).default([]),
   durationMs: z.number().int().nonnegative(),
   looksDynamic: z.boolean(),
   isSoft404: z.boolean(),
@@ -77,10 +92,40 @@ const robotsResultSchema = z.object({
 export type ScrapedPage = z.infer<typeof pageResultSchema>;
 export type SocialLink = z.infer<typeof socialSchema>;
 export type DiscordDetection = z.infer<typeof discordDetectionSchema>;
+export type RustPriceDetection = z.infer<typeof rustPriceListingSchema>;
 export type RobotsResource = z.infer<typeof robotsResultSchema>;
 
+export class ScraperRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly retryAfterSeconds?: number,
+  ) {
+    super(message);
+    this.name = "ScraperRequestError";
+  }
+}
+
 const baseUrl = process.env.SCRAPER_URL || "http://127.0.0.1:3011";
-const token = process.env.SCRAPER_TOKEN || "aether-dev-local-worker";
+const DEVELOPMENT_SCRAPER_TOKEN = "aether-dev-local-worker";
+export function configuredScraperToken(
+  environment: NodeJS.ProcessEnv = process.env,
+) {
+  const configured = String(environment.SCRAPER_TOKEN || "").trim();
+  if (environment.NODE_ENV === "production") {
+    if (
+      configured.length < 24 ||
+      configured === DEVELOPMENT_SCRAPER_TOKEN ||
+      configured.includes("REPLACE_WITH")
+    )
+      throw new Error(
+        "SCRAPER_TOKEN must be a unique secret of at least 24 characters in production",
+      );
+    return configured;
+  }
+  return configured || DEVELOPMENT_SCRAPER_TOKEN;
+}
+const token = configuredScraperToken();
 const dynamicConcurrency = Math.max(
   1,
   Math.min(4, Number(process.env.SCRAPER_DYNAMIC_CONCURRENCY || 3)),
@@ -121,12 +166,45 @@ async function internalRequest<T>(
       },
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok)
-      throw new Error(
+    if (!response.ok) {
+      const detail =
         typeof payload?.error === "string"
           ? payload.error
-          : `Scraper service failed (${response.status})`,
+          : `Scraper service failed (${response.status})`;
+      const retryAfterSeconds = Number.isFinite(
+        Number(payload?.retryAfterSeconds),
+      )
+        ? Math.max(0, Math.min(300, Number(payload.retryAfterSeconds)))
+        : undefined;
+      const code = typeof payload?.code === "string" ? `${payload.code}: ` : "";
+      if (response.status === 504)
+        throw new ScraperRequestError(
+          `Scrapling worker timeout (HTTP 504): ${code}${detail}`,
+          response.status,
+          retryAfterSeconds,
+        );
+      if (
+        response.status === 429 ||
+        (response.status === 503 &&
+          /busy|capacity|overload|queue/i.test(detail))
+      )
+        throw new ScraperRequestError(
+          `Scrapling worker busy (HTTP ${response.status}): ${code}${detail}`,
+          response.status,
+          retryAfterSeconds,
+        );
+      if (response.status >= 500)
+        throw new ScraperRequestError(
+          `Scrapling worker error (HTTP ${response.status}): ${code}${detail}`,
+          response.status,
+          retryAfterSeconds,
+        );
+      throw new ScraperRequestError(
+        `${code}${detail}`,
+        response.status,
+        retryAfterSeconds,
       );
+    }
     return payload as T;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError")
@@ -143,6 +221,8 @@ async function requestPage(
   url: string,
   timeoutMs: number,
   forceDynamic = false,
+  discoveryMode: "discord" | "rust-price" = "discord",
+  product?: { name: string; type: string },
 ): Promise<ScrapedPage> {
   const payload = await internalRequest<{ result: unknown }>(
     "/internal/scrape",
@@ -153,10 +233,13 @@ async function requestPage(
         timeoutMs,
         dynamicFallback: false,
         forceDynamic,
+        discoveryMode,
+        productName: product?.name,
+        productType: product?.type,
         mode: "page",
       }),
     },
-    timeoutMs + 3_000,
+    timeoutMs + (forceDynamic ? 12_000 : 5_000),
   );
   const parsed = pageResultSchema.safeParse(payload.result);
   if (!parsed.success) throw new Error("Malformed Scrapling worker response");
@@ -173,18 +256,31 @@ export async function scrapePage(
     timeoutMs: number;
     dynamicFallback: boolean;
     forceDynamic?: boolean;
+    discoveryMode?: "discord" | "rust-price";
+    product?: { name: string; type: string };
   },
 ): Promise<ScrapedPage> {
-  const staticPage = await requestPage(url, options.timeoutMs);
+  const staticPage = await requestPage(
+    url,
+    options.timeoutMs,
+    false,
+    options.discoveryMode,
+    options.product,
+  );
+  const needsDetection =
+    options.discoveryMode === "rust-price"
+      ? staticPage.rustPriceListings.length === 0 || staticPage.looksDynamic
+      : staticPage.discordLinks.length === 0;
   const shouldRender =
     options.dynamicFallback &&
-    staticPage.discordLinks.length === 0 &&
+    needsDetection &&
     staticPage.httpStatus !== 429 &&
     (options.forceDynamic ||
       (staticPage.looksDynamic &&
         staticPage.httpStatus >= 200 &&
         staticPage.httpStatus < 300) ||
-      (!staticPage.discordLinks.length &&
+      (options.discoveryMode !== "rust-price" &&
+        !staticPage.discordLinks.length &&
         staticPage.httpStatus >= 200 &&
         staticPage.httpStatus < 300 &&
         contactPath.test(new URL(staticPage.finalUrl).pathname)) ||
@@ -194,7 +290,13 @@ export async function scrapePage(
   if (!shouldRender) return staticPage;
   try {
     const rendered = await withDynamicSlot(() =>
-      requestPage(staticPage.finalUrl, options.timeoutMs, true),
+      requestPage(
+        staticPage.finalUrl,
+        options.timeoutMs,
+        true,
+        options.discoveryMode,
+        options.product,
+      ),
     );
     return {
       ...rendered,
@@ -230,7 +332,7 @@ export async function fetchRobotsResource(
         mode: "robots",
       }),
     },
-    timeoutMs + 3_000,
+    timeoutMs + 5_000,
   );
   const parsed = robotsResultSchema.safeParse(payload.result);
   if (!parsed.success) throw new Error("Malformed Scrapling robots response");

@@ -21,6 +21,8 @@ const DEFAULT_EXCLUDED_DOMAINS = [
   "medium.com",
   "quora.com",
   "telegram.me",
+  "telegram.dog",
+  "telegram.org",
   "t.me",
   "whatsapp.com",
   "vk.com",

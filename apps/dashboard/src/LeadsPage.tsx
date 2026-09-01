@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useState } from "react";
 import {
   Columns3,
   Download,
@@ -9,7 +9,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { leadStatuses, priorities } from "@lead/shared";
+import { leadStatuses, normalizeDiscordUrl, priorities } from "@lead/shared";
 import { api, type ExpandedLead } from "./api";
 import { useAuth } from "./Auth";
 import {
@@ -23,6 +23,10 @@ import {
 
 const notify = (message: string) =>
   window.dispatchEvent(new CustomEvent("toast", { detail: message }));
+const leadDiscordUrl = (lead: ExpandedLead) =>
+  normalizeDiscordUrl(
+    lead.discordInvite || lead.scannerResult?.discordLinks?.[0]?.url || "",
+  );
 export default function LeadsPage({
   leads,
   refresh,
@@ -40,7 +44,18 @@ export default function LeadsPage({
     [draft, setDraft] = useState<ExpandedLead>(),
     [tagText, setTagText] = useState(""),
     [selected, setSelected] = useState<Set<string>>(new Set()),
-    [team, setTeam] = useState<Array<{ id: string; username: string }>>([]);
+    [team, setTeam] = useState<Array<{ id: string; username: string }>>([]),
+    [draggingId, setDraggingId] = useState<string>(),
+    [dropStatus, setDropStatus] = useState<string>(),
+    [recentlyDroppedId, setRecentlyDroppedId] = useState<string>(),
+    [optimisticStatuses, setOptimisticStatuses] = useState<
+      Record<string, string>
+    >({}),
+    [preview, setPreview] = useState<{
+      lead: ExpandedLead;
+      top: number;
+      left: number;
+    }>();
   useEffect(() => {
     if (canAssign) void api.get<typeof team>("/team/users").then(setTeam);
   }, [canAssign]);
@@ -51,7 +66,24 @@ export default function LeadsPage({
       ].sort(),
     [leads],
   );
-  const filtered = leads.filter(
+  useEffect(() => {
+    setOptimisticStatuses((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const [id, nextStatus] of Object.entries(current)) {
+        if (leads.find((lead) => lead.id === id)?.status === nextStatus) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [leads]);
+  const visibleLeads = leads.map((lead) => {
+    const optimisticStatus = optimisticStatuses[lead.id];
+    return optimisticStatus ? { ...lead, status: optimisticStatus } : lead;
+  });
+  const filtered = visibleLeads.filter(
     (l) =>
       (status === "All" || l.status === status) &&
       (tag === "All" || l.tags?.some((t) => t.tag.name === tag)) &&
@@ -62,6 +94,19 @@ export default function LeadsPage({
   function open(lead: ExpandedLead) {
     setDetail(lead);
     setDraft(structuredClone(lead));
+    void api
+      .get<ExpandedLead>(`/leads/${lead.id}`)
+      .then((expanded) => {
+        setDetail(expanded);
+        setDraft(structuredClone(expanded));
+      })
+      .catch((error) =>
+        notify(
+          error instanceof Error
+            ? error.message
+            : "Complete lead details could not load.",
+        ),
+      );
   }
   async function save() {
     if (!draft) return;
@@ -97,6 +142,25 @@ export default function LeadsPage({
       await refresh();
     }
   }
+  async function clearAll() {
+    if (!leads.length) {
+      notify("There are no leads to clear.");
+      return;
+    }
+    if (
+      !confirm(
+        `Delete all ${leads.length} leads in this workspace? This cannot be undone.`,
+      )
+    )
+      return;
+    const result = await api.send<{ deleted: number }>("/leads", "DELETE");
+    setSelected(new Set());
+    setDetail(undefined);
+    setDraft(undefined);
+    setPreview(undefined);
+    notify(`${result.deleted} lead${result.deleted === 1 ? "" : "s"} cleared.`);
+    await refresh();
+  }
   async function assign(ids: string[], assignedToId: string | null) {
     await api.send("/leads/bulk-assign", "POST", { ids, assignedToId });
     notify(`${ids.length} lead${ids.length === 1 ? "" : "s"} assigned.`);
@@ -104,14 +168,48 @@ export default function LeadsPage({
     await refresh();
   }
   async function moveLead(id: string, nextStatus: string) {
+    const originalStatus = leads.find((lead) => lead.id === id)?.status;
+    if (!originalStatus || originalStatus === nextStatus) return;
+    setOptimisticStatuses((current) => ({
+      ...current,
+      [id]: nextStatus,
+    }));
+    setRecentlyDroppedId(id);
+    window.setTimeout(
+      () =>
+        setRecentlyDroppedId((current) =>
+          current === id ? undefined : current,
+        ),
+      420,
+    );
     try {
       await api.send(`/leads/${id}`, "PATCH", { status: nextStatus });
       notify(`Lead moved to ${nextStatus}.`);
       await refresh();
     } catch (error) {
+      setOptimisticStatuses((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
       notify(error instanceof Error ? error.message : "Lead move failed.");
       await refresh();
     }
+  }
+  function showPreview(event: MouseEvent<HTMLElement>, lead: ExpandedLead) {
+    if (draggingId) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const width = 290;
+    const gap = 12;
+    const left =
+      rect.right + width + gap <= window.innerWidth
+        ? rect.right + gap
+        : Math.max(12, rect.left - width - gap);
+    const top = Math.min(
+      Math.max(12, rect.top),
+      Math.max(12, window.innerHeight - 330),
+    );
+    setPreview({ lead, top, left });
   }
   function setField(key: keyof ExpandedLead, value: any) {
     draft && setDraft({ ...draft, [key]: value });
@@ -137,12 +235,23 @@ export default function LeadsPage({
       <PageHeader
         eyebrow="Relationship workspace"
         title="Leads funnel"
-        subtitle="Build a complete research record for every opportunity."
+        subtitle="Review Discord-, Telegram-, and email-qualified scanner leads and manually created opportunities."
         actions={
           <>
             <a className="btn secondary" href="/api/export/leads.csv">
               <Download /> Export
             </a>
+            <a
+              className="btn secondary"
+              href="/api/export/lead-discord-links.txt"
+            >
+              <Download /> Discord links
+            </a>
+            {canAssign && (
+              <Button variant="danger" onClick={() => void clearAll()}>
+                <Trash2 /> Clear all
+              </Button>
+            )}
             <Button onClick={add}>
               <Plus /> Add lead
             </Button>
@@ -342,10 +451,28 @@ export default function LeadsPage({
           {leadStatuses.map((leadStatus) => (
             <section
               key={leadStatus}
-              className="kanban-column"
-              onDragOver={(event) => event.preventDefault()}
+              className={`kanban-column${dropStatus === leadStatus ? " is-drop-target" : ""}`}
+              onDragEnter={() => {
+                if (draggingId) setDropStatus(leadStatus);
+              }}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node))
+                  setDropStatus((current) =>
+                    current === leadStatus ? undefined : current,
+                  );
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                if (draggingId && dropStatus !== leadStatus)
+                  setDropStatus(leadStatus);
+              }}
               onDrop={(event) => {
-                const id = event.dataTransfer.getData("text/plain");
+                event.preventDefault();
+                const id =
+                  draggingId || event.dataTransfer.getData("text/plain");
+                setDraggingId(undefined);
+                setDropStatus(undefined);
                 if (id) void moveLead(id, leadStatus);
               }}
             >
@@ -357,42 +484,134 @@ export default function LeadsPage({
               </header>
               {filtered
                 .filter((lead) => lead.status === leadStatus)
-                .map((lead) => (
-                  <article
-                    key={lead.id}
-                    className="lead-card card"
-                    draggable
-                    onDragStart={(event) =>
-                      event.dataTransfer.setData("text/plain", lead.id)
-                    }
-                    onClick={() => open(lead)}
-                  >
-                    <div>
-                      <span className="site-icon">
-                        {lead.domain.hostname[0]?.toUpperCase()}
-                      </span>
-                      <Badge tone={lead.priority.toLowerCase()}>
-                        {lead.priority}
-                      </Badge>
-                    </div>
-                    <b>{lead.companyName || lead.domain.hostname}</b>
-                    <small>
-                      {lead.discordInvite ||
-                        lead.scannerResult?.discordLinks?.[0]?.url?.replace(
-                          "https://",
-                          "",
-                        ) ||
-                        "No Discord link"}
-                    </small>
-                    <footer>
-                      <span>{lead.domain.location?.country || "Unknown"}</span>
-                      <span>{lead.assignedTo?.username || "Unassigned"}</span>
-                    </footer>
-                  </article>
-                ))}
+                .map((lead) => {
+                  const discordUrl = leadDiscordUrl(lead);
+                  return (
+                    <article
+                      key={lead.id}
+                      className={`lead-card card${draggingId === lead.id ? " is-dragging" : ""}${recentlyDroppedId === lead.id ? " just-dropped" : ""}`}
+                      draggable
+                      aria-describedby={
+                        preview?.lead.id === lead.id
+                          ? "kanban-lead-preview"
+                          : undefined
+                      }
+                      onMouseEnter={(event) => showPreview(event, lead)}
+                      onMouseLeave={() => setPreview(undefined)}
+                      onDragStart={(event) => {
+                        if (
+                          event.target instanceof Element &&
+                          event.target.closest(
+                            "a, button, input, select, textarea",
+                          )
+                        ) {
+                          event.preventDefault();
+                          return;
+                        }
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", lead.id);
+                        setPreview(undefined);
+                        setDraggingId(lead.id);
+                      }}
+                      onDragEnd={() => {
+                        setDraggingId(undefined);
+                        setDropStatus(undefined);
+                      }}
+                      onClick={() => open(lead)}
+                    >
+                      <div>
+                        <span className="site-icon">
+                          {lead.domain.hostname[0]?.toUpperCase()}
+                        </span>
+                        <Badge tone={lead.priority.toLowerCase()}>
+                          {lead.priority}
+                        </Badge>
+                      </div>
+                      <b>{lead.companyName || lead.domain.hostname}</b>
+                      {discordUrl ? (
+                        <a
+                          className="lead-card-link"
+                          href={discordUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          draggable={false}
+                          title={`Open ${discordUrl}`}
+                          onClick={(event) => event.stopPropagation()}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onDragStart={(event) => event.preventDefault()}
+                        >
+                          <span>{discordUrl.replace(/^https?:\/\//, "")}</span>
+                          <ExternalLink aria-hidden="true" />
+                        </a>
+                      ) : (
+                        <small>No Discord link</small>
+                      )}
+                      <footer>
+                        <span>
+                          {lead.domain.location?.country || "Unknown"}
+                        </span>
+                        <span>{lead.assignedTo?.username || "Unassigned"}</span>
+                      </footer>
+                    </article>
+                  );
+                })}
             </section>
           ))}
         </div>
+      )}
+      {view === "kanban" && preview && (
+        <aside
+          id="kanban-lead-preview"
+          className="lead-hover-preview"
+          role="tooltip"
+          style={{ top: preview.top, left: preview.left }}
+        >
+          <header>
+            <span className="site-icon">
+              {preview.lead.domain.hostname[0]?.toUpperCase()}
+            </span>
+            <div>
+              <b>{preview.lead.companyName || preview.lead.domain.hostname}</b>
+              <small>{preview.lead.domain.hostname}</small>
+            </div>
+            <Badge tone={preview.lead.priority.toLowerCase()}>
+              {preview.lead.priority}
+            </Badge>
+          </header>
+          <div className="lead-preview-grid">
+            <span>
+              <small>Status</small>
+              <b>{preview.lead.status}</b>
+            </span>
+            <span>
+              <small>Assigned to</small>
+              <b>{preview.lead.assignedTo?.username || "Unassigned"}</b>
+            </span>
+            <span>
+              <small>Contact</small>
+              <b>{preview.lead.contactName || preview.lead.email || "—"}</b>
+            </span>
+            <span>
+              <small>Hosting</small>
+              <b>{preview.lead.domain.location?.country || "Unknown"}</b>
+            </span>
+          </div>
+          <div className="lead-preview-discord">
+            <small>Discord</small>
+            <b>
+              {preview.lead.discordInvite ||
+                preview.lead.scannerResult?.discordLinks?.[0]?.url ||
+                "Not found"}
+            </b>
+          </div>
+          {preview.lead.tags.length > 0 && (
+            <footer>
+              {preview.lead.tags.slice(0, 4).map((item) => (
+                <span key={item.tag.id}>{item.tag.name}</span>
+              ))}
+            </footer>
+          )}
+        </aside>
       )}
       {detail && draft && (
         <Drawer
