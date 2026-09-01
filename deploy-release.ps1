@@ -72,6 +72,7 @@ function Publish-GitRelease {
     "DEPLOY-FGP.cmd",
     "DEPLOY-CORRECTED-RELEASE.cmd",
     "deploy-now.cmd",
+    "OPEN-DEPLOY.vbs",
     "run-deploy-interactive.ps1"
   ) | Where-Object { Test-Path -LiteralPath (Join-Path $PSScriptRoot $_) }
 
