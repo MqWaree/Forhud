@@ -53,6 +53,8 @@ function Publish-GitRelease {
   $releasePaths = @(
     ".env.example",
     ".gitignore",
+    "AGENTS.md",
+    "OPENCODE-HANDOFF.md",
     "README.md",
     "THIRD_PARTY_NOTICES.md",
     "apps",

@@ -12,6 +12,8 @@ const stagingRoot = join(stagingParent, "package");
 const rootEntries = [
   ".env.example",
   ".gitignore",
+  "AGENTS.md",
+  "OPENCODE-HANDOFF.md",
   "apps",
   "deploy",
   "eslint.config.js",
