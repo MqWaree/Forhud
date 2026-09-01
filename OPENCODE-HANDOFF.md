@@ -21,7 +21,7 @@ FGP began as a lead-intelligence/search-and-scan panel and expanded into a multi
 
 Production is served at `https://forhud.shop` from an Ubuntu VPS. GitHub is `https://github.com/MqWaree/Forhud` and the primary branch is `main`.
 
-The latest source is pushed to GitHub at commit `7ecf02d`, but that exact commit has not yet been confirmed as deployed. The most recent local deployment log ending successfully is from earlier on 2026-09-01 and predates the final merged release.
+The latest application release baseline is commit `7ecf02d`, and current GitHub `main` also contains this OpenCode handoff documentation. Resolve the current remote HEAD when starting work. The application changes in `7ecf02d` have not yet been confirmed as deployed. The most recent local deployment log ending successfully is from earlier on 2026-09-01 and predates the final merged release.
 
 ## 2. Current source and verification state
 
@@ -526,7 +526,7 @@ Git ignore and release builder rules already reject most sensitive runtime files
 
 ### Immediate
 
-1. Deploy current GitHub `main` (`7ecf02d`) using `DEPLOY-FGP.cmd` or the equivalent safe interactive workflow.
+1. Deploy current GitHub `main` (which contains application release `7ecf02d`) using `DEPLOY-FGP.cmd` or the equivalent safe interactive workflow.
 2. Verify a new deployment log ends in `FGP_DEPLOYMENT_OK`.
 3. Verify `fgp-api`, `fgp-scraper`, and conditionally enabled `fgp-haze-notifier` services.
 4. Verify `https://forhud.shop/api/health` and load the dashboard.
@@ -567,7 +567,7 @@ Review untracked root patchers and staging folders individually. Preserve anythi
 Use this after opening the repository in OpenCode:
 
 ```text
-Read AGENTS.md and OPENCODE-HANDOFF.md completely. Inspect git status and confirm origin/main. Do not expose or reuse any secrets mentioned in historical material. First verify whether commit 7ecf02d is live; if it is not, use the repository's safe deployment workflow and verify the final deployment marker, services, public health, and a small scanner smoke test. Then report the exact GitHub commit, production state, and any remaining blocker.
+Read AGENTS.md and OPENCODE-HANDOFF.md completely. Inspect git status and confirm origin/main. Do not expose or reuse any secrets mentioned in historical material. First verify whether the application changes from commit 7ecf02d are live; if they are not, deploy current main with the repository's safe workflow and verify the final deployment marker, services, public health, and a small scanner smoke test. Then report the exact GitHub HEAD, production state, and any remaining blocker.
 ```
 
 ## 21. Final context for the next agent
