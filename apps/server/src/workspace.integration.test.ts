@@ -650,13 +650,14 @@ describe("authenticated persistent scanner workspace", () => {
         "https://24.1.0.2/",
         "https://24.1.0.3/",
         "https://24.1.0.4/",
+        "https://24.1.0.5/",
       ],
     });
     const imported = await prisma.scannerResult.findMany({
       where: { domain: { hostname: { startsWith: "24.1.0." } } },
       orderBy: { normalizedUrl: "asc" },
     });
-    expect(imported).toHaveLength(4);
+    expect(imported).toHaveLength(5);
     await Promise.all([
       prisma.scannerResult.update({
         where: { id: imported[0].id },
@@ -690,13 +691,21 @@ describe("authenticated persistent scanner workspace", () => {
           error: "Robots policy disallows this URL",
         },
       }),
+      prisma.scannerResult.update({
+        where: { id: imported[4].id },
+        data: {
+          scanStatus: "Failed",
+          discoveryFailureReason: "HTTP_503",
+          error: "Service unavailable",
+        },
+      }),
     ]);
 
     try {
       const response = await browser.post("/api/scanner/retry-failed");
       expect(response.status).toBe(202);
       expect(response.body).toMatchObject({
-        queued: 2,
+        queued: 3,
         skippedPermanent: 2,
         recoveryProfile: {
           concurrency: 8,

@@ -284,6 +284,7 @@ function statusForError(message: string) {
 
 const INFRASTRUCTURE_FAILURE_REASONS = new Set([
   "TIMEOUT",
+  "SCRAPER_TIMEOUT",
   "HTTP_403",
   "HTTP_429",
   "HTTP_5XX",
@@ -301,6 +302,7 @@ const INFRASTRUCTURE_FAILURE_REASONS = new Set([
 
 const AUTOMATIC_RETRY_FAILURE_REASONS = new Set([
   "TIMEOUT",
+  "SCRAPER_TIMEOUT",
   "HTTP_408",
   "HTTP_425",
   "HTTP_429",
@@ -365,6 +367,7 @@ function failureMessage(reason: string) {
   const messages: Record<string, string> = {
     CONTACT_NOT_FOUND: "No Discord, Telegram, or email contact found",
     TIMEOUT: "Website or scraper did not respond before the retry deadline",
+    SCRAPER_TIMEOUT: "The Scrapling worker did not respond in time",
     HTTP_403: "Website denied public access (HTTP 403)",
     HTTP_429: "Website rate limited the scanner (HTTP 429)",
     HTTP_5XX: "Website returned a temporary server error",
@@ -379,10 +382,10 @@ function failureMessage(reason: string) {
     REDIRECT_BLOCKED: "A redirect left the approved public website boundary",
     REDIRECT_LIMIT: "The website exceeded the safe redirect limit",
   };
-  return (
-    messages[reason] ||
-    `Contact extraction failed: ${reason.replaceAll("_", " ")}`
-  );
+  if (messages[reason]) return messages[reason];
+  if (/^HTTP_5\d{2}$/.test(reason))
+    return `Website returned a temporary server error (HTTP ${reason.slice(5)})`;
+  return `Contact extraction failed: ${reason.replaceAll("_", " ")}`;
 }
 
 function chooseFailureReason(primary: string, recovery?: string) {

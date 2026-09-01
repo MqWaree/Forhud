@@ -2098,6 +2098,7 @@ app.post("/api/scanner/retry-failed", async (req, res, next) => {
       "DISCORD_NOT_FOUND",
       "NO_DISCORD_FOUND",
       "TIMEOUT",
+      "SCRAPER_TIMEOUT",
       "HTTP_408",
       "HTTP_425",
       "HTTP_429",
@@ -2122,6 +2123,10 @@ app.post("/api/scanner/retry-failed", async (req, res, next) => {
             scanStatus: { in: ["Failed", "Blocked"] },
             discoveryFailureReason: { in: retryableReasons },
           },
+          {
+            scanStatus: { in: ["Failed", "Blocked"] },
+            discoveryFailureReason: { startsWith: "HTTP_5" },
+          },
         ],
       },
       data: { scanStatus: "Pending", error: null },
@@ -2131,7 +2136,12 @@ app.post("/api/scanner/retry-failed", async (req, res, next) => {
         workspaceId: auth.workspaceId,
         quarantinedAt: null,
         scanStatus: { in: ["Failed", "Blocked"] },
-        NOT: { discoveryFailureReason: { in: retryableReasons } },
+        NOT: {
+          OR: [
+            { discoveryFailureReason: { in: retryableReasons } },
+            { discoveryFailureReason: { startsWith: "HTTP_5" } },
+          ],
+        },
       },
     });
     const settings = await getSettings(auth.workspaceId);

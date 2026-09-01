@@ -1,6 +1,7 @@
 import {
   classifyFetchError,
   fetchPage,
+  isHttp5xxReason,
   robotsDecision,
   type FetchAttempt,
   type RecoveredPage,
@@ -191,7 +192,7 @@ function pageFailure(page: ScrapedPage) {
   if (page.httpStatus === 404) return "HTTP_404";
   if (page.httpStatus === 403) return "HTTP_403";
   if (page.httpStatus === 429) return "HTTP_429";
-  if (page.httpStatus >= 500) return "HTTP_5XX";
+  if (page.httpStatus >= 500) return `HTTP_${page.httpStatus}`;
   if (page.httpStatus >= 400) return `HTTP_${page.httpStatus}`;
   return "DISCORD_NOT_FOUND";
 }
@@ -514,14 +515,16 @@ export async function discoverDiscord(
       if (
         candidate.kind === "internal-link" &&
         isExplicitDiscordCandidate &&
-        ["TIMEOUT", "HTTP_403", "HTTP_429", "HTTP_5XX"].includes(reason)
+        (reason === "TIMEOUT" ||
+          ["HTTP_403", "HTTP_429"].includes(reason) ||
+          isHttp5xxReason(reason))
       )
         explicitDiscordAccessFailure = reason;
       pages.push({
         url: candidate.url,
         kind: candidate.kind,
         status:
-          reason === "TIMEOUT"
+          reason === "TIMEOUT" || reason === "SCRAPER_TIMEOUT"
             ? "Timeout"
             : reason === "REDIRECT_BLOCKED"
               ? "Blocked"
@@ -532,9 +535,11 @@ export async function discoverDiscord(
         redirectChain: diagnostics.redirectChain,
       });
       if (candidate.kind === "original") {
-        const workerUnavailable = ["SCRAPER_OFFLINE", "SCRAPER_BUSY"].includes(
-          reason,
-        );
+        const workerUnavailable = [
+          "SCRAPER_OFFLINE",
+          "SCRAPER_BUSY",
+          "SCRAPER_TIMEOUT",
+        ].includes(reason);
         if (
           !workerUnavailable &&
           !["DNS_FAILURE", "CONNECTION_FAILURE", "SCRAPER_OFFLINE"].includes(
@@ -662,7 +667,7 @@ export async function discoverDiscord(
         if (
           ["HTTP_404", "HTTP_403", "SOFT_404"].includes(failureReason) ||
           RECOVERABLE_CHALLENGE_STATUSES.has(page.httpStatus) ||
-          failureReason === "HTTP_5XX"
+          isHttp5xxReason(failureReason)
         )
           enqueueRecovery(failureReason !== "HTTP_429", true);
       }
@@ -782,16 +787,33 @@ export async function discoverDiscord(
       : originalHttpStatus === 429
         ? "HTTP_429"
         : originalHttpStatus != null && originalHttpStatus >= 500
-          ? "HTTP_5XX"
+          ? `HTTP_${originalHttpStatus}`
           : undefined;
-  if (!detections.size && successfulContentPages > 0) {
+  // The healthy-homepage rule below must only mask guessed-path failures.
+  // When the original entry page itself failed for an access or transport
+  // reason, that failure remains the honest domain-level outcome even if some
+  // recovery page later loaded successfully.
+  const originalAccessFailure =
+    originalFailure ||
+    (originalFailureReason &&
+    !["HTTP_404", "SOFT_404", "CONTACT_NOT_FOUND"].includes(
+      originalFailureReason,
+    )
+      ? originalFailureReason
+      : undefined);
+  if (!detections.size && successfulContentPages > 0 && !originalAccessFailure) {
     // A failed guessed path must never overwrite a healthy website result.
     // Keep its page-level diagnostic, but report the domain as a completed
     // contact search unless the total discovery deadline really expired.
     failureReason = deadlineReached ? "TIMEOUT" : "DISCORD_NOT_FOUND";
-  } else if (!detections.size && recoveryQueued && failureReason === "SOFT_404")
+  } else if (
+    !detections.size &&
+    recoveryQueued &&
+    failureReason === "SOFT_404" &&
+    !originalAccessFailure
+  )
     failureReason = "DISCORD_NOT_FOUND";
-  else if (!detections.size && (originalFailure || originalFailureReason))
+  else if (!detections.size && originalAccessFailure)
     failureReason = originalFailure || originalFailureReason;
   else if (!detections.size && deadlineReached) failureReason = "TIMEOUT";
   else if (
@@ -803,9 +825,10 @@ export async function discoverDiscord(
   if (
     !detections.size &&
     explicitDiscordAccessFailure &&
-    ["HTTP_403", "HTTP_429", "HTTP_5XX", "ROBOTS_RESTRICTED"].includes(
+    (["HTTP_403", "HTTP_429", "ROBOTS_RESTRICTED"].includes(
       explicitDiscordAccessFailure,
-    )
+    ) ||
+      isHttp5xxReason(explicitDiscordAccessFailure))
   )
     failureReason = explicitDiscordAccessFailure;
   const robotsStatus = robotsRestricted

@@ -3,17 +3,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const fetchPage = vi.fn();
 const robotsDecision = vi.fn();
 const classifyFetchError = (message: string) =>
-  /timeout|timed out/i.test(message)
-    ? "TIMEOUT"
-    : /worker busy/i.test(message)
-      ? "SCRAPER_BUSY"
-      : /cross-domain|redirect blocked/i.test(message)
-        ? "REDIRECT_BLOCKED"
-        : "INVALID_RESPONSE";
+  /scrapling worker timeout/i.test(message) &&
+  !/\(http 5\d\d\)/i.test(message)
+    ? "SCRAPER_TIMEOUT"
+    : /timeout|timed out/i.test(message)
+      ? "TIMEOUT"
+      : /worker busy/i.test(message)
+        ? "SCRAPER_BUSY"
+        : /cross-domain|redirect blocked/i.test(message)
+          ? "REDIRECT_BLOCKED"
+          : "INVALID_RESPONSE";
 vi.mock("./crawler.js", () => ({
   fetchPage,
   robotsDecision,
   classifyFetchError,
+  isHttp5xxReason: (reason?: string | null) =>
+    /^HTTP_5(?:\d{2}|XX)$/.test(String(reason ?? "").toUpperCase()),
 }));
 
 function page(url: string, overrides: Record<string, unknown> = {}) {
@@ -385,7 +390,7 @@ describe("layered Discord discovery", () => {
       timeoutMs: 1_000,
     });
     expect(result.discordFound).toBe(true);
-    expect(result.pages[0]?.error).toBe("HTTP_5XX");
+    expect(result.pages[0]?.error).toBe("HTTP_503");
   });
 
   it("retries high-value recovery pages instead of treating them as one-shot guesses", async () => {
@@ -455,7 +460,7 @@ describe("layered Discord discovery", () => {
     ).toBe(true);
   });
 
-  it("continues to recovery routes after the homepage worker times out", async () => {
+  it("keeps a local worker timeout distinct and does not burst recovery requests", async () => {
     fetchPage.mockImplementation((url: string) => {
       const path = new URL(url).pathname;
       if (path === "/")
@@ -477,11 +482,49 @@ describe("layered Discord discovery", () => {
       maxPages: 6,
     });
 
-    expect(result.discordFound).toBe(true);
+    expect(result.discordFound).toBe(false);
+    expect(result.failureReason).toBe("SCRAPER_TIMEOUT");
     expect(result.pages[0]).toMatchObject({
       status: "Timeout",
-      error: "TIMEOUT",
+      error: "SCRAPER_TIMEOUT",
     });
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a 403-blocked original as the domain outcome even when recovery pages loaded", async () => {
+    fetchPage.mockImplementation((url: string) =>
+      Promise.resolve(
+        new URL(url).pathname === "/"
+          ? page(url, { httpStatus: 403 })
+          : page(url, { httpStatus: 200 }),
+      ),
+    );
+    const { discoverDiscord } = await import("./discord-discovery.js");
+    const result = await discoverDiscord("https://example.com/", {
+      timeoutMs: 1_000,
+      maxPages: 6,
+    });
+
+    expect(result.discordFound).toBe(false);
+    expect(result.failureReason).toBe("HTTP_403");
+  });
+
+  it("keeps a 429-limited original as the domain outcome even when recovery pages loaded", async () => {
+    fetchPage.mockImplementation((url: string) =>
+      Promise.resolve(
+        new URL(url).pathname === "/"
+          ? page(url, { httpStatus: 429 })
+          : page(url, { httpStatus: 200 }),
+      ),
+    );
+    const { discoverDiscord } = await import("./discord-discovery.js");
+    const result = await discoverDiscord("https://example.com/", {
+      timeoutMs: 1_000,
+      maxPages: 6,
+    });
+
+    expect(result.discordFound).toBe(false);
+    expect(result.failureReason).toBe("HTTP_429");
   });
 
   it("does not amplify a saturated worker into fallback request bursts", async () => {
@@ -500,7 +543,7 @@ describe("layered Discord discovery", () => {
     expect(fetchPage).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps a persistent original 503 classified as HTTP 5XX", async () => {
+  it("keeps a persistent original 503 classified as HTTP 503", async () => {
     fetchPage.mockImplementation((url: string) =>
       Promise.resolve(page(url, { httpStatus: 503 })),
     );
@@ -512,7 +555,7 @@ describe("layered Discord discovery", () => {
     });
 
     expect(result.discordFound).toBe(false);
-    expect(result.failureReason).toBe("HTTP_5XX");
+    expect(result.failureReason).toBe("HTTP_503");
   });
 
   it("keeps browser rendering in a separate bounded tier", async () => {

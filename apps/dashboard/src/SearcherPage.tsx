@@ -1304,7 +1304,9 @@ export default function SearcherPage() {
             ) : detail.discoveryFailureReason ? (
               <div className="error-box">
                 Discovery issue:{" "}
-                {detail.discoveryFailureReason.replaceAll("_", " ")}
+                {detail.discoveryFailureReason === "SCRAPER_TIMEOUT"
+                  ? "Scraper worker timeout"
+                  : detail.discoveryFailureReason.replaceAll("_", " ")}
               </div>
             ) : null}
             <div className="drawer-actions">

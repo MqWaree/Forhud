@@ -23,12 +23,17 @@ export type FetchErrorCode =
   | "CONNECTION_FAILURE"
   | "TLS_FAILURE"
   | "TIMEOUT"
+  | "SCRAPER_TIMEOUT"
   | "REDIRECT_LIMIT"
   | "REDIRECT_BLOCKED"
   | "INVALID_RESPONSE"
   | "SCRAPER_OFFLINE"
   | "SCRAPER_BUSY"
   | "SCRAPER_ERROR";
+
+export function isHttp5xxReason(reason?: string | null) {
+  return /^HTTP_5(?:\d{2}|XX)$/.test(String(reason ?? "").toUpperCase());
+}
 
 export type FetchAttempt = {
   attempt: number;
@@ -60,6 +65,11 @@ function wait(ms: number) {
 
 export function classifyFetchError(message: string): FetchErrorCode {
   if (/redirect limit/i.test(message)) return "REDIRECT_LIMIT";
+  if (/scrapling worker timeout/i.test(message)) {
+    // HTTP 504 means the worker answered and its own remote fetch timed out;
+    // a bare worker timeout means the local worker never answered in time.
+    return /\(http 5\d\d\)/i.test(message) ? "TIMEOUT" : "SCRAPER_TIMEOUT";
+  }
   if (/timeout|timed out|abort/i.test(message)) return "TIMEOUT";
   // Preserve the remote network cause reported by the worker. These checks
   // must run before the generic worker-5xx classification or DNS/TLS/connect
@@ -93,6 +103,7 @@ export function isRetryableFetchError(code: FetchErrorCode) {
     "DNS_FAILURE",
     "CONNECTION_FAILURE",
     "TIMEOUT",
+    "SCRAPER_TIMEOUT",
     "SCRAPER_OFFLINE",
     "SCRAPER_BUSY",
     "SCRAPER_ERROR",

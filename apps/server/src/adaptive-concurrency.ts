@@ -96,6 +96,7 @@ export class AdaptiveConcurrencyController {
     const internalPressure =
       reason.includes("SCRAPER_BUSY") ||
       reason.includes("SCRAPER_OFFLINE") ||
+      reason.includes("SCRAPER_TIMEOUT") ||
       reason.includes("SCRAPER_ERROR");
     const succeeded = [
       "Completed",

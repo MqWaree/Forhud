@@ -40,7 +40,14 @@ describe("Node-controlled Scrapling URL boundaries", () => {
       "DNS_FAILURE",
     );
     expect(classifyFetchError("certificate verify failed")).toBe("TLS_FAILURE");
-    expect(classifyFetchError("Scrapling worker timeout")).toBe("TIMEOUT");
+    expect(classifyFetchError("Scrapling worker timeout")).toBe(
+      "SCRAPER_TIMEOUT",
+    );
+    expect(
+      classifyFetchError(
+        "Scrapling worker timeout (HTTP 504): TIMEOUT: Fetch exceeded deadline",
+      ),
+    ).toBe("TIMEOUT");
     expect(
       classifyFetchError(
         "Scrapling worker busy (HTTP 503): global capacity is full",
@@ -179,7 +186,7 @@ describe("Node-controlled Scrapling URL boundaries", () => {
     });
 
     expect(result.httpStatus).toBe(200);
-    expect(result.attempts[0]).toMatchObject({ errorCode: "TIMEOUT" });
+    expect(result.attempts[0]).toMatchObject({ errorCode: "SCRAPER_TIMEOUT" });
     expect(scrapePage).toHaveBeenCalledTimes(2);
   });
 
