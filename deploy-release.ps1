@@ -54,6 +54,9 @@ function Publish-GitRelease {
     ".env.example",
     ".gitignore",
     "AGENTS.md",
+    "DEEPSEEK-ATTEMPT-LEDGER.md",
+    "DEEPSEEK-V4-PRO-HANDOFF.md",
+    "DEEPSEEK-V4-PRO-START-PROMPT.md",
     "OPENCODE-HANDOFF.md",
     "README.md",
     "THIRD_PARTY_NOTICES.md",
@@ -72,6 +75,7 @@ function Publish-GitRelease {
     "DEPLOY-FGP.cmd",
     "DEPLOY-CORRECTED-RELEASE.cmd",
     "deploy-now.cmd",
+    "invoke-fgp-deployment.ps1",
     "OPEN-DEPLOY.vbs",
     "run-deploy-interactive.ps1"
   ) | Where-Object { Test-Path -LiteralPath (Join-Path $PSScriptRoot $_) }
