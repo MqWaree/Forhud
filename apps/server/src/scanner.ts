@@ -363,7 +363,7 @@ function contactFailureReason(reason?: string) {
     : reason;
 }
 
-function failureMessage(reason: string) {
+export function failureMessage(reason: string) {
   const messages: Record<string, string> = {
     CONTACT_NOT_FOUND: "No Discord, Telegram, or email contact found",
     TIMEOUT: "Website or scraper did not respond before the retry deadline",

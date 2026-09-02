@@ -3,8 +3,19 @@ import app, { prisma, scannerReady } from "./app.js";
 import { startBackupScheduler } from "./backups.js";
 import { bootstrapLztTracker, shutdownLztTracker } from "./lzt-tracker.js";
 import { bootstrapRustPriceScanner } from "./rust-price-scanner.js";
+import { reconcileLegacyFailureLabels } from "./failure-label-reconciliation.js";
 
 await scannerReady;
+try {
+  const outcome = await reconcileLegacyFailureLabels();
+  if (outcome.corrected > 0) {
+    console.log(
+      `Reclassified ${outcome.corrected} legacy scanner failure labels: ${JSON.stringify(outcome.byReason)}`,
+    );
+  }
+} catch (error) {
+  console.error("Legacy failure label reconciliation skipped:", error);
+}
 await bootstrapRustPriceScanner();
 startBackupScheduler();
 await bootstrapLztTracker();

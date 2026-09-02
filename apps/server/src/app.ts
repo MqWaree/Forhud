@@ -263,7 +263,7 @@ app.get("/api/health", async (_req, res) => {
       database: "connected",
       extension: "available",
       scraper,
-      version: "1.4.0",
+      version: "1.4.1",
     });
   } catch (error) {
     console.error("Database health check failed", error);
