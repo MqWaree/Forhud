@@ -102,6 +102,9 @@ describe("Forskin asset registry", () => {
     expect(forskinAssets.frames.heavy).toBe(
       "/assets/themes/forskin/frames/frame-heavy-9slice.webp",
     );
+    expect(forskinAssets.frames.organic).toBe(
+      "/assets/themes/forskin/frames/frame-organic-copper-v3.png",
+    );
     expect(forskinAssets.ornaments.tendrilLeft).toBe(
       "/assets/themes/forskin/ornaments/tendril-left.webp",
     );

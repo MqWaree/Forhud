@@ -251,6 +251,23 @@ export function ForskinOrnamentsLayer({
         alt=""
         loading="lazy"
       />
+      <div className="forskin-hero-emblem">
+        <ForskinAsset
+          className="forskin-hero-crown"
+          src={forskinAssets.ornaments.crown}
+          alt=""
+          loading="lazy"
+        />
+        <span className="forskin-hero-seal">
+          <ForskinLogo alt="" aria-hidden="true" />
+          <strong>FGP</strong>
+        </span>
+        <b>
+          FORHUDSGANG
+          <br />
+          PRODUCTIONS
+        </b>
+      </div>
       <ForskinAsset
         className="forskin-ambient-piece forskin-smoke-overlay"
         src={forskinAssets.textures.smoke}

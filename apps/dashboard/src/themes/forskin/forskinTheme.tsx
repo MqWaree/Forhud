@@ -212,7 +212,11 @@ export function ForskinThemeProvider({ children }: { children: ReactNode }) {
 
     void Promise.all([
       load(forskinAssets.logo),
-      load(forskinAssets.frames.thin),
+      load(
+        preferences.mode === "forskin-hella"
+          ? forskinAssets.frames.organic
+          : forskinAssets.frames.thin,
+      ),
     ]).then(
       () => {
         if (!cancelled) root.dataset.forskinAssets = "ready";

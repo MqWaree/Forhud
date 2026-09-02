@@ -20,6 +20,8 @@ const RASTER_SOURCE =
   "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output.";
 const STATIC_SOURCE =
   "Original path artwork authored for this project; no external artwork, font dependency, or model output.";
+const CURATED_SOURCE =
+  "Original project artwork generated with OpenAI ImageGen from the operator-provided visual direction, then curated for this interface; no third-party artwork is included.";
 const INITIAL_LIMIT = 1.5 * 1024 * 1024;
 const FULL_LIMIT = 5 * 1024 * 1024;
 
@@ -36,15 +38,20 @@ const staticAssets = [
   ["icons/icon-forskin-theme.svg", "Forskin theme selector icon", false],
 ];
 
+const curatedAssets = [
+  [
+    "frames/frame-organic-copper-v3.png",
+    "Photorealistic organic copper 9-slice frame for Forskin Hella",
+    false,
+  ],
+];
+
 const initialSubset = new Set([
   "branding/fgp-forskin-emblem.svg",
   "branding/fgp-forskin-wordmark.svg",
   "branding/fgp-forskin-mini-mark.svg",
-  "frames/frame-heavy-9slice.webp",
-  "frames/frame-medium-9slice.webp",
   "frames/frame-thin-9slice.webp",
-  "frames/frame-active-9slice.webp",
-  "frames/frame-error-9slice.webp",
+  "frames/frame-organic-copper-v3.png",
   "frames/divider-horizontal.webp",
   "frames/nav-active-drip.webp",
   "frames/progress-tube-track.webp",
@@ -603,7 +610,7 @@ async function renderRaster([path, width, height, role, lazy, source]) {
   return { path, role, lazy };
 }
 
-async function inspectAsset(path, role, lazy) {
+async function inspectAsset(path, role, lazy, provenance = RASTER_SOURCE) {
   const absolute = join(outputDir, path);
   const [file, metadata] = await Promise.all([
     stat(absolute),
@@ -616,7 +623,7 @@ async function inspectAsset(path, role, lazy) {
     height: metadata.height,
     role,
     lazy,
-    provenance: RASTER_SOURCE,
+    provenance,
   };
 }
 
@@ -650,6 +657,8 @@ async function main() {
   for (const asset of staticAssets) assets.push(await inspectSvg(...asset));
   for (const asset of rendered)
     assets.push(await inspectAsset(asset.path, asset.role, asset.lazy));
+  for (const asset of curatedAssets)
+    assets.push(await inspectAsset(...asset, CURATED_SOURCE));
   assets.sort((a, b) => a.path.localeCompare(b.path));
 
   const initialBytes = assets
@@ -674,7 +683,7 @@ async function main() {
     ),
     deterministic: true,
     referenceNote:
-      "reference/forskin-mode-reference.png is a generated implementation style board because no external reference was attached.",
+      "The Hella composition and organic frame were refined against an operator-provided visual reference; the bundled reference board remains an implementation aid.",
     license:
       "Original project artwork. May be used, modified, and redistributed with this project under the project license. No third-party artwork is included.",
     budgets: {

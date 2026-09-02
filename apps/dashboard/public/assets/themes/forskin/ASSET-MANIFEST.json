@@ -3,21 +3,18 @@
   "theme": "forskin",
   "generatedBy": "apps/dashboard/scripts/generate-forskin-assets.mjs",
   "deterministic": true,
-  "referenceNote": "reference/forskin-mode-reference.png is a generated implementation style board because no external reference was attached.",
+  "referenceNote": "The Hella composition and organic frame were refined against an operator-provided visual reference; the bundled reference board remains an implementation aid.",
   "license": "Original project artwork. May be used, modified, and redistributed with this project under the project license. No third-party artwork is included.",
   "budgets": {
     "initial": {
-      "bytes": 431800,
+      "bytes": 1521902,
       "limitBytes": 1572864,
       "assets": [
         "branding/fgp-forskin-emblem.svg",
         "branding/fgp-forskin-mini-mark.svg",
         "branding/fgp-forskin-wordmark.svg",
         "frames/divider-horizontal.webp",
-        "frames/frame-active-9slice.webp",
-        "frames/frame-error-9slice.webp",
-        "frames/frame-heavy-9slice.webp",
-        "frames/frame-medium-9slice.webp",
+        "frames/frame-organic-copper-v3.png",
         "frames/frame-thin-9slice.webp",
         "frames/nav-active-drip.webp",
         "frames/progress-tube-fill.webp",
@@ -34,11 +31,9 @@
       ]
     },
     "full": {
-      "bytes": 900394,
+      "bytes": 2097590,
       "limitBytes": 5242880,
-      "excludes": [
-        "ASSET-MANIFEST.json"
-      ]
+      "excludes": ["ASSET-MANIFEST.json"]
     }
   },
   "assets": [
@@ -122,6 +117,15 @@
       "role": "Medium panel border-image source; recommended slice 15%",
       "lazy": false,
       "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "frames/frame-organic-copper-v3.png",
+      "bytes": 1197196,
+      "width": 1254,
+      "height": 1254,
+      "role": "Photorealistic organic copper 9-slice frame for Forskin Hella",
+      "lazy": false,
+      "provenance": "Original project artwork generated with OpenAI ImageGen from the operator-provided visual direction, then curated for this interface; no third-party artwork is included."
     },
     {
       "path": "frames/frame-thin-9slice.webp",

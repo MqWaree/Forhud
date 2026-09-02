@@ -1840,3 +1840,517 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
     }
   }
 }
+
+/* Reference composition: organic copper shell on a compact instrument panel. */
+:root[data-theme="forskin-hella"] {
+  --fs-copper-deep: #632f27;
+  --fs-copper: #a45542;
+  --fs-copper-hot: #d18467;
+}
+
+:root[data-theme="forskin-hella"] body {
+  background-color: #05090c;
+  background-image:
+    radial-gradient(
+      circle at 72% 0%,
+      rgba(30, 125, 144, 0.08),
+      transparent 34rem
+    ),
+    radial-gradient(
+      circle at 16% 84%,
+      rgba(151, 66, 48, 0.1),
+      transparent 28rem
+    ),
+    linear-gradient(rgba(76, 113, 122, 0.085) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(76, 113, 122, 0.065) 1px, transparent 1px),
+    var(--fs-texture-grain), linear-gradient(155deg, #091116, #040709 64%);
+  background-size:
+    auto,
+    auto,
+    28px 28px,
+    28px 28px,
+    260px 260px,
+    auto;
+  background-blend-mode: normal, normal, normal, normal, soft-light, normal;
+}
+
+:root[data-theme="forskin-hella"] .app::before {
+  inset: 1px;
+  border: 20px solid transparent;
+  border-image-source: var(--fs-frame-organic);
+  border-image-slice: 160;
+  border-image-width: 20px;
+  border-image-repeat: stretch;
+  opacity: 0.92;
+  filter: saturate(0.82) brightness(0.84) contrast(1.08);
+}
+
+:root[data-theme="forskin-hella"] .app::after {
+  inset: 0;
+  opacity: 0.08;
+}
+
+:root[data-theme="forskin-hella"] :is(.sidebar, .member-sidebar) {
+  border-color: rgba(193, 101, 76, 0.48);
+  background:
+    linear-gradient(rgba(71, 103, 111, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(71, 103, 111, 0.04) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 28, 0.985), rgba(5, 9, 12, 0.99));
+  background-size:
+    28px 28px,
+    28px 28px,
+    auto;
+  box-shadow:
+    0 0 0 1px rgba(229, 137, 103, 0.07),
+    0 0 34px rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(14px) saturate(0.75);
+}
+
+:root[data-theme="forskin-hella"] .sidebar {
+  width: 178px;
+  padding: 26px 11px 16px;
+  border-right-width: 2px;
+}
+
+:root[data-theme="forskin-hella"] .member-sidebar {
+  width: 205px;
+  padding: 13px 9px;
+  border-left-width: 2px;
+}
+
+:root[data-theme="forskin-hella"] main {
+  width: calc(100% - 383px);
+  margin-left: 178px;
+  margin-right: 205px;
+}
+
+:root[data-theme="forskin-hella"] .identity-bar {
+  height: 54px;
+  padding: 8px 17px 0;
+  gap: 7px;
+  border-bottom-color: rgba(193, 101, 76, 0.44);
+  background: rgba(5, 10, 13, 0.93);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+}
+
+:root[data-theme="forskin-hella"] .mode-switch {
+  padding: 2px;
+  background: rgba(4, 8, 10, 0.9);
+}
+
+:root[data-theme="forskin-hella"] .mode-switch a {
+  min-height: 27px;
+  padding-inline: 8px;
+}
+
+:root[data-theme="forskin-hella"] .brand {
+  gap: 8px;
+  padding: 0 7px 18px;
+}
+
+:root[data-theme="forskin-hella"] .forskin-sidebar-medallion,
+:root[data-theme="forskin-hella"] .forskin-sidebar-medallion .forskin-logo {
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
+}
+
+:root[data-theme="forskin-hella"] .brand b {
+  font-size: 12px;
+}
+
+:root[data-theme="forskin-hella"] .brand small {
+  font-size: 8px;
+}
+
+:root[data-theme="forskin-hella"] .sidebar nav {
+  gap: 2px;
+}
+
+:root[data-theme="forskin-hella"] .sidebar nav a {
+  height: 36px;
+  padding: 0 9px;
+  gap: 9px;
+  font-size: 11px;
+}
+
+:root[data-theme="forskin-hella"] .sidebar nav a svg {
+  width: 15px;
+}
+
+:root[data-theme="forskin-hella"] .sidebar nav a.active {
+  border-color: rgba(218, 126, 92, 0.7);
+  background: linear-gradient(
+    90deg,
+    rgba(185, 83, 60, 0.22),
+    rgba(18, 27, 33, 0.72)
+  );
+  box-shadow:
+    inset 3px 0 var(--fs-copper-hot),
+    0 0 16px rgba(155, 70, 52, 0.16);
+}
+
+:root[data-theme="forskin-hella"] .member-row {
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 7px;
+  border-radius: 5px;
+}
+
+:root[data-theme="forskin-hella"] .member-avatar {
+  width: 30px;
+  height: 30px;
+}
+
+:root[data-theme="forskin-hella"] .member-rank-group {
+  margin-top: 10px;
+}
+
+:root[data-theme="forskin-hella"] .page {
+  max-width: none;
+  padding: 30px 18px 64px;
+}
+
+:root[data-theme="forskin-hella"] .page-header {
+  display: grid;
+  grid-template-columns: minmax(195px, 0.5fr) minmax(0, 1.5fr);
+  align-items: end;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+:root[data-theme="forskin-hella"] .page-header h1 {
+  margin-bottom: 4px;
+  font-family: var(--fs-font-body);
+  font-size: 28px;
+  font-weight: 760;
+  letter-spacing: -0.045em;
+  white-space: nowrap;
+}
+
+:root[data-theme="forskin-hella"] .page-header p {
+  max-width: 540px;
+  font-size: 11px;
+}
+
+:root[data-theme="forskin-hella"] .page-header .header-actions {
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+:root[data-theme="forskin-hella"] .btn {
+  height: 34px;
+  padding-inline: 11px;
+  border-color: rgba(180, 91, 69, 0.5);
+  border-radius: 4px;
+  font-size: 10px;
+  background: linear-gradient(
+    180deg,
+    rgba(18, 28, 34, 0.96),
+    rgba(7, 12, 15, 0.96)
+  );
+  box-shadow:
+    inset 0 1px rgba(255, 224, 204, 0.035),
+    0 5px 14px rgba(0, 0, 0, 0.22);
+}
+
+:root[data-theme="forskin-hella"] .btn.primary {
+  color: #e8fbff;
+  border-color: rgba(95, 206, 222, 0.74);
+  background: linear-gradient(180deg, #267f9b, #14566e);
+  box-shadow:
+    inset 0 1px rgba(215, 250, 255, 0.22),
+    0 0 18px rgba(46, 155, 184, 0.2);
+}
+
+:root[data-theme="forskin-hella"] .btn.secondary {
+  border-color: rgba(193, 101, 76, 0.5);
+  background: linear-gradient(
+    180deg,
+    rgba(19, 28, 34, 0.98),
+    rgba(7, 12, 15, 0.98)
+  );
+}
+
+:root[data-theme="forskin-hella"] .btn.danger {
+  border-color: rgba(207, 83, 77, 0.5);
+  background: rgba(84, 24, 24, 0.25);
+}
+
+:root[data-theme="forskin-hella"] .card {
+  border: 8px solid transparent;
+  border-image-source: var(--fs-frame-organic);
+  border-image-slice: 160;
+  border-image-width: 8px;
+  border-image-repeat: stretch;
+  border-radius: 0;
+  background:
+    linear-gradient(rgba(71, 103, 111, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(71, 103, 111, 0.025) 1px, transparent 1px),
+    linear-gradient(150deg, rgba(13, 21, 26, 0.985), rgba(5, 10, 13, 0.985));
+  background-size:
+    28px 28px,
+    28px 28px,
+    auto;
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.4),
+    inset 0 1px rgba(255, 255, 255, 0.025);
+}
+
+:root[data-theme="forskin-hella"]
+  :is(
+    .brave-search-card,
+    .brave-discovery-progress,
+    .scanner-state,
+    .scanner-performance,
+    .discord-check-progress,
+    .scan-progress.enhanced,
+    .table-card,
+    .toolbar
+  ) {
+  border-width: 10px;
+  border-image-source: var(--fs-frame-organic);
+  border-image-slice: 160;
+  border-image-width: 10px;
+}
+
+:root[data-theme="forskin-hella"] .brave-search-card {
+  gap: 9px;
+  padding: 10px 12px;
+  margin-bottom: 9px;
+}
+
+:root[data-theme="forskin-hella"]
+  :is(.brave-query, .brave-limit, .brave-custom, .searchbox) {
+  height: 35px;
+  border-color: rgba(160, 78, 59, 0.48);
+  background: rgba(3, 8, 11, 0.88);
+}
+
+:root[data-theme="forskin-hella"] .provider-status {
+  margin-top: -2px;
+}
+
+:root[data-theme="forskin-hella"] :is(.scanner-state, .scanner-performance) {
+  margin-bottom: 9px;
+}
+
+:root[data-theme="forskin-hella"] .scanner-state {
+  padding: 10px 13px;
+}
+
+:root[data-theme="forskin-hella"] .scanner-performance {
+  padding: 11px 13px;
+}
+
+:root[data-theme="forskin-hella"] .performance-metrics {
+  margin: 9px 0;
+  gap: 6px;
+}
+
+:root[data-theme="forskin-hella"] .performance-metrics > span {
+  padding: 8px 9px;
+  border-color: rgba(151, 76, 59, 0.34);
+  border-radius: 4px;
+  background: rgba(6, 12, 15, 0.66);
+}
+
+:root[data-theme="forskin-hella"] .scanner-stats {
+  gap: 7px;
+}
+
+:root[data-theme="forskin-hella"] .stat {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 9px solid transparent;
+  border-image-source: var(--fs-frame-organic);
+  border-image-slice: 160;
+  border-image-width: 9px;
+  border-image-repeat: stretch;
+}
+
+:root[data-theme="forskin-hella"] .stat strong {
+  margin: 8px 0 4px;
+  font-size: 23px;
+}
+
+:root[data-theme="forskin-hella"] .stat-top i {
+  width: 27px;
+  height: 27px;
+  border-radius: 4px;
+  color: var(--fs-cyan-300);
+  background: rgba(31, 119, 145, 0.12);
+}
+
+:root[data-theme="forskin-hella"] .scan-progress.enhanced,
+:root[data-theme="forskin-hella"] .scanner-toolbar {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+:root[data-theme="forskin-hella"] .table-card th {
+  background: rgba(12, 22, 27, 0.86);
+}
+
+:root[data-theme="forskin-hella"] .table-card td {
+  border-color: rgba(142, 74, 59, 0.23);
+}
+
+:root[data-theme="forskin-hella"] .forskin-ornaments img {
+  filter: saturate(1.2) hue-rotate(-8deg)
+    drop-shadow(0 12px 18px rgba(0, 0, 0, 0.65));
+}
+
+:root[data-theme="forskin-hella"] .forskin-ornaments .forskin-tendril-left {
+  top: -52px;
+  left: -42px;
+  width: 205px;
+  height: 470px;
+  opacity: 0.82;
+}
+
+:root[data-theme="forskin-hella"] .forskin-ornaments .forskin-chain-corner {
+  top: 38px;
+  right: 44px;
+  width: 204px;
+  height: 204px;
+  opacity: 0.8;
+}
+
+:root[data-theme="forskin-hella"] .forskin-ornaments .forskin-tendril-right {
+  right: -42px;
+  bottom: -52px;
+  width: 205px;
+  height: 430px;
+  opacity: 0.82;
+}
+
+:root[data-theme="forskin-hella"] .forskin-ornaments .forskin-shell-medallion {
+  right: auto;
+  bottom: 115px;
+  left: 202px;
+  width: 118px;
+  height: 118px;
+  opacity: 0.78;
+}
+
+:root[data-theme="forskin-hella"] .forskin-mug-ornament {
+  right: 35px;
+  bottom: 46px;
+  width: 150px;
+  height: 150px;
+}
+
+:root[data-theme="forskin-hella"] .forskin-mug-ornament > img {
+  opacity: 0.88;
+}
+
+.forskin-hero-emblem {
+  display: none;
+}
+
+@media (min-width: 1400px) {
+  :root[data-theme="forskin-hella"] .page {
+    padding-left: 178px;
+    padding-right: 18px;
+  }
+
+  :root[data-theme="forskin-hella"] .forskin-hero-emblem {
+    position: fixed;
+    top: 68px;
+    left: 193px;
+    display: flex;
+    width: 142px;
+    align-items: center;
+    flex-direction: column;
+    color: #d4a66d;
+    text-align: center;
+    filter: drop-shadow(0 16px 20px rgba(0, 0, 0, 0.82));
+  }
+
+  :root[data-theme="forskin-hella"] .forskin-hero-crown {
+    position: absolute;
+    top: -25px;
+    left: 24px;
+    z-index: 2;
+    width: 94px;
+    height: 70px;
+    opacity: 0.98;
+    transform: rotate(-8deg);
+  }
+
+  :root[data-theme="forskin-hella"] .forskin-hero-seal {
+    position: relative;
+    display: grid;
+    width: 132px;
+    height: 132px;
+    place-items: center;
+    margin-top: 14px;
+  }
+
+  :root[data-theme="forskin-hella"] .forskin-hero-seal .forskin-logo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    filter: sepia(0.46) saturate(1.28) contrast(1.12)
+      drop-shadow(0 0 10px rgba(190, 103, 66, 0.28));
+  }
+
+  :root[data-theme="forskin-hella"] .forskin-hero-seal strong {
+    position: relative;
+    z-index: 1;
+    color: #d5ad72;
+    font: 900 30px/1 var(--fs-font-body);
+    letter-spacing: -0.08em;
+    text-shadow:
+      0 2px #24120b,
+      0 0 7px rgba(255, 190, 105, 0.35);
+  }
+
+  :root[data-theme="forskin-hella"] .forskin-hero-emblem > b {
+    margin-top: -5px;
+    font-size: 9px;
+    line-height: 1.22;
+    letter-spacing: 0.1em;
+    text-shadow: 0 2px 5px #000;
+  }
+}
+
+@media (max-width: 1399px) {
+  :root[data-theme="forskin-hella"] .page-header {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  :root[data-theme="forskin-hella"] .page-header .header-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 1050px) {
+  :root[data-theme="forskin-hella"] main {
+    width: calc(100% - 178px);
+    margin-right: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  :root[data-theme="forskin-hella"] .sidebar {
+    width: 244px;
+  }
+
+  :root[data-theme="forskin-hella"] main {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  :root[data-theme="forskin-hella"] .page {
+    padding: 75px 15px;
+  }
+
+  :root[data-theme="forskin-hella"] .page-header h1 {
+    white-space: normal;
+  }
+}

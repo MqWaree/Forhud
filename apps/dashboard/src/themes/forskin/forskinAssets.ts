@@ -8,6 +8,7 @@ export const forskinAssets = {
     active: `${root}/frames/frame-active-9slice.webp`,
     error: `${root}/frames/frame-error-9slice.webp`,
     heavy: `${root}/frames/frame-heavy-9slice.webp`,
+    organic: `${root}/frames/frame-organic-copper-v3.png`,
     medium: `${root}/frames/frame-medium-9slice.webp`,
     thin: `${root}/frames/frame-thin-9slice.webp`,
     horizontalDivider: `${root}/frames/divider-horizontal.webp`,

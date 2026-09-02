@@ -61,6 +61,7 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) {
   --fs-frame-thin: url("/assets/themes/forskin/frames/frame-thin-9slice.webp");
   --fs-frame-active: url("/assets/themes/forskin/frames/frame-active-9slice.webp");
   --fs-frame-error: url("/assets/themes/forskin/frames/frame-error-9slice.webp");
+  --fs-frame-organic: url("/assets/themes/forskin/frames/frame-organic-copper-v3.png");
   --fs-nav-active: url("/assets/themes/forskin/frames/nav-active-drip.webp");
   --fs-progress-track: url("/assets/themes/forskin/frames/progress-tube-track.webp");
   --fs-progress-fill: url("/assets/themes/forskin/frames/progress-tube-fill.webp");
@@ -97,17 +98,17 @@ html:root[data-theme="forskin-subtle"] {
 }
 
 html:root[data-theme="forskin-hella"] {
-  --fs-bg: #070705;
-  --fs-surface: #100f0c;
-  --fs-surface-raised: #17140f;
-  --fs-surface-soft: #211b12;
-  --fs-line: rgba(216, 180, 109, 0.42);
-  --fs-line-strong: rgba(231, 200, 125, 0.72);
-  --fs-grid: rgba(216, 180, 109, 0.055);
-  --fs-grid-strong: rgba(81, 199, 210, 0.045);
+  --fs-bg: #05080a;
+  --fs-surface: #090e12;
+  --fs-surface-raised: #0d1318;
+  --fs-surface-soft: #121a20;
+  --fs-line: rgba(164, 81, 60, 0.48);
+  --fs-line-strong: rgba(218, 126, 92, 0.76);
+  --fs-grid: rgba(113, 153, 164, 0.055);
+  --fs-grid-strong: rgba(53, 174, 186, 0.07);
   --fs-shadow: rgba(0, 0, 0, 0.7);
-  --fs-radius: 7px;
-  --fs-radius-small: 3px;
+  --fs-radius: 5px;
+  --fs-radius-small: 4px;
   --fs-frame-width: 2px;
   --fs-frame-glow:
     0 0 0 1px rgba(231, 200, 125, 0.08), 0 24px 64px rgba(0, 0, 0, 0.42);
@@ -155,13 +156,13 @@ html:root[data-theme="forskin-hella"] body {
     ),
     radial-gradient(
       circle at 15% 95%,
-      rgba(187, 146, 86, 0.09),
+      rgba(151, 66, 48, 0.1),
       transparent 30rem
     ),
     linear-gradient(var(--fs-grid-strong) 1px, transparent 1px),
     linear-gradient(90deg, var(--fs-grid) 1px, transparent 1px),
     var(--fs-texture-grid), var(--fs-texture-charcoal),
-    linear-gradient(155deg, #0c0b08, var(--fs-bg) 60%);
+    linear-gradient(155deg, #091014, var(--fs-bg) 60%);
   background-blend-mode:
     normal, normal, normal, normal, soft-light, multiply, normal;
 }
