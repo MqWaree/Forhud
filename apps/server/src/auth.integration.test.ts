@@ -1,8 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { readFileSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import request from "supertest";
+
+const { DatabaseSync } = createRequire(import.meta.url)(
+  "node:sqlite",
+) as typeof import("node:sqlite");
 
 const dbPath = resolve(process.cwd(), "work", "auth-integration.db");
 const backupDir = resolve(process.cwd(), "work", "auth-test-backups");
@@ -224,9 +235,9 @@ describe("authentication, authorization, isolation, and recovery", () => {
       ),
     );
 
-    expect(attempts.every(({ status }) => status === 401 || status === 429)).toBe(
-      true,
-    );
+    expect(
+      attempts.every(({ status }) => status === 401 || status === 429),
+    ).toBe(true);
     expect(attempts.some(({ status }) => status === 500)).toBe(false);
   });
 
@@ -274,7 +285,9 @@ describe("authentication, authorization, isolation, and recovery", () => {
     expect((await researcher.get("/api/lzt-tracker")).status).toBe(403);
     const ranks = await admin.get("/api/admin/ranks");
     expect(ranks.status).toBe(200);
-    const lztRank = ranks.body.find((rank: { name: string }) => rank.name === "LZT Access");
+    const lztRank = ranks.body.find(
+      (rank: { name: string }) => rank.name === "LZT Access",
+    );
     expect(lztRank).toBeTruthy();
     expect(
       (
@@ -410,6 +423,52 @@ describe("authentication, authorization, isolation, and recovery", () => {
     ).toBe(200);
     expect((await other.get("/api/leads")).body).toHaveLength(0);
     expect((await other.get(`/api/leads/${leadId}`)).status).toBe(404);
+    expect((await admin.get("/api/admin/overview")).body.backupsAvailable).toBe(
+      false,
+    );
+    expect((await admin.get("/api/admin/backups")).status).toBe(403);
+    expect((await other.get("/api/admin/backups")).status).toBe(403);
+    expect((await admin.post("/api/admin/backups")).status).toBe(403);
+    const settings = await other.get("/api/settings");
+    expect(settings.status).toBe(200);
+    expect(settings.body.backupsAvailable).toBe(false);
+    expect(settings.body.automaticBackups).toBeUndefined();
+    expect(
+      (await other.patch("/api/settings").send({ automaticBackups: false }))
+        .status,
+    ).toBe(403);
+    const backupsModule = await import("./backups.js");
+    const platformBackup = await backupsModule.createBackup("MANUAL");
+    expect(JSON.parse(platformBackup.manifest).platformOnly).toBe(true);
+    const platformContents = readFileSync(
+      resolve(backupDir, platformBackup.filename),
+    );
+    await prisma.workspace.delete({ where: { id: otherWorkspace.id } });
+    const historicalManifest = {
+      ...JSON.parse(platformBackup.manifest),
+      platformOnly: false,
+    };
+    await prisma.backupMetadata.update({
+      where: { id: platformBackup.id },
+      data: { manifest: JSON.stringify(historicalManifest) },
+    });
+    expect((await admin.get("/api/admin/overview")).body.backupsAvailable).toBe(
+      true,
+    );
+    expect((await admin.get("/api/admin/backups")).body).toEqual([]);
+    expect(
+      (await admin.get(`/api/admin/backups/${platformBackup.id}/download`))
+        .status,
+    ).toBe(404);
+    const importedPlatformBackup = await admin
+      .post("/api/admin/backups/upload")
+      .set("content-type", "application/octet-stream")
+      .send(platformContents);
+    expect(importedPlatformBackup.status).toBe(201);
+    expect(JSON.parse(importedPlatformBackup.body.manifest).platformOnly).toBe(
+      true,
+    );
+    expect((await admin.get("/api/admin/backups")).body).toEqual([]);
   });
 
   it("creates a valid SQLite snapshot with metadata", async () => {
@@ -443,6 +502,147 @@ describe("authentication, authorization, isolation, and recovery", () => {
       .send(Buffer.from("not a sqlite database"));
     expect(corrupt.status).toBe(400);
     expect(await prisma.lead.count()).toBe(leadsBefore);
+
+    const malformedPath = resolve(backupDir, "malformed-shared-file.db");
+    copyFileSync(resolve(backupDir, source.filename), malformedPath);
+    const malformed = new DatabaseSync(malformedPath);
+    malformed.exec('ALTER TABLE "SharedFile" DROP COLUMN "sha256"');
+    malformed.close();
+    const incompleteSchema = await admin
+      .post("/api/admin/backups/upload")
+      .set("content-type", "application/octet-stream")
+      .send(readFileSync(malformedPath));
+    expect(incompleteSchema.status).toBe(400);
+    rmSync(malformedPath, { force: true });
+
+    const legacyPath = resolve(backupDir, "legacy-before-shared-files.db");
+    copyFileSync(resolve(backupDir, source.filename), legacyPath);
+    const legacy = new DatabaseSync(legacyPath);
+    legacy.exec('DROP TABLE "SharedFile"');
+    legacy
+      .prepare('DELETE FROM "_AetherMigration" WHERE name = ?')
+      .run("20260902033000_shared_files");
+    legacy.close();
+    const migratedLegacy = await admin
+      .post("/api/admin/backups/upload")
+      .set("content-type", "application/octet-stream")
+      .send(readFileSync(legacyPath));
+    expect(migratedLegacy.status).toBe(201);
+    const migratedDatabase = new DatabaseSync(
+      resolve(backupDir, migratedLegacy.body.filename),
+      { readOnly: true },
+    );
+    expect(
+      migratedDatabase
+        .prepare(
+          "SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name='SharedFile'",
+        )
+        .get(),
+    ).toEqual({ count: 1 });
+    const migratedLedger = migratedDatabase
+      .prepare('SELECT name FROM "_AetherMigration" WHERE name = ?')
+      .get("20260902033000_shared_files");
+    expect(migratedLedger).toEqual({ name: "20260902033000_shared_files" });
+    migratedDatabase.close();
+    rmSync(legacyPath, { force: true });
+
+    const pushStylePath = resolve(backupDir, "legacy-db-push.db");
+    copyFileSync(resolve(backupDir, source.filename), pushStylePath);
+    const pushStyle = new DatabaseSync(pushStylePath);
+    pushStyle.exec('DROP TABLE "SharedFile"; DROP TABLE "_AetherMigration";');
+    pushStyle.close();
+    const migratedPushStyle = await admin
+      .post("/api/admin/backups/upload")
+      .set("content-type", "application/octet-stream")
+      .send(readFileSync(pushStylePath));
+    expect(migratedPushStyle.status).toBe(201);
+    const pushStyleDatabase = new DatabaseSync(
+      resolve(backupDir, migratedPushStyle.body.filename),
+      { readOnly: true },
+    );
+    expect(
+      pushStyleDatabase
+        .prepare(
+          "SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name='SharedFile'",
+        )
+        .get(),
+    ).toEqual({ count: 1 });
+    expect(
+      pushStyleDatabase
+        .prepare(
+          "SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name='_AetherMigration'",
+        )
+        .get(),
+    ).toEqual({ count: 0 });
+    pushStyleDatabase.close();
+
+    const offlineStagedPath = resolve(backupDir, "offline-staged.db");
+    execFileSync(process.execPath, [
+      resolve(process.cwd(), "apps/server/scripts/prepare-offline-restore.mjs"),
+      pushStylePath,
+      offlineStagedPath,
+      backupDir,
+    ]);
+    const offlineStaged = new DatabaseSync(offlineStagedPath, {
+      readOnly: true,
+    });
+    expect(
+      offlineStaged
+        .prepare(
+          "SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name='SharedFile'",
+        )
+        .get(),
+    ).toEqual({ count: 1 });
+    expect(
+      offlineStaged
+        .prepare('SELECT COUNT(*) AS count FROM "AuthSession"')
+        .get(),
+    ).toEqual({ count: 0 });
+    offlineStaged.close();
+    execFileSync(process.execPath, [
+      resolve(process.cwd(), "apps/server/scripts/prepare-offline-restore.mjs"),
+      "--validate",
+      offlineStagedPath,
+      backupDir,
+    ]);
+    const offlineSafetyPath = resolve(backupDir, "offline-safety.db");
+    execFileSync(process.execPath, [
+      resolve(process.cwd(), "apps/server/scripts/prepare-offline-restore.mjs"),
+      "--snapshot",
+      offlineStagedPath,
+      offlineSafetyPath,
+    ]);
+    const offlineSafety = new DatabaseSync(offlineSafetyPath, {
+      readOnly: true,
+    });
+    expect(
+      Object.values(
+        offlineSafety.prepare("PRAGMA integrity_check").get() || {},
+      )[0],
+    ).toBe("ok");
+    offlineSafety.close();
+    const rejectedOfflinePath = resolve(backupDir, "offline-rejected.db");
+    writeFileSync(`${pushStylePath}-journal`, "unsafe companion");
+    expect(() =>
+      execFileSync(
+        process.execPath,
+        [
+          resolve(
+            process.cwd(),
+            "apps/server/scripts/prepare-offline-restore.mjs",
+          ),
+          pushStylePath,
+          rejectedOfflinePath,
+          backupDir,
+        ],
+        { stdio: "ignore" },
+      ),
+    ).toThrow();
+    expect(existsSync(rejectedOfflinePath)).toBe(false);
+    rmSync(`${pushStylePath}-journal`, { force: true });
+    rmSync(offlineSafetyPath, { force: true });
+    rmSync(offlineStagedPath, { force: true });
+    rmSync(pushStylePath, { force: true });
   });
 
   it("restricts backups to admins and retains the seven newest automatic snapshots", async () => {
@@ -455,6 +655,44 @@ describe("authentication, authorization, isolation, and recovery", () => {
     expect(
       await prisma.backupMetadata.count({ where: { type: "AUTOMATIC" } }),
     ).toBe(7);
+  });
+
+  it("rolls back the database when post-restore validation fails", async () => {
+    const backupsModule = await import("./backups.js");
+    await prisma.setting.upsert({
+      where: { id: "restore-rollback-test" },
+      update: { value: JSON.stringify("before") },
+      create: {
+        id: "restore-rollback-test",
+        value: JSON.stringify("before"),
+      },
+    });
+    const source = await backupsModule.createBackup("MANUAL");
+    await prisma.setting.update({
+      where: { id: "restore-rollback-test" },
+      data: { value: JSON.stringify("after") },
+    });
+    const actor = await prisma.user.findUniqueOrThrow({
+      where: { username: "admin" },
+    });
+    const states: string[] = [];
+    await expect(
+      backupsModule.restoreBackup(source.filename, actor.id, async (state) => {
+        states.push(state);
+        if (state === "restored") throw new Error("Simulated storage failure");
+      }),
+    ).rejects.toThrow("Simulated storage failure");
+    expect(states).toEqual(["restored", "recovered"]);
+    expect(
+      JSON.parse(
+        (
+          await prisma.setting.findUniqueOrThrow({
+            where: { id: "restore-rollback-test" },
+          })
+        ).value,
+      ),
+    ).toBe("after");
+    await prisma.setting.delete({ where: { id: "restore-rollback-test" } });
   });
 
   it("disabling a user invalidates active sessions", async () => {
@@ -476,6 +714,18 @@ describe("authentication, authorization, isolation, and recovery", () => {
       ).status,
     ).toBe(200);
     const backups = await freshAdmin.get("/api/admin/backups");
+    const originalNodeEnvironment = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      const blockedRestore = await freshAdmin
+        .post(`/api/admin/backups/${backups.body[0].id}/restore`)
+        .send({ confirm: "RESTORE" });
+      expect(blockedRestore.status).toBe(403);
+      expect(blockedRestore.body.error).toContain("offline operator");
+    } finally {
+      if (originalNodeEnvironment === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = originalNodeEnvironment;
+    }
     const createdAfterBackup = await freshAdmin
       .post("/api/leads")
       .send({ url: "https://16.0.0.1/new-after-backup" });

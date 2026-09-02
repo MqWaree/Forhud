@@ -10,8 +10,8 @@ listings are available.
 
 ## Architecture
 
-- `apps/dashboard` — dark React dashboard with authentication, scanner, link import, splitter, leads table/Kanban, My Leads, hosting checks, history, settings, and administrator controls.
-- `apps/server` — Express API, cookie sessions, role authorization, workspace isolation, extension pairing, persistent scanner workers, SSE updates, SSRF protection, CSV exports, backups, and audit logging.
+- `apps/dashboard` — dark React dashboard with authentication, scanner, file sharing, link import, splitter, leads table/Kanban, My Leads, hosting checks, history, settings, and administrator controls.
+- `apps/server` — Express API, cookie sessions, role authorization, workspace isolation, persistent shared-file storage, extension pairing, scanner workers, SSE updates, SSRF protection, CSV exports, backups, and audit logging.
 - `apps/scraper` — private Python service using Scrapling for asynchronous static fetching, selective browser rendering, and deterministic contact/page extraction.
 - `apps/server/prisma` — SQLite schema and ordered, data-preserving migrations.
 - `apps/extension` — Chrome MV3 extension that pairs using the dashboard Scanner ID and reads organic URLs from a Google results page opened by the user.
@@ -63,8 +63,9 @@ The extension creates a separate instance ID for each browser profile. Press **S
 - **Deep Scan:** Node keeps one bounded same-domain crawl queue. It prioritizes likely contact/community paths, saves a database checkpoint after each page, and resumes without duplicating completed pages.
 - **Leads:** supports table/Kanban views with persistent drag-and-drop status changes, detailed research fields, tags, statuses, priorities, assignments, activity history, My Leads, an in-app notification center, and CSV export. A workspace/domain database constraint prevents duplicate Leads. Scanner contacts prefill empty Lead fields and never overwrite manual content.
 - **Splitter:** supports first/all colon splitting, a custom delimiter, and a URL-aware Website/Discord mode that understands inconsistent separator spacing and Markdown links without splitting `https://`.
-- **Administration:** creates/disables users, changes roles, monitors/revokes extension instances, force-stops scanners, views audit events, and creates/downloads/restores validated SQLite snapshots.
-- **Backups:** use SQLite `VACUUM INTO`, integrity and required-table validation, manifest metadata, daily automatic retention, and a pre-restore safety snapshot. Restore invalidates existing sessions.
+- **File sharing:** streams authenticated uploads to persistent workspace-isolated storage and creates signed public download links. Downloads are always attachments, and deleting a file immediately revokes its link. Uploaders manage their own files; managers and administrators can moderate the workspace. Defaults allow 100 MB per file, 500 files, and 2 GB per workspace.
+- **Administration:** creates/disables users, changes roles, monitors/revokes extension instances, force-stops scanners, views audit events, and creates/downloads validated SQLite snapshots.
+- **Backups:** use SQLite `VACUUM INTO`, integrity and required-schema validation, manifest metadata, and daily automatic retention for single-workspace installations. Snapshots contain the platform database but not shared-file payloads. Browser-triggered production restore is intentionally disabled because the API and notifier are independent SQLite writers; the VPS operator must stop every FGP service and use the offline recovery procedure. Version 1.4 snapshots are migrated on a protected copy before validation. Multi-workspace snapshots are permanently platform-only and unavailable to workspace administrators.
 
 Scanner Reset removes scanner workspace records only; it does not delete saved Leads.
 
@@ -94,6 +95,15 @@ PORT=3001
 HOST=127.0.0.1
 PUBLIC_APP_ORIGIN=http://localhost:5173
 INITIAL_SETUP_TOKEN=replace-with-a-one-time-production-setup-secret
+FILE_STORAGE_DIR=
+FILE_LINK_SECRET=replace-with-at-least-32-random-characters
+FILE_MAX_SIZE_BYTES=104857600
+FILE_WORKSPACE_QUOTA_BYTES=2147483648
+FILE_WORKSPACE_MAX_FILES=500
+FILE_MAX_CONCURRENT_DOWNLOADS=20
+FILE_MAX_CONCURRENT_DOWNLOADS_PER_FILE=4
+FILE_MAX_CONCURRENT_DOWNLOADS_PER_WORKSPACE=10
+FILE_DOWNLOAD_TIMEOUT_MS=600000
 SCRAPER_URL=http://127.0.0.1:3011
 SCRAPER_TOKEN=replace-with-a-long-random-secret
 SCRAPER_PORT=3011
@@ -110,6 +120,8 @@ SCRAPER_SCROLL_WAIT_MS=125
 ```
 
 Place these values in `apps/server/.env` when running the server through its workspace command. A fresh production database will not create its first administrator until the operator supplies an `INITIAL_SETUP_TOKEN` of at least 24 characters and enters the same one-time value in the setup form. Existing installations do not use this token after the first administrator exists. Keep the scraper bound to loopback and use the same unique `SCRAPER_TOKEN` of at least 24 characters in the scraper and Node environments; production startup rejects the development placeholder. Set `NODE_ENV=production`, a precise `PUBLIC_APP_ORIGIN`, and a protected `BACKUP_DIR` for a non-local deployment. HTTPS enables the session cookie's `Secure` flag.
+
+Preserve `FILE_LINK_SECRET` across restarts and disaster recovery: rotating it revokes every existing public file link. Production rejects documented placeholder values, and the normal deployment workflow generates a strong value when the setting is missing. Global SQLite backup actions are disabled when more than one workspace exists because those snapshots contain platform-wide data; the VPS operator remains responsible for platform-level backups in that topology.
 
 Scanner IDs created by current builds use 80 bits of entropy. On the first hardened startup, legacy short Scanner IDs are rotated and existing extension tokens are revoked, so each Chrome profile must reconnect once using the new ID shown in the dashboard.
 
@@ -149,6 +161,16 @@ npm run audit:discord-discovery
 The no-argument command uses `tests/fixtures/known-positive-discord-sites.txt`. You can still pass a different input and output stem directly to `apps/server/scripts/discord-discovery-audit.mjs`. The command preserves input order and duplicates, scans with bounded concurrency, and writes detailed JSON, a flat CSV, and a summary JSON containing raw-line, unique-URL, unique-domain, testability, method, and failure counts. Reports include original/fallback HTTP statuses, pages checked, normalized invite, discovery method/section/interaction, validation status, failure category, robots status, and duration. Live-site results are evidence from that run, not a guarantee that a changing third-party site or invite will remain available.
 
 The JavaScript integration suite uses disposable databases and covers authentication, session security, roles, assignment visibility, workspace isolation, extension pairing/revocation, backups, SSRF rejection, large imports, deduplication, persistent idle scanning, stop/resume, 404/root recovery, robots fallbacks, controlled social redirects, script-asset discovery, error-document evidence, aggregator handling, and lead preservation. The Python suite covers Scrapling static fetching, redirect handoff, metadata, Discord extraction strategies, root/widget destinations, soft-404 classification, email/social extraction, same-domain link selection, and worker-side defense in depth.
+
+## Offline database restore
+
+Production database restore is root-operated so no API, scanner, tracker, backup scheduler, Haze process, or other `fgp` process can write during replacement. Choose a known snapshot already stored directly in `/var/backups/fgp`, then run:
+
+```bash
+sudo /opt/fgp/deploy/restore-fgp-backup.sh /var/backups/fgp/lead-platform_backup_TIMESTAMP_manual.db
+```
+
+The procedure rejects symlinks and paths outside the backup directory, stops public ingress plus all FGP services and remaining `fgp` processes, temporarily locks the state and backup directories against service-account changes, creates a timestamped safety copy under root-only `/var/backups/fgp-operator`, stages and integrity-checks the selected SQLite database, upgrades a pre-file-sharing snapshot on the staged copy, invalidates saved sessions, and atomically replaces the live database. Before committing, it starts the API behind stopped Caddy in a maintenance-probe mode that disables scanners, reconciliation, trackers, Haze, and backup scheduling while checking API, scraper, database, and storage health. A failed preparation or probe automatically puts the previous database back and restarts the services; failures after the probe are reported without rolling back writes. These structural and integrity checks do not authenticate who created a service-writable snapshot; verify its provenance and expected hash before selecting it. Keep the reported safety backup until the restored installation has been manually verified.
 
 ## Third-party software
 

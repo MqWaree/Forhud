@@ -7,7 +7,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { randomBytes } from "node:crypto";
 import { prisma } from "./db.js";
@@ -15,6 +15,14 @@ import { prisma } from "./db.js";
 const { DatabaseSync } = createRequire(import.meta.url)(
   "node:sqlite",
 ) as typeof import("node:sqlite");
+const SHARED_FILE_MIGRATION_NAME = "20260902033000_shared_files";
+const SHARED_FILE_MIGRATION_SQL = readFileSync(
+  resolve(
+    import.meta.dirname,
+    `../prisma/migrations/${SHARED_FILE_MIGRATION_NAME}/migration.sql`,
+  ),
+  "utf8",
+);
 
 export let maintenanceMode = false;
 function configuredDatabasePath() {
@@ -32,7 +40,8 @@ const databasePath = configuredDatabasePath();
 const backupDir = resolve(
   process.env.BACKUP_DIR || resolve(import.meta.dirname, "../data/backups"),
 );
-mkdirSync(backupDir, { recursive: true });
+if (process.env.FGP_MAINTENANCE_PROBE !== "true")
+  mkdirSync(backupDir, { recursive: true });
 
 function safePath(filename: string) {
   if (!/^[A-Za-z0-9_.-]+$/.test(filename))
@@ -54,7 +63,7 @@ export function backupFilePath(filename: string) {
   return safePath(filename);
 }
 
-export function validateBackup(path: string) {
+function inspectBackup(path: string, allowLegacy: boolean) {
   if (!existsSync(path))
     throw Object.assign(new Error("Backup file not found"), {
       statusCode: 404,
@@ -82,6 +91,34 @@ export function validateBackup(path: string) {
     );
     if (required.some((name) => !tables.has(name)))
       throw new Error("Required tables are missing");
+    const legacy = !tables.has("SharedFile");
+    if (legacy) {
+      if (!allowLegacy) throw new Error("SharedFile table is missing");
+      return { legacy: true };
+    }
+    const sharedFileColumns = new Set(
+      (
+        db.prepare('PRAGMA table_info("SharedFile")').all() as Array<{
+          name: string;
+        }>
+      ).map((column) => column.name),
+    );
+    const requiredSharedFileColumns = [
+      "id",
+      "workspaceId",
+      "uploadedById",
+      "storageName",
+      "originalName",
+      "mimeType",
+      "sizeBytes",
+      "sha256",
+      "downloadCount",
+      "lastDownloadedAt",
+      "createdAt",
+    ];
+    if (requiredSharedFileColumns.some((name) => !sharedFileColumns.has(name)))
+      throw new Error("SharedFile schema is incompatible");
+    return { legacy: false };
   } catch {
     throw Object.assign(new Error("Invalid backup. No data was changed."), {
       statusCode: 400,
@@ -91,6 +128,121 @@ export function validateBackup(path: string) {
   }
 }
 
+export function validateBackup(path: string) {
+  inspectBackup(path, false);
+}
+
+function prepareBackup(path: string) {
+  if (inspectBackup(path, true).legacy) {
+    const db = new DatabaseSync(path);
+    try {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        db.exec(SHARED_FILE_MIGRATION_SQL);
+        const hasMigrationLedger = db
+          .prepare(
+            "SELECT 1 AS found FROM sqlite_master WHERE type='table' AND name='_AetherMigration'",
+          )
+          .get();
+        if (hasMigrationLedger) {
+          const recorded = db
+            .prepare(
+              'SELECT 1 AS found FROM "_AetherMigration" WHERE name = ? LIMIT 1',
+            )
+            .get(SHARED_FILE_MIGRATION_NAME);
+          if (!recorded)
+            db.prepare('INSERT INTO "_AetherMigration" (name) VALUES (?)').run(
+              SHARED_FILE_MIGRATION_NAME,
+            );
+        }
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+    } finally {
+      db.close();
+    }
+  }
+  validateBackup(path);
+}
+
+function parseManifest(value: string) {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return null;
+  }
+}
+
+function backupWorkspaceCount(path: string) {
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    const row = db
+      .prepare('SELECT COUNT(*) AS count FROM "Workspace"')
+      .get() as {
+      count: number;
+    };
+    return Number(row.count);
+  } finally {
+    db.close();
+  }
+}
+
+export function backupIsPlatformOnly(backup: {
+  filename: string;
+  manifest: string;
+}) {
+  const manifest = parseManifest(backup.manifest);
+  if (manifest === null) return true;
+  if (manifest.platformOnly === true) return true;
+  try {
+    return backupWorkspaceCount(safePath(backup.filename)) !== 1;
+  } catch {
+    return true;
+  }
+}
+
+export async function workspaceAdminBackupsAvailable() {
+  const workspaceCount = await prisma.workspace.count();
+  if (workspaceCount > 1) {
+    const backups = await prisma.backupMetadata.findMany();
+    for (const backup of backups) {
+      const existing = parseManifest(backup.manifest) || {};
+      if (existing.platformOnly === true) continue;
+      const manifest = { ...existing, platformOnly: true };
+      await prisma.backupMetadata.update({
+        where: { id: backup.id },
+        data: { manifest: JSON.stringify(manifest) },
+      });
+      const sidecar = `${safePath(backup.filename)}.manifest.json`;
+      if (existsSync(sidecar))
+        writeFileSync(sidecar, JSON.stringify(manifest, null, 2), "utf8");
+    }
+  }
+  return workspaceCount === 1;
+}
+
+function manifestFor(
+  type: "MANUAL" | "AUTOMATIC" | "PRE_RESTORE" | "UPLOADED",
+  path: string,
+  createdById?: string,
+) {
+  return {
+    backupVersion: 2,
+    applicationVersion: "1.5.0",
+    schemaVersion: SHARED_FILE_MIGRATION_NAME,
+    createdAt: new Date().toISOString(),
+    createdById: createdById || null,
+    backupType: type,
+    databaseType: "sqlite",
+    platformOnly: backupWorkspaceCount(path) !== 1,
+  };
+}
+
 export async function createBackup(
   type: "MANUAL" | "AUTOMATIC" | "PRE_RESTORE",
   createdById?: string,
@@ -98,35 +250,33 @@ export async function createBackup(
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(".", "");
   const filename = `lead-platform_backup_${stamp}_${randomBytes(3).toString("hex")}_${type.toLowerCase()}.db`;
   const path = safePath(filename);
-  const source = new DatabaseSync(databasePath, { readOnly: true });
   try {
-    source.exec(`VACUUM INTO '${path.replaceAll("'", "''")}'`);
-  } finally {
-    source.close();
+    const source = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      source.exec(`VACUUM INTO '${path.replaceAll("'", "''")}'`);
+    } finally {
+      source.close();
+    }
+    validateBackup(path);
+    const manifest = manifestFor(type, path, createdById);
+    writeFileSync(`${path}.manifest.json`, JSON.stringify(manifest, null, 2), {
+      encoding: "utf8",
+      flag: "wx",
+    });
+    return await prisma.backupMetadata.create({
+      data: {
+        filename,
+        type,
+        size: statSync(path).size,
+        createdById,
+        manifest: JSON.stringify(manifest),
+      },
+    });
+  } catch (error) {
+    rmSync(path, { force: true });
+    rmSync(`${path}.manifest.json`, { force: true });
+    throw error;
   }
-  validateBackup(path);
-  const manifest = {
-    backupVersion: 1,
-    applicationVersion: "1.4.0",
-    schemaVersion: "20260803020000_multi_user_platform",
-    createdAt: new Date().toISOString(),
-    createdById: createdById || null,
-    backupType: type,
-    databaseType: "sqlite",
-  };
-  writeFileSync(`${path}.manifest.json`, JSON.stringify(manifest, null, 2), {
-    encoding: "utf8",
-    flag: "wx",
-  });
-  return prisma.backupMetadata.create({
-    data: {
-      filename,
-      type,
-      size: statSync(path).size,
-      createdById,
-      manifest: JSON.stringify(manifest),
-    },
-  });
 }
 
 export async function importBackup(contents: Buffer, createdById: string) {
@@ -142,16 +292,8 @@ export async function importBackup(contents: Buffer, createdById: string) {
   const path = safePath(filename);
   try {
     writeFileSync(path, contents, { flag: "wx" });
-    validateBackup(path);
-    const manifest = {
-      backupVersion: 1,
-      applicationVersion: "1.4.0",
-      schemaVersion: "20260803020000_multi_user_platform",
-      createdAt: new Date().toISOString(),
-      createdById,
-      backupType: "UPLOADED",
-      databaseType: "sqlite",
-    };
+    prepareBackup(path);
+    const manifest = manifestFor("UPLOADED", path, createdById);
     writeFileSync(`${path}.manifest.json`, JSON.stringify(manifest, null, 2), {
       encoding: "utf8",
       flag: "wx",
@@ -160,7 +302,7 @@ export async function importBackup(contents: Buffer, createdById: string) {
       data: {
         filename,
         type: "UPLOADED",
-        size: contents.length,
+        size: statSync(path).size,
         createdById,
         manifest: JSON.stringify(manifest),
       },
@@ -178,30 +320,96 @@ export async function deleteBackup(filename: string) {
   rmSync(`${path}.manifest.json`, { force: true });
 }
 
-export async function restoreBackup(filename: string, actorId: string) {
+type BackupRecord = Awaited<ReturnType<typeof createBackup>>;
+
+async function registerBackupMetadata(backup: BackupRecord) {
+  await prisma.backupMetadata.upsert({
+    where: { filename: backup.filename },
+    update: {},
+    create: {
+      id: backup.id,
+      filename: backup.filename,
+      type: backup.type,
+      size: backup.size,
+      status: backup.status,
+      createdById: backup.createdById,
+      createdAt: backup.createdAt,
+      manifest: backup.manifest,
+    },
+  });
+}
+
+export async function restoreBackup(
+  filename: string,
+  actorId: string,
+  afterDatabaseReady?: (state: "restored" | "recovered") => Promise<void>,
+) {
   const selected = safePath(filename);
-  validateBackup(selected);
-  maintenanceMode = true;
-  const safety = await createBackup("PRE_RESTORE", actorId);
-  const safetyPath = safePath(safety.filename);
+  inspectBackup(selected, true);
+  const prepared = resolve(
+    dirname(databasePath),
+    `.fgp-restore-${randomBytes(8).toString("hex")}.db`,
+  );
   try {
+    copyFileSync(selected, prepared);
+    prepareBackup(prepared);
+  } catch (error) {
+    rmSync(prepared, { force: true });
+    throw error;
+  }
+  maintenanceMode = true;
+  let disconnected = false;
+  let safety: BackupRecord | undefined;
+  try {
+    safety = await createBackup("PRE_RESTORE", actorId);
     await prisma.$disconnect();
-    copyFileSync(selected, databasePath);
+    disconnected = true;
+    rmSync(`${databasePath}-wal`, { force: true });
+    rmSync(`${databasePath}-shm`, { force: true });
+    copyFileSync(prepared, databasePath);
     validateBackup(databasePath);
     await prisma.$connect();
+    disconnected = false;
+    await afterDatabaseReady?.("restored");
+    await registerBackupMetadata(safety);
     await prisma.authSession.deleteMany();
     return { restored: true, safetyBackup: safety.filename };
   } catch (error) {
-    copyFileSync(safetyPath, databasePath);
-    await prisma.$connect();
+    if (safety) {
+      if (!disconnected) {
+        await prisma.$disconnect().catch(() => undefined);
+        disconnected = true;
+      }
+      rmSync(`${databasePath}-wal`, { force: true });
+      rmSync(`${databasePath}-shm`, { force: true });
+      copyFileSync(safePath(safety.filename), databasePath);
+      validateBackup(databasePath);
+      await prisma.$connect();
+      disconnected = false;
+      try {
+        await afterDatabaseReady?.("recovered");
+        await registerBackupMetadata(safety);
+      } catch (recoveryError) {
+        console.error("Post-restore safety recovery failed", recoveryError);
+        throw Object.assign(
+          new Error(
+            "Restore failed. The database was recovered, but file storage requires operator review.",
+          ),
+          { statusCode: 500, cause: error },
+        );
+      }
+    }
     throw error;
   } finally {
+    if (disconnected) await prisma.$connect().catch(() => undefined);
+    rmSync(prepared, { force: true });
     maintenanceMode = false;
   }
 }
 
 let scheduler: ReturnType<typeof setInterval> | undefined;
 export async function runBackupMaintenance() {
+  if (!(await workspaceAdminBackupsAvailable())) return;
   const settings = Object.fromEntries(
     (
       await prisma.setting.findMany({

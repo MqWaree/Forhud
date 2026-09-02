@@ -33,6 +33,7 @@ model Workspace {
   rustPriceScannerState    RustPriceScannerState?
   rustPriceScanDiagnostics RustPriceScanDiagnostic[]
   ranks                    WorkspaceRank[]
+  sharedFiles              SharedFile[]
 }
 
 model User {
@@ -55,9 +56,29 @@ model User {
   auditLogs             AuditLog[]          @relation("AuditActor")
   extensionInstances    ExtensionInstance[] @relation("ExtensionOwner")
   rankAssignments       UserRank[]
+  sharedFiles           SharedFile[]       @relation("SharedFileUploader")
 
   @@index([workspaceId])
   @@index([role, status])
+}
+
+model SharedFile {
+  id               String     @id @default(cuid())
+  workspaceId      String
+  workspace        Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploadedById     String?
+  uploadedBy       User?      @relation("SharedFileUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  storageName      String     @unique
+  originalName     String
+  mimeType         String     @default("application/octet-stream")
+  sizeBytes        Int
+  sha256           String
+  downloadCount    Int        @default(0)
+  lastDownloadedAt DateTime?
+  createdAt        DateTime   @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([uploadedById])
 }
 
 model WorkspaceRank {

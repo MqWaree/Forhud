@@ -53,12 +53,14 @@ import {
   type ExtensionRequest,
 } from "./extension-auth.js";
 import {
+  backupIsPlatformOnly,
   backupFilePath,
   createBackup,
   deleteBackup,
   importBackup,
   maintenanceMode,
   restoreBackup,
+  workspaceAdminBackupsAvailable,
 } from "./backups.js";
 import {
   bootstrapScanner,
@@ -124,6 +126,14 @@ import {
   requireRankPermission,
   workspaceMemberDirectory,
 } from "./ranks.js";
+import {
+  assertSharedFileStorageReady,
+  publicSharedFileRouter,
+  reconcileSharedFileStorage,
+  sharedFileRouter,
+  sharedFileStorageHealth,
+  withSharedFileMaintenance,
+} from "./file-sharing.js";
 
 export { prisma } from "./db.js";
 const defaults = {
@@ -157,6 +167,28 @@ async function getSettings(workspaceId?: string) {
       workspaceRows.map((r) => [r.key, JSON.parse(r.value)]),
     ),
   };
+}
+const backupSettingIds = new Set([
+  "automaticBackups",
+  "backupFrequency",
+  "backupTime",
+  "backupRetentionDaily",
+  "backupRetentionWeekly",
+]);
+async function workspaceAdminSettings(workspaceId: string) {
+  const [settings, backupsAvailable] = await Promise.all([
+    getSettings(workspaceId),
+    workspaceAdminBackupsAvailable(),
+  ]);
+  const visible: Record<string, unknown> = {
+    ...settings,
+    backupsAvailable,
+  };
+  if (!backupsAvailable) for (const id of backupSettingIds) delete visible[id];
+  return visible;
+}
+function inAppRestoreAvailable() {
+  return process.env.NODE_ENV === "test";
 }
 const SECURITY_POLICY_MARKER = "security.password-policy-v2";
 const SECURITY_POLICY_V3_MARKER = "security.scanner-id-v3";
@@ -227,11 +259,14 @@ export async function applySecurityPolicyV3() {
   });
 }
 
-export const scannerReady = bootstrapScanner().then(async () => {
-  await applySecurityPolicyV2();
-  await applySecurityPolicyV3();
-  await cleanupExpiredRateLimits();
-});
+const maintenanceProbe = process.env.FGP_MAINTENANCE_PROBE === "true";
+export const scannerReady = maintenanceProbe
+  ? Promise.resolve()
+  : bootstrapScanner().then(async () => {
+      await applySecurityPolicyV2();
+      await applySecurityPolicyV3();
+      await cleanupExpiredRateLimits();
+    });
 const app = express();
 app.set("trust proxy", "loopback");
 app.use(helmet({ crossOriginResourcePolicy: false }));
@@ -252,18 +287,34 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "5mb" }));
+if (maintenanceProbe)
+  app.use((req, res, next) => {
+    if (req.method === "GET" && req.path === "/api/health") return next();
+    return res.status(503).json({ error: "Maintenance probe is read-only" });
+  });
 
 app.get("/api/health", async (_req, res) => {
   try {
     await scannerReady;
     await prisma.$queryRaw`SELECT 1`;
+    await assertSharedFileStorageReady();
+    const sharedFiles = sharedFileStorageHealth();
+    if (sharedFiles && !sharedFiles.healthy)
+      return res.status(503).json({
+        ok: false,
+        database: "connected",
+        sharedFiles,
+        error: "Shared-file payload storage is incomplete",
+      });
     const scraper = await scraperHealth();
     res.json({
       ok: true,
       database: "connected",
       extension: "available",
+      sharedFiles: sharedFiles || { healthy: true, checked: false },
       scraper,
-      version: "1.4.1",
+      version: "1.5.0",
+      ...(maintenanceProbe ? { maintenanceProbe: true } : {}),
     });
   } catch (error) {
     console.error("Database health check failed", error);
@@ -895,6 +946,7 @@ app.use("/api", (req, res, next) => {
     return res.status(503).json({ error: "Maintenance in progress" });
   next();
 });
+app.use("/api/shared-files/public", publicSharedFileRouter);
 app.use("/api", requireAuth);
 app.use("/api", (req, res, next) => {
   const auth = (req as AuthRequest).auth;
@@ -910,6 +962,7 @@ app.use("/api", (req, res, next) => {
     });
   next();
 });
+app.use("/api/shared-files", sharedFileRouter);
 
 app.post("/api/scanner/import-links", async (req, res, next) => {
   try {
@@ -2162,20 +2215,18 @@ app.post("/api/scanner/retry-failed", async (req, res, next) => {
     const scanner = updated.count
       ? await startScanner(auth.workspaceId, recoverySettings)
       : null;
-    res
-      .status(updated.count ? 202 : 200)
-      .json({
-        queued: updated.count,
-        skippedPermanent,
-        recoveryProfile: updated.count
-          ? {
-              concurrency: recoverySettings.crawlerConcurrency,
-              timeoutSeconds: recoverySettings.timeoutSeconds,
-              retries: recoverySettings.retries,
-            }
-          : null,
-        scanner,
-      });
+    res.status(updated.count ? 202 : 200).json({
+      queued: updated.count,
+      skippedPermanent,
+      recoveryProfile: updated.count
+        ? {
+            concurrency: recoverySettings.crawlerConcurrency,
+            timeoutSeconds: recoverySettings.timeoutSeconds,
+            retries: recoverySettings.retries,
+          }
+        : null,
+      scanner,
+    });
   } catch (e) {
     next(e);
   }
@@ -2963,11 +3014,19 @@ app.post("/api/auth/change-password", async (req, res, next) => {
 });
 
 app.get("/api/settings", requireRole("ADMIN"), async (req, res) =>
-  res.json(await getSettings((req as AuthRequest).auth.workspaceId)),
+  res.json(await workspaceAdminSettings((req as AuthRequest).auth.workspaceId)),
 );
 app.patch("/api/settings", requireRole("ADMIN"), async (req, res, next) => {
   try {
     const auth = (req as AuthRequest).auth;
+    if (
+      !(await workspaceAdminBackupsAvailable()) &&
+      Object.keys(req.body || {}).some((id) => backupSettingIds.has(id))
+    )
+      return res.status(403).json({
+        error:
+          "Platform backup settings are unavailable to workspace administrators when multiple workspaces exist",
+      });
     const data = settingsSchema.parse(req.body);
     await Promise.all(
       Object.entries(data).map(([id, value]) => {
@@ -2993,7 +3052,7 @@ app.patch("/api/settings", requireRole("ADMIN"), async (req, res, next) => {
     await audit(req, "SETTINGS_UPDATED", "Workspace", auth.workspaceId, {
       keys: Object.keys(data),
     });
-    res.json(await getSettings(auth.workspaceId));
+    res.json(await workspaceAdminSettings(auth.workspaceId));
   } catch (e) {
     next(e);
   }
@@ -3335,7 +3394,8 @@ app.get("/api/admin/overview", requireRole("ADMIN"), async (req, res) => {
     scannerResults,
     leads,
     scanner,
-    backup,
+    backups,
+    backupsAvailable,
   ] = await Promise.all([
     prisma.user.count({ where: { workspaceId } }),
     prisma.user.count({ where: { workspaceId, status: "ACTIVE" } }),
@@ -3349,11 +3409,14 @@ app.get("/api/admin/overview", requireRole("ADMIN"), async (req, res) => {
     prisma.scannerResult.count({ where: { workspaceId } }),
     prisma.lead.count({ where: { workspaceId } }),
     prisma.scannerState.findUnique({ where: { workspaceId } }),
-    prisma.backupMetadata.findFirst({
+    prisma.backupMetadata.findMany({
       where: { status: "COMPLETED" },
       orderBy: { createdAt: "desc" },
+      take: 500,
     }),
+    workspaceAdminBackupsAvailable(),
   ]);
+  const latestBackup = backups.find((backup) => !backupIsPlatformOnly(backup));
   res.json({
     users,
     activeUsers,
@@ -3361,7 +3424,9 @@ app.get("/api/admin/overview", requireRole("ADMIN"), async (req, res) => {
     scannerResults,
     leads,
     scannersRunning: scanner?.status === "RUNNING" ? 1 : 0,
-    lastBackup: backup?.createdAt || null,
+    backupsAvailable,
+    restoreAvailable: backupsAvailable && inAppRestoreAvailable(),
+    lastBackup: backupsAvailable ? latestBackup?.createdAt || null : null,
   });
 });
 app.get("/api/members", async (req, res, next) => {
@@ -3787,24 +3852,57 @@ app.get("/api/admin/audit", requireRole("ADMIN"), async (req, res) => {
   );
 });
 
-app.get("/api/admin/backups", requireRole("ADMIN"), async (_req, res) =>
-  res.json(
-    await prisma.backupMetadata.findMany({ orderBy: { createdAt: "desc" } }),
-  ),
-);
-app.post("/api/admin/backups", requireRole("ADMIN"), async (req, res, next) => {
+const requireSingleWorkspaceBackupScope = async (
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) => {
   try {
-    const auth = (req as AuthRequest).auth;
-    const backup = await createBackup("MANUAL", auth.id);
-    await audit(req, "BACKUP_CREATED", "BackupMetadata", backup.id);
-    res.status(201).json(backup);
+    if (!(await workspaceAdminBackupsAvailable())) {
+      req.resume();
+      return res.status(403).json({
+        error:
+          "Platform backups are unavailable to workspace administrators when multiple workspaces exist",
+      });
+    }
+    next();
   } catch (error) {
     next(error);
   }
-});
+};
+
+app.get(
+  "/api/admin/backups",
+  requireRole("ADMIN"),
+  requireSingleWorkspaceBackupScope,
+  async (_req, res) =>
+    res.json(
+      (
+        await prisma.backupMetadata.findMany({
+          orderBy: { createdAt: "desc" },
+        })
+      ).filter((backup) => !backupIsPlatformOnly(backup)),
+    ),
+);
+app.post(
+  "/api/admin/backups",
+  requireRole("ADMIN"),
+  requireSingleWorkspaceBackupScope,
+  async (req, res, next) => {
+    try {
+      const auth = (req as AuthRequest).auth;
+      const backup = await createBackup("MANUAL", auth.id);
+      await audit(req, "BACKUP_CREATED", "BackupMetadata", backup.id);
+      res.status(201).json(backup);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 app.post(
   "/api/admin/backups/upload",
   requireRole("ADMIN"),
+  requireSingleWorkspaceBackupScope,
   express.raw({ type: "application/octet-stream", limit: "100mb" }),
   async (req, res, next) => {
     try {
@@ -3824,37 +3922,63 @@ app.post(
 app.get(
   "/api/admin/backups/:id/download",
   requireRole("ADMIN"),
+  requireSingleWorkspaceBackupScope,
   async (req, res) => {
     const backup = await prisma.backupMetadata.findUnique({
       where: { id: String(req.params.id) },
     });
-    if (!backup) return res.status(404).json({ error: "Not found" });
+    if (!backup || backupIsPlatformOnly(backup))
+      return res.status(404).json({ error: "Not found" });
     res.download(backupFilePath(backup.filename), backup.filename);
   },
 );
-app.delete("/api/admin/backups/:id", requireRole("ADMIN"), async (req, res) => {
-  const backup = await prisma.backupMetadata.findUnique({
-    where: { id: String(req.params.id) },
-  });
-  if (!backup) return res.status(404).json({ error: "Not found" });
-  await deleteBackup(backup.filename);
-  await prisma.backupMetadata.delete({ where: { id: backup.id } });
-  await audit(req, "BACKUP_DELETED", "BackupMetadata", backup.id);
-  res.status(204).end();
-});
+app.delete(
+  "/api/admin/backups/:id",
+  requireRole("ADMIN"),
+  requireSingleWorkspaceBackupScope,
+  async (req, res) => {
+    const backup = await prisma.backupMetadata.findUnique({
+      where: { id: String(req.params.id) },
+    });
+    if (!backup || backupIsPlatformOnly(backup))
+      return res.status(404).json({ error: "Not found" });
+    await deleteBackup(backup.filename);
+    await prisma.backupMetadata.delete({ where: { id: backup.id } });
+    await audit(req, "BACKUP_DELETED", "BackupMetadata", backup.id);
+    res.status(204).end();
+  },
+);
 app.post(
   "/api/admin/backups/:id/restore",
   requireRole("ADMIN"),
+  requireSingleWorkspaceBackupScope,
   async (req, res, next) => {
     try {
+      if (!inAppRestoreAvailable())
+        return res.status(403).json({
+          error:
+            "Database restore requires the offline operator recovery procedure",
+        });
       const auth = (req as AuthRequest).auth;
       z.object({ confirm: z.literal("RESTORE") }).parse(req.body);
       const backup = await prisma.backupMetadata.findUnique({
         where: { id: String(req.params.id) },
       });
-      if (!backup) return res.status(404).json({ error: "Not found" });
+      if (!backup || backupIsPlatformOnly(backup))
+        return res.status(404).json({ error: "Not found" });
       await stopScanner(auth.workspaceId);
-      const result = await restoreBackup(backup.filename, auth.id);
+      const result = await withSharedFileMaintenance(() =>
+        restoreBackup(backup.filename, auth.id, async (state) => {
+          const reconciliation = await reconcileSharedFileStorage();
+          if (state === "restored" && reconciliation.missingPayloads)
+            throw Object.assign(
+              new Error(
+                "This backup references shared-file payloads that are not available on this server. No data was changed.",
+              ),
+              { statusCode: 409, expose: true },
+            );
+        }),
+      );
       const [restoredActor, restoredWorkspace] = await Promise.all([
         prisma.user.findUnique({
           where: { id: auth.id },

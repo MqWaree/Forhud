@@ -14,6 +14,7 @@ outputs/
 work/
 deploy/*.tar.gz
 *.db
+*.db-journal
 *.db-shm
 *.db-wal
 *.log

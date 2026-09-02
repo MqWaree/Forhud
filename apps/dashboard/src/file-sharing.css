@@ -1,0 +1,581 @@
+.file-share-page {
+  --vault-accent: #6ab9f5;
+  --vault-violet: #a68cff;
+}
+.file-share-security {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid rgba(87, 211, 164, 0.18);
+  border-radius: 9px;
+  color: #74dcb5;
+  background: rgba(52, 211, 153, 0.045);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.file-share-security svg {
+  width: 14px;
+}
+.file-share-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 11px 13px;
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  border-radius: 10px;
+  color: #f3a0a4;
+  background: rgba(137, 36, 43, 0.09);
+  font-size: 10px;
+}
+.file-share-error > svg {
+  width: 15px;
+}
+.file-share-error span {
+  flex: 1;
+}
+.file-share-error button {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  color: #b77e83;
+  background: transparent;
+  cursor: pointer;
+}
+.file-share-error button svg {
+  width: 13px;
+}
+.file-share-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(270px, 0.55fr);
+  gap: 15px;
+}
+.share-upload-card {
+  overflow: hidden;
+  padding: 12px;
+}
+.share-drop-zone {
+  position: relative;
+  min-height: 238px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  padding: 28px;
+  overflow: hidden;
+  border: 1px dashed rgba(106, 185, 245, 0.26);
+  border-radius: 10px;
+  outline: none;
+  color: #dce9f6;
+  background:
+    linear-gradient(rgba(106, 185, 245, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(106, 185, 245, 0.025) 1px, transparent 1px),
+    #080d15;
+  background-size: 22px 22px;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+.share-drop-zone::before {
+  content: "DROP ZONE / 01";
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  color: #4d6178;
+  font:
+    7px "JetBrains Mono",
+    monospace;
+  letter-spacing: 0.12em;
+}
+.share-drop-zone::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 22px;
+  height: 22px;
+  border-right: 1px solid rgba(166, 140, 255, 0.34);
+  border-bottom: 1px solid rgba(166, 140, 255, 0.34);
+}
+.share-drop-zone:hover,
+.share-drop-zone:focus-visible,
+.share-drop-zone.dragging {
+  border-color: rgba(106, 185, 245, 0.65);
+  background-color: #0a111b;
+  box-shadow: inset 0 0 45px rgba(58, 150, 224, 0.045);
+}
+.share-drop-zone.dragging {
+  transform: scale(0.995);
+}
+.share-drop-zone.uploading {
+  cursor: wait;
+  opacity: 0.76;
+}
+.share-drop-zone input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.upload-orbit {
+  position: relative;
+  display: grid;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 5px;
+  place-items: center;
+  border: 1px solid rgba(106, 185, 245, 0.23);
+  border-radius: 50%;
+  color: var(--vault-accent);
+  background: rgba(49, 145, 221, 0.07);
+  box-shadow: 0 0 0 8px rgba(58, 150, 224, 0.025);
+}
+.upload-orbit::after {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border: 1px dashed rgba(166, 140, 255, 0.18);
+  border-radius: inherit;
+}
+.upload-orbit svg {
+  width: 23px;
+}
+.share-drop-zone > strong {
+  font-size: 13px;
+}
+.share-drop-zone > p {
+  color: #738398;
+  font-size: 10px;
+}
+.share-drop-zone > small {
+  margin-top: 7px;
+  color: #536479;
+  font:
+    8px "JetBrains Mono",
+    monospace;
+  text-transform: uppercase;
+}
+.share-drop-zone.selected {
+  min-height: 238px;
+  flex-direction: row;
+  gap: 17px;
+}
+.selected-file-visual {
+  display: grid;
+  width: 86px;
+  height: 86px;
+  flex: 0 0 86px;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid rgba(106, 185, 245, 0.2);
+  border-radius: 12px;
+  color: #7cc4fa;
+  background: rgba(35, 108, 168, 0.08);
+}
+.selected-file-visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.selected-file-visual svg {
+  width: 31px;
+}
+.selected-file-copy {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+.selected-file-copy small {
+  color: #67d5ab;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.selected-file-copy strong {
+  max-width: 500px;
+  overflow: hidden;
+  color: #edf6ff;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.selected-file-copy span {
+  color: #6c7f95;
+  font:
+    9px "JetBrains Mono",
+    monospace;
+}
+.share-upload-footer {
+  display: flex;
+  align-items: center;
+  min-height: 60px;
+  gap: 8px;
+  padding: 10px 4px 0;
+}
+.share-upload-footer > div {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+}
+.share-upload-footer small {
+  color: #8291a4;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.share-upload-footer span {
+  color: #536277;
+  font-size: 8px;
+}
+.share-upload-card > .progress {
+  height: 3px;
+  margin: 8px 4px 1px;
+}
+.share-storage-card {
+  min-height: 322px;
+  padding: 20px;
+  border-color: rgba(166, 140, 255, 0.15);
+  background: linear-gradient(
+    160deg,
+    rgba(22, 20, 42, 0.82),
+    rgba(9, 14, 22, 0.98) 52%
+  );
+}
+.share-storage-card header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.share-storage-card header > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgba(166, 140, 255, 0.22);
+  border-radius: 10px;
+  color: #b29dff;
+  background: rgba(138, 107, 241, 0.08);
+}
+.share-storage-card header svg {
+  width: 17px;
+}
+.share-storage-card header div {
+  display: grid;
+  gap: 3px;
+}
+.share-storage-card header small {
+  color: #756e94;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.share-storage-card header strong {
+  font:
+    18px "JetBrains Mono",
+    monospace;
+}
+.share-storage-card > .progress {
+  height: 5px;
+  margin-top: 24px;
+  background: rgba(101, 84, 153, 0.16);
+}
+.share-storage-card > .progress span {
+  background: linear-gradient(90deg, #438fc9, #a68cff);
+}
+.share-storage-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 7px;
+  color: #5d6078;
+  font-size: 8px;
+}
+.share-storage-card dl {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 22px 0 0;
+  padding: 15px 0;
+  border-top: 1px solid rgba(155, 135, 245, 0.1);
+  border-bottom: 1px solid rgba(155, 135, 245, 0.1);
+}
+.share-storage-card dl div {
+  min-width: 0;
+  padding: 0 9px;
+  border-left: 1px solid rgba(155, 135, 245, 0.09);
+}
+.share-storage-card dl div:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.share-storage-card dt {
+  color: #66637f;
+  font-size: 7px;
+  text-transform: uppercase;
+}
+.share-storage-card dd {
+  margin: 5px 0 0;
+  overflow: hidden;
+  color: #c5c4d9;
+  font:
+    9px "JetBrains Mono",
+    monospace;
+  text-overflow: ellipsis;
+}
+.share-storage-card > p {
+  margin-top: 15px;
+  color: #5c6377;
+  font-size: 9px;
+}
+.share-link-ready {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 15px;
+  padding: 13px 15px;
+  border-color: rgba(52, 211, 153, 0.19);
+  background: linear-gradient(
+    90deg,
+    rgba(30, 127, 91, 0.08),
+    rgba(9, 14, 21, 0.96) 45%
+  );
+}
+.share-link-ready > svg {
+  width: 21px;
+  color: #5dd6aa;
+}
+.share-link-ready > div {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+}
+.share-link-ready small {
+  color: #5dd6aa;
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.share-link-ready code {
+  overflow: hidden;
+  color: #91a7bc;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shared-file-ledger {
+  margin-top: 15px;
+  overflow: hidden;
+}
+.shared-file-ledger > header {
+  min-height: 66px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.shared-file-ledger > header div {
+  display: grid;
+  gap: 3px;
+}
+.shared-file-ledger > header small {
+  color: var(--vault-accent);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.shared-file-ledger > header h2 {
+  margin: 0;
+  font-size: 13px;
+}
+.shared-file-ledger > header > span {
+  padding: 4px 8px;
+  border: 1px solid rgba(106, 185, 245, 0.13);
+  border-radius: 999px;
+  color: #70849a;
+  background: rgba(106, 185, 245, 0.04);
+  font-size: 8px;
+}
+.shared-file-loading {
+  min-height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: #6b7b8f;
+  font-size: 10px;
+}
+.shared-file-loading svg {
+  width: 16px;
+}
+.shared-file-list > article {
+  display: grid;
+  grid-template-columns: 36px minmax(180px, 1fr) 90px 80px 150px auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--line);
+  transition: background 140ms ease;
+}
+.shared-file-list > article:first-child {
+  border-top: 0;
+}
+.shared-file-list > article:hover {
+  background: rgba(60, 166, 255, 0.025);
+}
+.shared-file-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgba(106, 185, 245, 0.14);
+  border-radius: 9px;
+  color: #73baf0;
+  background: rgba(54, 139, 205, 0.055);
+}
+.shared-file-icon svg {
+  width: 15px;
+}
+.shared-file-name,
+.shared-file-metric {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+.shared-file-name strong {
+  overflow: hidden;
+  color: #dbe7f2;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shared-file-name small,
+.shared-file-metric small {
+  overflow: hidden;
+  color: #526278;
+  font-size: 7px;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.shared-file-metric b {
+  overflow: hidden;
+  color: #8fa0b2;
+  font:
+    8px "JetBrains Mono",
+    monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shared-file-actions {
+  display: flex;
+  gap: 5px;
+}
+.shared-file-actions button,
+.shared-file-actions a {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: #71849a;
+  background: #0a1018;
+  cursor: pointer;
+}
+.shared-file-actions button:hover,
+.shared-file-actions a:hover {
+  border-color: rgba(106, 185, 245, 0.25);
+  color: #84cafc;
+}
+.shared-file-actions button.danger:hover {
+  border-color: rgba(248, 113, 113, 0.25);
+  color: #ef9095;
+}
+.shared-file-actions button:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+.shared-file-actions svg {
+  width: 13px;
+}
+@media (max-width: 1180px) {
+  .file-share-grid {
+    grid-template-columns: 1fr;
+  }
+  .share-storage-card {
+    min-height: 0;
+  }
+  .shared-file-list > article {
+    grid-template-columns: 36px minmax(180px, 1fr) 80px 120px auto;
+  }
+  .shared-file-list .shared-file-metric:nth-of-type(3) {
+    display: none;
+  }
+}
+@media (max-width: 1050px) {
+  .shared-file-list {
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+  }
+  .shared-file-list > article {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 9px;
+    padding: 11px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(7, 12, 19, 0.55);
+  }
+  .shared-file-metric {
+    display: none;
+  }
+  .shared-file-actions {
+    grid-column: 2 / -1;
+  }
+}
+@media (max-width: 760px) {
+  .file-share-security {
+    display: none;
+  }
+  .share-drop-zone {
+    min-height: 220px;
+    padding: 24px 14px;
+  }
+  .share-drop-zone.selected {
+    flex-direction: column;
+  }
+  .selected-file-copy {
+    width: 100%;
+    text-align: center;
+  }
+  .share-upload-footer {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+  .share-upload-footer > div {
+    flex-basis: 100%;
+  }
+  .share-link-ready {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+  .share-link-ready > svg {
+    align-self: center;
+  }
+  .share-link-ready > div {
+    flex-basis: calc(100% - 36px);
+  }
+}

@@ -6,6 +6,7 @@ import AuthRoot from "./Auth";
 import "./styles.css";
 import "./enhancements.css";
 import "./identity.css";
+import "./file-sharing.css";
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

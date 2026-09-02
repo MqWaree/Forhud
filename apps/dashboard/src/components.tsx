@@ -147,7 +147,13 @@ export function Drawer({
     </>
   );
 }
-export function Progress({ value }: { value: number }) {
+export function Progress({
+  value,
+  label = "Progress",
+}: {
+  value: number;
+  label?: string;
+}) {
   const normalized = Math.min(100, Math.max(0, value));
   return (
     <div
@@ -156,6 +162,7 @@ export function Progress({ value }: { value: number }) {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(normalized)}
+      aria-label={label}
     >
       <span style={{ width: `${normalized}%` }} />
     </div>

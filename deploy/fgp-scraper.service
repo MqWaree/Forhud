@@ -23,7 +23,7 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
-ReadWritePaths=/var/lib/fgp /var/backups/fgp
+ReadWritePaths=/var/lib/fgp
 UMask=0027
 
 [Install]

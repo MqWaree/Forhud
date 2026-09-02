@@ -1,4 +1,12 @@
-import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  cp,
+  lstat,
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +16,15 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outputPath = join(projectRoot, "deploy", "fgp-release.tar.gz");
 const stagingParent = await mkdtemp(join(tmpdir(), "fgp-release-"));
 const stagingRoot = join(stagingParent, "package");
+const sourceRoot = join(stagingParent, "source");
+const sourceArchive = join(stagingParent, "source.tar");
+const commit = spawnSync("git", ["rev-parse", "HEAD"], {
+  cwd: projectRoot,
+  encoding: "utf8",
+});
+if (commit.status !== 0 || !/^[0-9a-f]{40}\s*$/i.test(commit.stdout))
+  throw new Error(commit.stderr || "Could not resolve the release commit");
+const sourceCommit = commit.stdout.trim().toLowerCase();
 
 const rootEntries = [
   ".env.example",
@@ -49,23 +66,44 @@ const deniedDirectories = new Set([
 
 const deniedFile = (name) =>
   (name.startsWith(".env") && name !== ".env.example") ||
-  /(?:\.db(?:-shm|-wal)?|\.sqlite\d*|\.log|\.pyc|\.tsbuildinfo|\.tar\.gz)$/i.test(
+  /(?:\.db(?:-journal|-shm|-wal)?|\.sqlite\d*|\.log|\.pyc|\.tsbuildinfo|\.tar\.gz)$/i.test(
     name,
   ) ||
   /^query_engine-.*\.tmp/i.test(name);
 
-function includeSource(source) {
-  const pathFromRoot = relative(projectRoot, source);
+async function includeSource(source) {
+  const pathFromRoot = relative(sourceRoot, source);
   if (!pathFromRoot) return true;
   const parts = pathFromRoot.split(sep);
   if (parts.some((part) => deniedDirectories.has(part))) return false;
-  return !deniedFile(basename(source));
+  if (deniedFile(basename(source))) return false;
+  if ((await lstat(source)).isSymbolicLink())
+    throw new Error(`Release source contains a symlink: ${pathFromRoot}`);
+  return true;
+}
+
+async function materializeCommittedSource() {
+  await mkdir(sourceRoot, { recursive: true });
+  const archived = spawnSync(
+    "git",
+    ["archive", "--format=tar", `--output=${sourceArchive}`, sourceCommit],
+    { cwd: projectRoot, encoding: "utf8" },
+  );
+  if (archived.status !== 0)
+    throw new Error(archived.stderr || "Could not archive the release commit");
+  const extracted = spawnSync("tar", ["-xf", sourceArchive, "-C", sourceRoot], {
+    encoding: "utf8",
+  });
+  if (extracted.status !== 0)
+    throw new Error(
+      extracted.stderr || "Could not extract committed release source",
+    );
 }
 
 async function copyReleaseSource() {
   await mkdir(stagingRoot, { recursive: true });
   for (const entry of rootEntries) {
-    const source = join(projectRoot, entry);
+    const source = join(sourceRoot, entry);
     const destination = join(stagingRoot, entry);
     await cp(source, destination, {
       recursive: true,
@@ -76,6 +114,7 @@ async function copyReleaseSource() {
   const metadata = {
     builtAt: new Date().toISOString(),
     source: "npm run release:build",
+    sourceCommit,
     policy: "allowlisted-source-only",
   };
   await writeFile(
@@ -122,6 +161,7 @@ function inspectArchive() {
 
 try {
   await mkdir(dirname(outputPath), { recursive: true });
+  await materializeCommittedSource();
   await copyReleaseSource();
   createArchive();
   const entryCount = inspectArchive();

@@ -19,6 +19,8 @@ type Overview = {
   scannerResults: number;
   leads: number;
   scannersRunning: number;
+  backupsAvailable: boolean;
+  restoreAvailable: boolean;
   lastBackup?: string;
 };
 type UserRow = {
@@ -29,9 +31,19 @@ type UserRow = {
   lastLoginAt?: string;
   createdAt: string;
   _count: { assignedLeads: number; extensionInstances: number };
-  rankAssignments: Array<{ rank: { id: string; name: string; color: string; position: number } }>;
+  rankAssignments: Array<{
+    rank: { id: string; name: string; color: string; position: number };
+  }>;
 };
-type RankRow = { id: string; name: string; color: string; position: number; permissions: string[]; managed: boolean; _count: { users: number } };
+type RankRow = {
+  id: string;
+  name: string;
+  color: string;
+  position: number;
+  permissions: string[];
+  managed: boolean;
+  _count: { users: number };
+};
 type ExtensionRow = {
   id: string;
   instanceId: string;
@@ -70,11 +82,13 @@ export default function AdminPage() {
   const [ranks, setRanks] = useState<RankRow[]>([]);
   const [message, setMessage] = useState("");
   const load = async () => {
-    const [a, b, c, d, e, f] = await Promise.all([
-      api.get<Overview>("/admin/overview"),
+    const a = await api.get<Overview>("/admin/overview");
+    const [b, c, d, e, f] = await Promise.all([
       api.get<UserRow[]>("/admin/users"),
       api.get<ExtensionRow[]>("/admin/extensions"),
-      api.get<BackupRow[]>("/admin/backups"),
+      a.backupsAvailable
+        ? api.get<BackupRow[]>("/admin/backups")
+        : Promise.resolve<BackupRow[]>([]),
       api.get<AuditRow[]>("/admin/audit"),
       api.get<RankRow[]>("/admin/ranks"),
     ]);
@@ -113,8 +127,14 @@ export default function AdminPage() {
   async function createRank(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    await api.send("/admin/ranks", "POST", { name: form.get("name"), color: form.get("color"), position: Number(form.get("position")), permissions: form.get("lztAccess") ? ["LZT_ACCESS"] : [] });
-    event.currentTarget.reset(); await load();
+    await api.send("/admin/ranks", "POST", {
+      name: form.get("name"),
+      color: form.get("color"),
+      position: Number(form.get("position")),
+      permissions: form.get("lztAccess") ? ["LZT_ACCESS"] : [],
+    });
+    event.currentTarget.reset();
+    await load();
   }
   async function updateRank(id: string, data: unknown) {
     await api.send(`/admin/ranks/${id}`, "PATCH", data);
@@ -190,9 +210,11 @@ export default function AdminPage() {
           label="Leads"
           value={overview?.leads || 0}
           detail={
-            overview?.lastBackup
-              ? `Backup ${new Date(overview.lastBackup).toLocaleDateString()}`
-              : "No backup yet"
+            overview?.backupsAvailable === false
+              ? "Platform-managed backups"
+              : overview?.lastBackup
+                ? `Backup ${new Date(overview.lastBackup).toLocaleDateString()}`
+                : "No backup yet"
           }
           icon={<Archive />}
         />
@@ -210,9 +232,88 @@ export default function AdminPage() {
         <h2>Team members</h2>
       </div>
       <article className="card table-card rank-manager">
-        <div className="card-head"><div><h2>Workspace ranks</h2><p>Visual groups and feature permissions. System administrator roles remain separate.</p></div></div>
-        <form className="admin-form" onSubmit={createRank}><input name="name" required maxLength={40} placeholder="Rank name" /><input name="color" type="color" defaultValue="#8792A6" aria-label="Rank color" /><input name="position" type="number" defaultValue="50" min="-1000" max="1000" aria-label="Rank position" /><label className="rank-permission-check"><input name="lztAccess" type="checkbox" /> LZT Access</label><Button><Plus /> Add rank</Button></form>
-        <div className="rank-chip-list">{ranks.map((rank) => <span key={rank.id} style={{ borderColor: rank.color, color: rank.color }}><i style={{ background: rank.color }} />{rank.name}<small>{rank._count.users} members{rank.permissions.includes("LZT_ACCESS") ? " · LZT" : ""}</small>{!rank.managed && <><label title="Toggle LZT Access"><input type="checkbox" checked={rank.permissions.includes("LZT_ACCESS")} onChange={(event) => void updateRank(rank.id, { permissions: event.target.checked ? ["LZT_ACCESS"] : [] })} /> LZT</label><input type="color" value={rank.color} aria-label={`Color for ${rank.name}`} onChange={(event) => void updateRank(rank.id, { color: event.target.value })} /><button className="rank-delete" onClick={() => confirm(`Delete the ${rank.name} rank?`) && void deleteRank(rank.id)}>Delete</button></>}</span>)}</div>
+        <div className="card-head">
+          <div>
+            <h2>Workspace ranks</h2>
+            <p>
+              Visual groups and feature permissions. System administrator roles
+              remain separate.
+            </p>
+          </div>
+        </div>
+        <form className="admin-form" onSubmit={createRank}>
+          <input name="name" required maxLength={40} placeholder="Rank name" />
+          <input
+            name="color"
+            type="color"
+            defaultValue="#8792A6"
+            aria-label="Rank color"
+          />
+          <input
+            name="position"
+            type="number"
+            defaultValue="50"
+            min="-1000"
+            max="1000"
+            aria-label="Rank position"
+          />
+          <label className="rank-permission-check">
+            <input name="lztAccess" type="checkbox" /> LZT Access
+          </label>
+          <Button>
+            <Plus /> Add rank
+          </Button>
+        </form>
+        <div className="rank-chip-list">
+          {ranks.map((rank) => (
+            <span
+              key={rank.id}
+              style={{ borderColor: rank.color, color: rank.color }}
+            >
+              <i style={{ background: rank.color }} />
+              {rank.name}
+              <small>
+                {rank._count.users} members
+                {rank.permissions.includes("LZT_ACCESS") ? " · LZT" : ""}
+              </small>
+              {!rank.managed && (
+                <>
+                  <label title="Toggle LZT Access">
+                    <input
+                      type="checkbox"
+                      checked={rank.permissions.includes("LZT_ACCESS")}
+                      onChange={(event) =>
+                        void updateRank(rank.id, {
+                          permissions: event.target.checked
+                            ? ["LZT_ACCESS"]
+                            : [],
+                        })
+                      }
+                    />{" "}
+                    LZT
+                  </label>
+                  <input
+                    type="color"
+                    value={rank.color}
+                    aria-label={`Color for ${rank.name}`}
+                    onChange={(event) =>
+                      void updateRank(rank.id, { color: event.target.value })
+                    }
+                  />
+                  <button
+                    className="rank-delete"
+                    onClick={() =>
+                      confirm(`Delete the ${rank.name} rank?`) &&
+                      void deleteRank(rank.id)
+                    }
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
+            </span>
+          ))}
+        </div>
       </article>
       <article className="card table-card">
         <form className="admin-form" onSubmit={createUser}>
@@ -278,7 +379,39 @@ export default function AdminPage() {
                       <option>RESEARCHER</option>
                     </select>
                   </td>
-                  <td><div className="rank-assignment-list">{ranks.map((rank) => { const checked = user.rankAssignments.some((item) => item.rank.id === rank.id); return <label key={rank.id} style={{ color: rank.color }}><input type="checkbox" checked={checked} onChange={(event) => void assignRanks(user.id, event.target.checked ? [...user.rankAssignments.map((item) => item.rank.id), rank.id] : user.rankAssignments.map((item) => item.rank.id).filter((id) => id !== rank.id))} />{rank.name}</label>; })}</div></td>
+                  <td>
+                    <div className="rank-assignment-list">
+                      {ranks.map((rank) => {
+                        const checked = user.rankAssignments.some(
+                          (item) => item.rank.id === rank.id,
+                        );
+                        return (
+                          <label key={rank.id} style={{ color: rank.color }}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(event) =>
+                                void assignRanks(
+                                  user.id,
+                                  event.target.checked
+                                    ? [
+                                        ...user.rankAssignments.map(
+                                          (item) => item.rank.id,
+                                        ),
+                                        rank.id,
+                                      ]
+                                    : user.rankAssignments
+                                        .map((item) => item.rank.id)
+                                        .filter((id) => id !== rank.id),
+                                )
+                              }
+                            />
+                            {rank.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </td>
                   <td>
                     <Badge
                       tone={user.status === "ACTIVE" ? "connected" : "failed"}
@@ -384,78 +517,100 @@ export default function AdminPage() {
           <div>
             <h2>Verified SQLite snapshots</h2>
             <p>
-              Restore creates a safety backup first and signs out existing
-              sessions.
+              {overview?.backupsAvailable === false
+                ? "Workspace administrators cannot access platform-wide snapshots when multiple workspaces exist."
+                : "Database snapshots do not contain shared-file payloads. Production restores use the offline operator recovery procedure so every database writer is stopped."}
             </p>
           </div>
-          <div className="header-actions">
-            <label className="btn secondary">
-              <Upload /> Upload
-              <input
-                hidden
-                type="file"
-                accept=".db,application/x-sqlite3,application/octet-stream"
-                onChange={(event) => void uploadBackup(event.target.files?.[0])}
-              />
-            </label>
-            <Button onClick={() => void createBackup()}>
-              <DatabaseBackup /> Create backup
-            </Button>
-          </div>
+          {overview?.backupsAvailable && (
+            <div className="header-actions">
+              <label className="btn secondary">
+                <Upload /> Upload
+                <input
+                  hidden
+                  type="file"
+                  accept=".db,application/x-sqlite3,application/octet-stream"
+                  onChange={(event) =>
+                    void uploadBackup(event.target.files?.[0])
+                  }
+                />
+              </label>
+              <Button onClick={() => void createBackup()}>
+                <DatabaseBackup /> Create backup
+              </Button>
+            </div>
+          )}
         </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Created</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Size</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {backups.map((item) => (
-                <tr key={item.id}>
-                  <td>{new Date(item.createdAt).toLocaleString()}</td>
-                  <td>{item.type}</td>
-                  <td>
-                    <Badge
-                      tone={
-                        item.status === "COMPLETED" ? "completed" : "failed"
-                      }
-                    >
-                      {item.status}
-                    </Badge>
-                  </td>
-                  <td>{Math.ceil(item.size / 1024)} KB</td>
-                  <td>
-                    <div className="actions-inline">
-                      <a href={`/api/admin/backups/${item.id}/download`}>
-                        Download
-                      </a>
-                      <button
-                        className="danger"
-                        onClick={() =>
-                          confirm(
-                            "Restore this backup? Current data gets a safety backup first.",
-                          ) &&
-                          void api.send(
-                            `/admin/backups/${item.id}/restore`,
-                            "POST",
-                            { confirm: "RESTORE" },
-                          )
+        {overview?.backupsAvailable === false ? (
+          <div className="notice">
+            <ShieldCheck />
+            <div>
+              <b>Platform backup required</b>
+              <span>
+                Ask the VPS operator to create or restore a protected
+                platform-level snapshot.
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Created</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Size</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {backups.map((item) => (
+                  <tr key={item.id}>
+                    <td>{new Date(item.createdAt).toLocaleString()}</td>
+                    <td>{item.type}</td>
+                    <td>
+                      <Badge
+                        tone={
+                          item.status === "COMPLETED" ? "completed" : "failed"
                         }
                       >
-                        Restore
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                        {item.status}
+                      </Badge>
+                    </td>
+                    <td>{Math.ceil(item.size / 1024)} KB</td>
+                    <td>
+                      <div className="actions-inline">
+                        <a href={`/api/admin/backups/${item.id}/download`}>
+                          Download
+                        </a>
+                        {overview?.restoreAvailable ? (
+                          <button
+                            className="danger"
+                            onClick={() =>
+                              confirm(
+                                "Restore this backup? Current data gets a safety backup first.",
+                              ) &&
+                              void api.send(
+                                `/admin/backups/${item.id}/restore`,
+                                "POST",
+                                { confirm: "RESTORE" },
+                              )
+                            }
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <span>Operator restore</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </article>
       <div className="section-title">
         <h2>Recent security activity</h2>

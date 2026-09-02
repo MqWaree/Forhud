@@ -34,6 +34,7 @@ import {
   Save,
   Scissors,
   Search,
+  Share2,
   ShoppingCart,
   Settings as SettingsIcon,
   ShieldCheck,
@@ -55,6 +56,7 @@ import LeadsPage from "./LeadsPage";
 import AdminPage from "./AdminPage";
 import RustPricesPage from "./RustPricesPage";
 import MemberSidebar from "./MemberSidebar";
+import FileSharingPage from "./FileSharingPage";
 import { useAuth } from "./Auth";
 import {
   Badge,
@@ -81,6 +83,7 @@ const nav = [
   ["Dashboard", "/", LayoutDashboard],
   ["Searcher", "/searcher", Search],
   ["Splitter", "/splitter", Scissors],
+  ["File Sharing", "/files", Share2],
   ["Leads", "/leads", Funnel],
   ["My Leads", "/my-leads", Users],
   ["Location Checker", "/location", MapPin],
@@ -276,7 +279,7 @@ export default function App() {
             <i className="dot blue" />
             Extension listening
           </p>
-          <small>v1.4.0 · {user.workspace.name}</small>
+          <small>v1.5.0 · {user.workspace.name}</small>
         </div>
       </aside>
       <main>
@@ -386,6 +389,7 @@ export default function App() {
           <Route path="/searcher" element={<SearcherPage />} />
           <Route path="/rust-prices" element={<RustPricesPage />} />
           <Route path="/splitter" element={<Splitter />} />
+          <Route path="/files" element={<FileSharingPage />} />
           <Route
             path="/leads"
             element={<LeadsPage leads={ctx.leads} refresh={ctx.refresh} />}
@@ -1774,57 +1778,70 @@ function Settings() {
                 Destructive database actions are intentionally not exposed
                 without a backup workflow.
               </p>
-              <label>
-                <span>
-                  <b>Automatic backups</b>
-                  <small>Run snapshot maintenance at startup and hourly</small>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={data.automaticBackups}
-                  onChange={(event) =>
-                    set("automaticBackups", event.target.checked)
-                  }
-                />
-              </label>
-              <label>
-                <span>
-                  <b>Frequency</b>
-                  <small>Automatic snapshot interval</small>
-                </span>
-                <select
-                  value={data.backupFrequency}
-                  onChange={(event) =>
-                    set("backupFrequency", event.target.value)
-                  }
-                >
-                  <option value="DAILY">Daily</option>
-                  <option value="WEEKLY">Weekly</option>
-                </select>
-              </label>
-              <label>
-                <span>
-                  <b>Preferred time</b>
-                  <small>Local server time</small>
-                </span>
-                <input
-                  type="time"
-                  value={data.backupTime}
-                  onChange={(event) => set("backupTime", event.target.value)}
-                />
-              </label>
-              <NumberSetting
-                label="Daily retention"
-                detail="Automatic daily copies to keep"
-                value={data.backupRetentionDaily}
-                onChange={(value) => set("backupRetentionDaily", value)}
-              />
-              <NumberSetting
-                label="Weekly retention"
-                detail="Automatic weekly copies to keep"
-                value={data.backupRetentionWeekly}
-                onChange={(value) => set("backupRetentionWeekly", value)}
-              />
+              {data.backupsAvailable ? (
+                <>
+                  <label>
+                    <span>
+                      <b>Automatic backups</b>
+                      <small>
+                        Run snapshot maintenance at startup and hourly
+                      </small>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={data.automaticBackups}
+                      onChange={(event) =>
+                        set("automaticBackups", event.target.checked)
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>
+                      <b>Frequency</b>
+                      <small>Automatic snapshot interval</small>
+                    </span>
+                    <select
+                      value={data.backupFrequency}
+                      onChange={(event) =>
+                        set("backupFrequency", event.target.value)
+                      }
+                    >
+                      <option value="DAILY">Daily</option>
+                      <option value="WEEKLY">Weekly</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>
+                      <b>Preferred time</b>
+                      <small>Local server time</small>
+                    </span>
+                    <input
+                      type="time"
+                      value={data.backupTime}
+                      onChange={(event) =>
+                        set("backupTime", event.target.value)
+                      }
+                    />
+                  </label>
+                  <NumberSetting
+                    label="Daily retention"
+                    detail="Automatic daily copies to keep"
+                    value={data.backupRetentionDaily}
+                    onChange={(value) => set("backupRetentionDaily", value)}
+                  />
+                  <NumberSetting
+                    label="Weekly retention"
+                    detail="Automatic weekly copies to keep"
+                    value={data.backupRetentionWeekly}
+                    onChange={(value) => set("backupRetentionWeekly", value)}
+                  />
+                </>
+              ) : (
+                <div className="notice">
+                  Platform backup controls are managed by the VPS operator in
+                  multi-workspace installations.
+                </div>
+              )}
             </article>
           </>
         )}

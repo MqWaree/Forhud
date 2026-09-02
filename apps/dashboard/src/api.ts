@@ -51,6 +51,28 @@ export type Location = {
   status: string;
   checkedAt: string;
 };
+export type SharedFile = {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  downloadCount: number;
+  lastDownloadedAt?: string | null;
+  createdAt: string;
+  uploadedBy?: { username: string } | null;
+  canDelete: boolean;
+  downloadPath: string;
+};
+export type SharedFileSnapshot = {
+  files: SharedFile[];
+  usage: {
+    usedBytes: number;
+    fileCount: number;
+    maxFileBytes: number;
+    quotaBytes: number;
+    maxFiles: number;
+  };
+};
 export type Lead = {
   id: string;
   status: string;
