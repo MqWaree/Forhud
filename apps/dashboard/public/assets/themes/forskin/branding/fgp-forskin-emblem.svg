@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">FGP Forskin emblem</title>
+  <defs>
+    <linearGradient id="metal" x1=".15" y1=".05" x2=".88" y2=".95"><stop stop-color="#f1d28a"/><stop offset=".27" stop-color="#9b7537"/><stop offset=".56" stop-color="#39372f"/><stop offset="1" stop-color="#15110d"/></linearGradient>
+    <linearGradient id="verdigris" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#8dc4a2"/><stop offset=".48" stop-color="#345c4b"/><stop offset="1" stop-color="#15251f"/></linearGradient>
+  </defs>
+  <path d="M256 18 454 126l-27 252-171 116L85 378 58 126Z" fill="#0b0e0c" stroke="url(#metal)" stroke-width="22"/>
+  <path d="m256 61 153 83-22 208-131 89-131-89-22-208Z" fill="url(#verdigris)" stroke="#725629" stroke-width="12"/>
+  <path d="M143 183q113-113 226 0l-31 155-82 57-82-57Z" fill="#141b17" stroke="url(#metal)" stroke-width="16"/>
+  <path d="m256 117 31 62 69 10-50 48 12 68-62-33-62 33 12-68-50-48 69-10Z" fill="url(#metal)"/>
+  <circle cx="256" cy="229" r="35" fill="#172a23" stroke="#d0a956" stroke-width="11"/>
+  <path d="M117 341q139 92 278 0M131 151q125-79 250 0" fill="none" stroke="#e6cb8e" stroke-width="8" stroke-linecap="round" opacity=".62"/>
+</svg>

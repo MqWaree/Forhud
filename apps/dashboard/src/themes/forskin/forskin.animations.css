@@ -1,0 +1,189 @@
+@keyframes forskin-frame-breathe {
+  0%,
+  100% {
+    opacity: 0.42;
+    filter: brightness(0.9);
+  }
+  50% {
+    opacity: 0.68;
+    filter: brightness(1.12);
+  }
+}
+
+@keyframes forskin-ember-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, 5px, 0);
+  }
+}
+
+@keyframes forskin-status-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 5px currentColor;
+  }
+  50% {
+    box-shadow: 0 0 12px currentColor;
+  }
+}
+
+@keyframes forskin-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+/* Subtle only retains short state transitions and functional loading motion. */
+:root[data-theme="forskin-subtle"] .page {
+  animation: forskin-enter 160ms ease-out both;
+}
+
+:root[data-theme="forskin-subtle"]
+  :is(.btn, .card, .sidebar nav a, .identity-action, input, select, textarea) {
+  transition-duration: 120ms;
+}
+
+/* Hella ornaments move slowly enough to remain atmosphere, not activity. */
+:root[data-theme="forskin-hella"] .app::before,
+:root[data-theme="forskin-hella"] .app::after {
+  animation: forskin-frame-breathe 16s ease-in-out infinite;
+}
+
+:root[data-theme="forskin-hella"] .app::after {
+  animation-delay: -8s;
+}
+
+:root[data-theme="forskin-hella"] .brand-logo,
+:root[data-theme="forskin-hella"] .auth-brand-logo {
+  animation: forskin-ember-drift 14s ease-in-out infinite;
+}
+
+:root[data-theme="forskin-hella"] .forskin-ambient-piece,
+:root[data-theme="forskin-hella"] .forskin-mug-ornament {
+  animation: forskin-ember-drift 12s ease-in-out infinite alternate;
+}
+
+:root[data-theme="forskin-hella"] .forskin-chain-corner,
+:root[data-theme="forskin-hella"] .forskin-smoke-overlay {
+  animation-duration: 16s;
+  animation-delay: -6s;
+}
+
+:root[data-theme="forskin-hella"] .forskin-tendril-right,
+:root[data-theme="forskin-hella"] .forskin-sparks-overlay {
+  animation-duration: 10s;
+  animation-delay: -3s;
+}
+
+:root[data-theme="forskin-hella"]
+  :is(
+    .dot.green,
+    .dot.blue,
+    .scanner-live-dot.running,
+    .provider-status.ready i
+  ) {
+  animation: forskin-status-breathe 8s ease-in-out infinite;
+}
+
+:root[data-theme="forskin-hella"] .page {
+  animation: forskin-enter 220ms ease-out both;
+}
+
+/* Functional indicators remain available in either theme. */
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.spin, .loading svg) {
+  animation-name: spin;
+  animation-duration: 0.9s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+:root:is(
+    [data-theme="forskin-subtle"],
+    [data-theme="forskin-hella"]
+  )[data-forskin-motion="paused"]
+  *,
+:root:is(
+    [data-theme="forskin-subtle"],
+    [data-theme="forskin-hella"]
+  )[data-forskin-motion="paused"]
+  *::before,
+:root:is(
+    [data-theme="forskin-subtle"],
+    [data-theme="forskin-hella"]
+  )[data-forskin-motion="paused"]
+  *::after,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  [data-forskin-motion="paused"]
+  *,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  [data-forskin-motion="paused"]
+  *::before,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  [data-forskin-motion="paused"]
+  *::after {
+  animation-play-state: paused !important;
+}
+
+:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])[data-forskin-motion="off"]
+  :is(
+    .forskin-ambient,
+    .forskin-ambient *,
+    .brand-logo,
+    .auth-brand-logo,
+    .dot.green,
+    .dot.blue,
+    .scanner-live-dot.running,
+    .provider-status.ready i,
+    .page
+  ),
+:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])[data-forskin-motion="off"]
+  .app::before,
+:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])[data-forskin-motion="off"]
+  .app::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+:root:is(
+    [data-theme="forskin-subtle"],
+    [data-theme="forskin-hella"]
+  )[data-forskin-motion="off"] {
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) {
+    scroll-behavior: auto !important;
+  }
+
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) *,
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+    *::before,
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+    *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+    :is(.spin, .loading svg) {
+    animation: spin 0.9s linear infinite !important;
+  }
+}
+
+@media (max-width: 760px) {
+  :root[data-theme="forskin-hella"] .brand-logo,
+  :root[data-theme="forskin-hella"] .auth-brand-logo,
+  :root[data-theme="forskin-hella"] .app::before,
+  :root[data-theme="forskin-hella"] .app::after {
+    animation: none;
+  }
+}

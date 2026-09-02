@@ -1,0 +1,350 @@
+@import "./forskin.tokens.css";
+@import "./forskin.components.css";
+@import "./forskin.animations.css";
+
+.forskin-asset[hidden] {
+  display: none !important;
+}
+
+.forskin-frame {
+  position: relative;
+  padding: 18px;
+  overflow: hidden;
+  border: 8px solid var(--forskin-line, var(--line));
+  border-image-source: var(--forskin-frame-image);
+  border-image-slice: var(--forskin-frame-slice, 10%);
+  border-image-width: 8px;
+  border-image-repeat: stretch;
+  border-radius: var(--fs-radius, 12px);
+  background: var(--forskin-surface, var(--card));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+
+.forskin-logo {
+  display: block;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.forskin-plaque {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 11px;
+  border: 1px solid var(--fs-line, var(--line));
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--fs-gold, var(--blue));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+}
+
+.forskin-plaque-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.forskin-plaque > span {
+  position: relative;
+}
+
+.forskin-ornaments {
+  position: fixed;
+  inset: 0;
+  z-index: 34;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.forskin-ornaments img {
+  position: absolute;
+  display: block;
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
+  opacity: 0.42;
+}
+
+.forskin-ornaments .forskin-tendril-left {
+  top: -34px;
+  left: -34px;
+  width: 190px;
+  height: 380px;
+}
+
+.forskin-ornaments .forskin-chain-corner {
+  top: -48px;
+  right: -42px;
+  width: 230px;
+  height: 230px;
+}
+
+.forskin-ornaments .forskin-tendril-right {
+  right: -34px;
+  bottom: -34px;
+  width: 180px;
+  height: 360px;
+}
+
+.forskin-ornaments .forskin-shell-medallion {
+  right: 12px;
+  bottom: 18px;
+  width: 88px;
+  height: 88px;
+  opacity: 0.5;
+}
+
+.forskin-ornaments .forskin-smoke-overlay,
+.forskin-ornaments .forskin-sparks-overlay {
+  inset: auto 8% 0;
+  width: 84%;
+  height: 34%;
+  object-fit: fill;
+  opacity: 0.07;
+}
+
+.forskin-ornaments .forskin-sparks-overlay {
+  opacity: 0.11;
+}
+
+.forskin-mug-ornament {
+  position: absolute;
+  right: 38px;
+  bottom: 96px;
+  width: 126px;
+  height: 126px;
+}
+
+.forskin-mug-ornament > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.58;
+}
+
+.forskin-mug-ornament > span {
+  position: absolute;
+  inset: 42px 28px auto 25px;
+  color: #f2d593;
+  font:
+    700 7px/1.25 Georgia,
+    serif;
+  text-align: center;
+  text-wrap: balance;
+  transform: rotate(-2deg);
+}
+
+.forskin-warning-plaque {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  max-width: 280px;
+  transform: translateX(-50%) rotate(-1deg);
+}
+
+.forskin-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.forskin-progress {
+  flex: 1;
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.07);
+  background-position: center;
+  background-size: 100% 100%;
+}
+
+.forskin-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background-color: var(--fs-functional, var(--blue));
+  background-position: left center;
+  background-size: 100% 100%;
+  box-shadow: 0 0 15px rgba(81, 199, 210, 0.35);
+  transition: width 180ms ease;
+}
+
+.forskin-progress-value {
+  min-width: 32px;
+  color: var(--muted);
+  font:
+    700 10px "JetBrains Mono",
+    monospace;
+}
+
+.forskin-theme-toggle {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.forskin-theme-toggle button {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.forskin-theme-toggle button:hover {
+  color: inherit;
+}
+
+.forskin-theme-toggle button[aria-pressed="true"] {
+  background: rgba(81, 199, 210, 0.14);
+  color: var(--fs-text-strong, #f8f3f6);
+  box-shadow: inset 0 0 0 1px rgba(81, 199, 210, 0.3);
+}
+
+.forskin-theme-toggle button:focus-visible,
+.forskin-theme-settings input:focus-visible {
+  outline: 2px solid var(--fs-focus, var(--blue));
+  outline-offset: 2px;
+}
+
+.forskin-theme-settings {
+  display: grid;
+  gap: 12px;
+  color: inherit;
+}
+
+.forskin-theme-settings h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.forskin-theme-settings > label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.forskin-theme-settings input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--fs-functional, var(--blue));
+}
+
+.forskin-preview {
+  --forskin-surface: #0c1119;
+  --forskin-line: rgba(255, 255, 255, 0.075);
+  position: relative;
+  isolation: isolate;
+  min-height: 170px;
+  padding: 18px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #05070b;
+  color: #f4f7fb;
+}
+
+.forskin-preview[data-theme="forskin-subtle"] {
+  --forskin-surface: #14130f;
+  --forskin-line: rgba(187, 146, 86, 0.25);
+  background: #0b0b09;
+}
+
+.forskin-preview[data-theme="forskin-hella"] {
+  --forskin-surface: #100f0c;
+  --forskin-line: rgba(216, 180, 109, 0.42);
+  background: radial-gradient(circle at 80% 0, #2b2415, #070705 62%);
+}
+
+.forskin-preview .forskin-frame {
+  z-index: 1;
+}
+
+.forskin-preview header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 20px;
+}
+
+.forskin-preview header strong,
+.forskin-preview header span {
+  display: block;
+}
+
+.forskin-preview header strong {
+  font-size: 12px;
+}
+
+.forskin-preview header span,
+.forskin-preview p {
+  margin: 3px 0 0;
+  color: #a79b87;
+  font-size: 9px;
+}
+
+[data-forskin-copy="off"] .forskin-decorative-copy {
+  display: none !important;
+}
+
+[data-forskin-motion="paused"] .forskin-ambient,
+[data-forskin-motion="paused"] .forskin-ambient * {
+  animation-play-state: paused !important;
+}
+
+[data-forskin-motion="off"] .forskin-ambient,
+[data-forskin-motion="off"] .forskin-ambient * {
+  animation: none !important;
+  transition: none !important;
+}
+
+@keyframes forskin-core-drift {
+  from {
+    transform: translate3d(-3px, -2px, 0);
+  }
+  to {
+    transform: translate3d(6px, 5px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .forskin-ambient,
+  .forskin-ambient *,
+  .forskin-progress > span {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 1200px) {
+  .forskin-ornaments {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .forskin-theme-toggle {
+    grid-template-columns: 1fr;
+  }
+}

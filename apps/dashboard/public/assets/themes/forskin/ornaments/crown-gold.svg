@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 384" role="img" aria-labelledby="title">
+  <title id="title">Gold crown ornament</title>
+  <defs><linearGradient id="gold" x1=".12" y1=".04" x2=".85" y2="1"><stop stop-color="#fff0ae"/><stop offset=".25" stop-color="#d4a74d"/><stop offset=".67" stop-color="#795027"/><stop offset="1" stop-color="#2b1a0f"/></linearGradient></defs>
+  <path d="m47 114 98 77 104-152 108 152 108-81-39 207q-171 53-342 0Z" fill="url(#gold)" stroke="#21140d" stroke-width="18" stroke-linejoin="round"/>
+  <path d="M84 276q171 45 342 0M97 315q158 39 316 0" fill="none" stroke="#f0d283" stroke-width="12" opacity=".58"/>
+  <g fill="#315b4a" stroke="#e0bd6a" stroke-width="8"><path d="m149 231 31-30 31 30-31 31Z"/><path d="m225 241 31-39 31 39-31 39Z"/><path d="m302 231 31-30 31 30-31 31Z"/></g>
+</svg>

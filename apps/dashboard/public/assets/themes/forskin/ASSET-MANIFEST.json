@@ -1,0 +1,406 @@
+{
+  "schemaVersion": 1,
+  "theme": "forskin",
+  "generatedBy": "apps/dashboard/scripts/generate-forskin-assets.mjs",
+  "deterministic": true,
+  "referenceNote": "reference/forskin-mode-reference.png is a generated implementation style board because no external reference was attached.",
+  "license": "Original project artwork. May be used, modified, and redistributed with this project under the project license. No third-party artwork is included.",
+  "budgets": {
+    "initial": {
+      "bytes": 431800,
+      "limitBytes": 1572864,
+      "assets": [
+        "branding/fgp-forskin-emblem.svg",
+        "branding/fgp-forskin-mini-mark.svg",
+        "branding/fgp-forskin-wordmark.svg",
+        "frames/divider-horizontal.webp",
+        "frames/frame-active-9slice.webp",
+        "frames/frame-error-9slice.webp",
+        "frames/frame-heavy-9slice.webp",
+        "frames/frame-medium-9slice.webp",
+        "frames/frame-thin-9slice.webp",
+        "frames/nav-active-drip.webp",
+        "frames/progress-tube-fill.webp",
+        "frames/progress-tube-track.webp",
+        "icons/icon-fgp-crown.svg",
+        "icons/icon-forskin-scan.svg",
+        "icons/icon-forskin-theme.svg",
+        "icons/icon-intact-shield.svg",
+        "icons/icon-organic-link.svg",
+        "textures/charcoal-surface.webp",
+        "textures/fine-grain.webp",
+        "textures/grid-mask.svg",
+        "textures/vignette.webp"
+      ]
+    },
+    "full": {
+      "bytes": 900394,
+      "limitBytes": 5242880,
+      "excludes": [
+        "ASSET-MANIFEST.json"
+      ]
+    }
+  },
+  "assets": [
+    {
+      "path": "branding/fgp-forskin-emblem.svg",
+      "bytes": 1261,
+      "width": 512,
+      "height": 512,
+      "role": "Primary Forskin mode emblem",
+      "lazy": false,
+      "provenance": "Original path artwork authored for this project; no external artwork, font dependency, or model output."
+    },
+    {
+      "path": "branding/fgp-forskin-mini-mark.svg",
+      "bytes": 593,
+      "width": 128,
+      "height": 128,
+      "role": "Compact navigation mark",
+      "lazy": false,
+      "provenance": "Original path artwork authored for this project; no external artwork, font dependency, or model output."
+    },
+    {
+      "path": "branding/fgp-forskin-wordmark.svg",
+      "bytes": 1164,
+      "width": 1280,
+      "height": 260,
+      "role": "Path-built Forskin wordmark",
+      "lazy": false,
+      "provenance": "Original path artwork authored for this project; no external artwork, font dependency, or model output."
+    },
+    {
+      "path": "frames/divider-horizontal.webp",
+      "bytes": 7562,
+      "width": 1024,
+      "height": 96,
+      "role": "Horizontal organic-metal divider",
+      "lazy": false,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "frames/divider-vertical.webp",
+      "bytes": 8838,
+      "width": 96,
+      "height": 1024,
+      "role": "Vertical organic-metal divider",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "frames/frame-active-9slice.webp",
+      "bytes": 26072,
+      "width": 1024,
+      "height": 1024,
+      "role": "Active panel border-image source; recommended slice 12%",
+      "lazy": false,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "frames/frame-error-9slice.webp",
+      "bytes": 26644,
+      "width": 1024,
+      "height": 1024,
+      "role": "Error panel border-image source; recommended slice 12%",
+      "lazy": false,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "frames/frame-heavy-9slice.webp",
+      "bytes": 26874,
+      "width": 1024,
+      "height": 1024,
+      "role": "Heavy panel border-image source; recommended slice 19%",
+      "lazy": false,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "frames/frame-medium-9slice.webp",
+      "bytes": 27504,
+      "width": 1024,
+      "height": 1024,
+      "role": "Medium panel border-image source; recommended slice 15%",
+      "lazy": false,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "frames/frame-thin-9slice.webp",
+      "bytes": 25102,
+      "width": 1024,
+      "height": 1024,
+      "role": "Thin panel border-image source; recommended slice 10%",
+      "lazy": false,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "frames/nav-active-drip.webp",
+      "bytes": 18578,
+      "width": 768,
+      "height": 180,
+      "role": "Active navigation underline ornament",
+      "lazy": false,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "frames/progress-tube-fill.webp",
+      "bytes": 4052,
+      "width": 1024,
+      "height": 120,
+      "role": "Progress tube scalable fill",
+      "lazy": false,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "frames/progress-tube-track.webp",
+      "bytes": 2956,
+      "width": 1024,
+      "height": 120,
+      "role": "Progress tube empty track",
+      "lazy": false,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "icons/icon-fgp-crown.svg",
+      "bytes": 355,
+      "width": 64,
+      "height": 64,
+      "role": "FGP crown status icon",
+      "lazy": false,
+      "provenance": "Original path artwork authored for this project; no external artwork, font dependency, or model output."
+    },
+    {
+      "path": "icons/icon-forskin-scan.svg",
+      "bytes": 437,
+      "width": 64,
+      "height": 64,
+      "role": "Forskin scan action icon",
+      "lazy": false,
+      "provenance": "Original path artwork authored for this project; no external artwork, font dependency, or model output."
+    },
+    {
+      "path": "icons/icon-forskin-theme.svg",
+      "bytes": 342,
+      "width": 64,
+      "height": 64,
+      "role": "Forskin theme selector icon",
+      "lazy": false,
+      "provenance": "Original path artwork authored for this project; no external artwork, font dependency, or model output."
+    },
+    {
+      "path": "icons/icon-intact-shield.svg",
+      "bytes": 365,
+      "width": 64,
+      "height": 64,
+      "role": "Integrity shield status icon",
+      "lazy": false,
+      "provenance": "Original path artwork authored for this project; no external artwork, font dependency, or model output."
+    },
+    {
+      "path": "icons/icon-organic-link.svg",
+      "bytes": 393,
+      "width": 64,
+      "height": 64,
+      "role": "Organic link action icon",
+      "lazy": false,
+      "provenance": "Original path artwork authored for this project; no external artwork, font dependency, or model output."
+    },
+    {
+      "path": "ornaments/chain-corner.webp",
+      "bytes": 17730,
+      "width": 512,
+      "height": 512,
+      "role": "Decorative upper corner chain",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "ornaments/crown-gold.svg",
+      "bytes": 837,
+      "width": 512,
+      "height": 384,
+      "role": "Gold crown ornament",
+      "lazy": true,
+      "provenance": "Original path artwork authored for this project; no external artwork, font dependency, or model output."
+    },
+    {
+      "path": "ornaments/fgp-dogtag.webp",
+      "bytes": 21288,
+      "width": 640,
+      "height": 640,
+      "role": "Decorative FGP crest dogtag",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "ornaments/footer-organic-knot.webp",
+      "bytes": 29782,
+      "width": 1200,
+      "height": 260,
+      "role": "Footer knot ornament",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "ornaments/forhud-forevig-medallion.webp",
+      "bytes": 25048,
+      "width": 640,
+      "height": 640,
+      "role": "Commemorative fantasy machinery medallion",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "ornaments/forskin-mug.webp",
+      "bytes": 17888,
+      "width": 640,
+      "height": 640,
+      "role": "Decorative armored Forskin mug",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "ornaments/sidebar-organic-knot.webp",
+      "bytes": 22440,
+      "width": 520,
+      "height": 520,
+      "role": "Sidebar knot ornament",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "ornaments/tendril-left.webp",
+      "bytes": 17746,
+      "width": 384,
+      "height": 768,
+      "role": "Decorative left organic-machine tendril",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "ornaments/tendril-right.webp",
+      "bytes": 16964,
+      "width": 384,
+      "height": 768,
+      "role": "Decorative right organic-machine tendril",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "plaques/plaque-rusted-small.webp",
+      "bytes": 13540,
+      "width": 640,
+      "height": 320,
+      "role": "Compact rusted content plaque",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "plaques/plaque-rusted-wide.webp",
+      "bytes": 17800,
+      "width": 1200,
+      "height": 320,
+      "role": "Wide rusted content plaque",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "plaques/plaque-torn.webp",
+      "bytes": 24824,
+      "width": 900,
+      "height": 360,
+      "role": "Irregular torn-edge fantasy plaque",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "plaques/sticker-graffiti.webp",
+      "bytes": 23428,
+      "width": 640,
+      "height": 360,
+      "role": "Abstract path-only graffiti sticker",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "plaques/sticker-warning.webp",
+      "bytes": 13950,
+      "width": 560,
+      "height": 480,
+      "role": "Path-only warning sigil sticker",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "reference/forskin-mode-reference.png",
+      "bytes": 34743,
+      "width": 1600,
+      "height": 1000,
+      "role": "Generated implementation style board, not an external reference",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "textures/charcoal-surface.webp",
+      "bytes": 5816,
+      "width": 512,
+      "height": 512,
+      "role": "Seam-tolerant charcoal surface texture",
+      "lazy": false,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "textures/fine-grain.webp",
+      "bytes": 221468,
+      "width": 512,
+      "height": 512,
+      "role": "Subtle compositing grain",
+      "lazy": false,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "textures/grid-mask.svg",
+      "bytes": 600,
+      "width": 256,
+      "height": 256,
+      "role": "Low-contrast machinery grid mask",
+      "lazy": false,
+      "provenance": "Original path artwork authored for this project; no external artwork, font dependency, or model output."
+    },
+    {
+      "path": "textures/organic-mottle.webp",
+      "bytes": 7184,
+      "width": 512,
+      "height": 512,
+      "role": "Secondary organic machinery mottle",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "textures/smoke-overlay.webp",
+      "bytes": 98636,
+      "width": 1024,
+      "height": 512,
+      "role": "Transparent ambient smoke overlay",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "textures/sparks-overlay.webp",
+      "bytes": 55928,
+      "width": 1024,
+      "height": 512,
+      "role": "Transparent warm sparks overlay",
+      "lazy": true,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "textures/vignette.webp",
+      "bytes": 33662,
+      "width": 1024,
+      "height": 1024,
+      "role": "Transparent edge vignette overlay",
+      "lazy": false,
+      "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    }
+  ]
+}

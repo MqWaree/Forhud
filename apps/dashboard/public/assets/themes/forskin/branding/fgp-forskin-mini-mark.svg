@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Forskin mini mark</title>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f0d18b"/><stop offset=".5" stop-color="#8f6b34"/><stop offset="1" stop-color="#292119"/></linearGradient></defs>
+  <path d="M64 5 116 33l-7 66-45 25-45-25-7-66Z" fill="#101713" stroke="url(#g)" stroke-width="8"/>
+  <path d="M38 91V35h55l-6 14H54v10h27v14H54v18Z" fill="url(#g)"/>
+  <circle cx="94" cy="93" r="10" fill="#54816a" stroke="#d1a957" stroke-width="4"/>
+</svg>

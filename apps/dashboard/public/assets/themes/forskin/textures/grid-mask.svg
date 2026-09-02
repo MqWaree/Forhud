@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-hidden="true">
+  <defs><pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0v32" fill="none" stroke="#b59a61" stroke-width="1" opacity=".3"/><circle cx="0" cy="0" r="2" fill="#d3b675" opacity=".38"/></pattern><radialGradient id="fade"><stop offset=".25" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity=".08"/></radialGradient><mask id="m"><rect width="256" height="256" fill="url(#fade)"/></mask></defs>
+  <rect width="256" height="256" fill="url(#grid)" mask="url(#m)"/>
+</svg>

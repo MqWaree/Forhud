@@ -1,0 +1,1842 @@
+/* Shared shell */
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) body,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .app,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) main,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .page {
+  min-width: 0;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .app {
+  position: relative;
+  isolation: isolate;
+  color: var(--fs-text);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .page {
+  position: relative;
+}
+
+html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .sidebar,
+html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .member-sidebar {
+  border-color: var(--fs-line-strong);
+  color: var(--fs-text);
+  background:
+    linear-gradient(180deg, rgba(81, 199, 210, 0.035), transparent 12rem),
+    rgba(11, 10, 8, 0.97);
+  box-shadow: 0 0 42px var(--fs-shadow);
+  backdrop-filter: blur(18px) saturate(0.8);
+}
+
+html:root[data-theme="forskin-hella"] .sidebar,
+html:root[data-theme="forskin-hella"] .member-sidebar {
+  border-width: 2px;
+  border-color: var(--fs-bronze-600);
+  background:
+    linear-gradient(90deg, rgba(231, 200, 125, 0.035), transparent 28%),
+    linear-gradient(180deg, #12100b, #090906);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .brand {
+  border-bottom: 1px solid var(--fs-line-soft);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-default-brand {
+  display: none;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-sidebar-medallion {
+  display: grid;
+  flex: 0 0 43px;
+  width: 43px;
+  height: 43px;
+  place-items: center;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-sidebar-medallion
+  .forskin-logo {
+  width: 43px;
+  height: 43px;
+  filter: drop-shadow(0 7px 12px rgba(0, 0, 0, 0.55));
+}
+
+:root[data-theme="forskin-hella"] .forskin-sidebar-plaque {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 10px;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .brand-logo,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .auth-brand-logo {
+  border-color: var(--fs-line-strong);
+  background: var(--fs-surface-raised);
+  box-shadow:
+    0 0 0 3px rgba(216, 180, 109, 0.08),
+    0 12px 28px var(--fs-shadow);
+  filter: saturate(0.82) contrast(1.06);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .brand b {
+  color: var(--fs-text-strong);
+  letter-spacing: 0.19em;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .brand
+  small,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .admin-nav-label,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .system
+  > small {
+  color: var(--fs-muted-soft);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .sidebar
+  nav
+  a {
+  border-radius: var(--fs-radius-small);
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .sidebar
+  nav
+  a:hover {
+  border-color: var(--fs-line);
+  color: var(--fs-text-strong);
+  background: rgba(216, 180, 109, 0.075);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .sidebar
+  nav
+  a.active {
+  border-color: var(--fs-line-strong);
+  color: var(--fs-text-strong);
+  background: linear-gradient(
+    90deg,
+    rgba(81, 199, 210, 0.17),
+    rgba(216, 180, 109, 0.055)
+  );
+  box-shadow:
+    inset 3px 0 var(--fs-functional),
+    0 0 22px rgba(81, 199, 210, 0.05);
+}
+
+:root[data-theme="forskin-hella"] .sidebar nav a.active {
+  box-shadow:
+    inset 3px 0 var(--fs-functional),
+    inset 0 0 0 1px rgba(231, 200, 125, 0.12);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .system {
+  border-color: var(--fs-line);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .system
+  p {
+  color: var(--fs-muted);
+}
+
+/* Identity and members */
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .identity-bar {
+  border-color: var(--fs-line);
+  color: var(--fs-text);
+  background: rgba(10, 10, 7, 0.92);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(18px) saturate(0.85);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .mode-switch {
+  border-color: var(--fs-line);
+  border-radius: var(--fs-radius-small);
+  background: var(--fs-charcoal-950);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .mode-switch
+  a {
+  border-radius: calc(var(--fs-radius-small) - 1px);
+  color: var(--fs-muted-soft);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .mode-switch
+  a:hover {
+  color: var(--fs-text);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .mode-switch
+  a.active {
+  color: var(--fs-text-strong);
+  background: rgba(81, 199, 210, 0.13);
+  box-shadow: inset 0 0 0 1px rgba(81, 199, 210, 0.34);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .identity-label,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .identity-id {
+  color: var(--fs-functional-strong);
+  border-color: var(--fs-line);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .identity-bar
+  small,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .notification-empty {
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .identity-action,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .mobile-menu {
+  border-color: var(--fs-line);
+  border-radius: var(--fs-radius-small);
+  color: var(--fs-text);
+  background: var(--fs-surface-raised);
+}
+
+.forskin-quick-toggle .forskin-asset {
+  width: 18px;
+  height: 18px;
+}
+
+.forskin-quick-toggle[aria-pressed="true"] {
+  color: #d6a952;
+  box-shadow: inset 0 0 0 1px rgba(189, 135, 64, 0.35);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-quick-toggle[aria-pressed="true"] {
+  color: var(--fs-gold);
+  background: rgba(187, 146, 86, 0.12);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .notification-trigger
+  > span {
+  color: #071113;
+  background: var(--fs-functional-strong);
+  box-shadow: 0 0 0 2px var(--fs-charcoal-950);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .notification-menu {
+  background: var(--fs-surface-raised);
+  box-shadow: 0 24px 70px var(--fs-shadow);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .notification-menu
+  > header,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .notification-menu
+  article {
+  border-color: var(--fs-line-soft);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .notification-menu
+  > header
+  button,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .notification-menu
+  article.unread
+  > i {
+  color: var(--fs-functional-strong);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .notification-menu
+  article.unread
+  > i {
+  background: var(--fs-functional);
+  box-shadow: 0 0 10px rgba(81, 199, 210, 0.5);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .notification-menu
+  article
+  p,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .member-row
+  small,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .member-rank-group
+  h3 {
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .member-row:hover {
+  background: rgba(216, 180, 109, 0.075);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .member-row.offline {
+  opacity: 1;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .member-avatar {
+  color: var(--fs-text-strong);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--member-rank) 55%, var(--fs-bronze-500));
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .member-avatar
+  i {
+  border-color: var(--fs-charcoal-950);
+  background: var(--fs-success);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-owner-crown {
+  display: inline-block;
+  width: 14px;
+  height: 12px;
+  margin-left: 5px;
+  vertical-align: -1px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 5px rgba(240, 194, 110, 0.28));
+}
+
+/* Typography and reusable surfaces */
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .page-header
+  h1,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .section-title
+  h2,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .card-head
+  h2,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .settings-section
+  h2 {
+  color: var(--fs-text-strong);
+}
+
+:root[data-theme="forskin-hella"] .page-header h1,
+:root[data-theme="forskin-hella"] .auth-panel h1,
+:root[data-theme="forskin-hella"] .forskin-display {
+  font-family: var(--fs-font-display);
+  font-weight: 600;
+  letter-spacing: 0.015em;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .mono,
+    code,
+    .identity-id,
+    .price-import textarea,
+    .import-links-input,
+    .performance-metrics b,
+    .discord-check-progress strong,
+    .scan-progress-heading strong,
+    .scan-attempts small,
+    .listing-price,
+    .original-listing-price,
+    .converted-market-stats dd,
+    .market-currency-grid dd,
+    .category-market-grid dd,
+    .share-storage-card header strong,
+    .selected-file-copy span,
+    .shared-file-metric b
+  ) {
+  font-family: var(--fs-font-mono);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .eyebrow,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .auto-lead-sync {
+  color: var(--fs-functional-strong) !important;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .page-header
+  p,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .card p,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .muted,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .count {
+  color: var(--fs-muted);
+}
+
+html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .card,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-panel {
+  border: var(--fs-frame-width) solid var(--fs-line);
+  border-radius: var(--fs-radius);
+  color: var(--fs-text);
+  background:
+    linear-gradient(135deg, rgba(231, 200, 125, 0.025), transparent 35%),
+    linear-gradient(155deg, var(--fs-surface-raised), var(--fs-surface));
+  box-shadow: var(--fs-frame-glow);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .card-head,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .status-row,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .detail,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .mini-list
+  > div,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .timeline
+  > div,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .activity-list
+  > div {
+  border-color: var(--fs-line-soft);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .stat-top
+  > span,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .stat
+  small,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .quick
+  small,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .status-row
+  small,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .detail
+  small,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  label
+  > small {
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .stat-top
+  i,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .quick
+  > span,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .extension-icon,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .state-orb,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .domain-cell
+  > span,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .site-icon,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .empty
+  > span {
+  border-color: var(--fs-line);
+  border-radius: var(--fs-radius-small);
+  color: var(--fs-functional-strong);
+  background: rgba(81, 199, 210, 0.07);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .quick {
+  color: var(--fs-text-strong);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .quick:hover {
+  border-color: var(--fs-line-strong);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+}
+
+/* Reusable Forskin opt-in components. */
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-frame {
+  position: relative;
+  border: 2px solid var(--fs-bronze-500);
+  border-radius: var(--fs-radius);
+  background: var(--fs-surface);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-ornament {
+  position: relative;
+  padding-inline: 1.15rem;
+  color: var(--fs-gold);
+  font-family: var(--fs-font-display);
+  letter-spacing: 0.08em;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-ornament::before,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-ornament::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 0.7rem;
+  height: 1px;
+  pointer-events: none;
+  background: var(--fs-bronze-400);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-ornament::before {
+  left: 0;
+}
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-ornament::after {
+  right: 0;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--fs-line-strong);
+  border-radius: var(--fs-radius-small);
+  color: var(--fs-text-strong);
+  background: linear-gradient(
+    180deg,
+    rgba(216, 180, 109, 0.15),
+    rgba(128, 96, 56, 0.08)
+  );
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-plaque {
+  border-color: var(--fs-line-strong);
+  color: var(--fs-gold);
+  background: rgba(187, 146, 86, 0.09);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-progress {
+  border: 1px solid var(--fs-line-soft);
+  background: var(--fs-charcoal-800);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-progress
+  > span {
+  background: linear-gradient(90deg, var(--fs-cyan-500), var(--fs-cyan-300));
+  box-shadow: 0 0 14px rgba(81, 199, 210, 0.38);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-progress-value {
+  color: var(--fs-muted);
+  font-family: var(--fs-font-mono);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.forskin-theme-toggle, .forskin-theme-settings) {
+  border-color: var(--fs-line);
+  color: var(--fs-text);
+  background: var(--fs-surface);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-theme-toggle
+  button {
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-theme-toggle
+  button[aria-pressed="true"] {
+  color: var(--fs-text-strong);
+  background: rgba(53, 174, 186, 0.13);
+  box-shadow: inset 0 0 0 1px rgba(81, 199, 210, 0.36);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-asset-fallback,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-asset-failed {
+  display: grid;
+  min-width: 40px;
+  min-height: 40px;
+  place-items: center;
+  border: 1px solid var(--fs-line-strong);
+  color: var(--fs-muted);
+  background: var(--fs-surface-soft);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-asset[hidden] {
+  display: none !important;
+}
+
+:root[data-theme="forskin-subtle"] .forskin-ornaments {
+  display: none;
+}
+
+:root[data-theme="forskin-hella"] .forskin-ornaments,
+:root[data-theme="forskin-hella"] .forskin-ornaments span {
+  pointer-events: none;
+}
+
+:root[data-theme="forskin-hella"] .forskin-ornaments span {
+  border-color: rgba(216, 180, 109, 0.2);
+}
+
+/* Theme previews are explicitly scoped by their own data-theme attribute. */
+article.forskin-preview[data-theme="forskin-subtle"],
+article.forskin-preview[data-theme="forskin-hella"] {
+  --fs-surface: #12110f;
+  --fs-surface-raised: #1a1813;
+  --fs-text: #eee7d9;
+  --fs-muted: #b9ad98;
+  --fs-line: rgba(187, 146, 86, 0.32);
+  --fs-line-strong: rgba(216, 180, 109, 0.56);
+  --fs-functional: #51c7d2;
+  --fs-functional-strong: #79dce3;
+  --fs-bronze-300: #d8b46d;
+  --fs-bronze-500: #9e7845;
+  --fs-charcoal-800: #1c1913;
+  --fs-charcoal-950: #0d0d0b;
+  --forskin-surface: var(--fs-surface);
+  --forskin-line: var(--fs-line);
+  --forskin-accent: var(--fs-functional);
+  --forskin-ornament: rgba(216, 180, 109, 0.2);
+  color: var(--fs-text);
+  background:
+    linear-gradient(rgba(81, 199, 210, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(216, 180, 109, 0.04) 1px, transparent 1px),
+    #0b0b09;
+  background-size: 32px 32px;
+}
+
+article.forskin-preview[data-theme="forskin-hella"] {
+  --fs-line: rgba(216, 180, 109, 0.46);
+  --fs-line-strong: rgba(231, 200, 125, 0.72);
+  background:
+    radial-gradient(circle at 80% 0, rgba(81, 199, 210, 0.1), transparent 55%),
+    linear-gradient(rgba(81, 199, 210, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(216, 180, 109, 0.055) 1px, transparent 1px),
+    #070705;
+  background-size:
+    auto,
+    28px 28px,
+    28px 28px,
+    auto;
+}
+
+article.forskin-preview[data-theme="forskin-subtle"] .forskin-frame,
+article.forskin-preview[data-theme="forskin-hella"] .forskin-frame {
+  border-color: var(--fs-line-strong);
+  color: var(--fs-text);
+  background: linear-gradient(
+    145deg,
+    var(--fs-surface-raised),
+    var(--fs-surface)
+  );
+}
+
+article.forskin-preview[data-theme="forskin-subtle"] .forskin-progress,
+article.forskin-preview[data-theme="forskin-hella"] .forskin-progress {
+  background: var(--fs-charcoal-800);
+}
+
+article.forskin-preview[data-theme="forskin-subtle"] .forskin-progress > span,
+article.forskin-preview[data-theme="forskin-hella"] .forskin-progress > span {
+  background: linear-gradient(
+    90deg,
+    var(--fs-functional),
+    var(--fs-functional-strong)
+  );
+}
+
+article.forskin-preview[data-theme="forskin-subtle"] .forskin-ornaments {
+  display: none;
+}
+
+article.forskin-preview[data-theme="forskin-hella"] .forskin-ornaments,
+article.forskin-preview[data-theme="forskin-hella"] .forskin-ornaments span {
+  pointer-events: none;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-status-success {
+  color: var(--fs-success);
+}
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-status-danger {
+  color: var(--fs-danger);
+}
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .forskin-status-info {
+  color: var(--fs-functional-strong);
+}
+
+@supports (border-image-source: linear-gradient(red, blue)) {
+  :root[data-theme="forskin-hella"] .forskin-frame,
+  :root[data-theme="forskin-hella"] .card.forskin-frame {
+    border: 8px solid var(--fs-bronze-500);
+    border-image-source: var(--forskin-frame-image, var(--fs-frame-thin));
+    border-image-slice: var(--forskin-frame-slice, 10%);
+    border-image-width: 8px;
+    border-image-repeat: stretch;
+  }
+
+  :root[data-theme="forskin-hella"] .card {
+    border: 5px solid var(--fs-line);
+    border-image-source: var(--fs-frame-thin);
+    border-image-slice: 10%;
+    border-image-width: 5px;
+    border-image-repeat: stretch;
+  }
+
+  :root[data-theme="forskin-hella"]
+    :is(
+      .table-card,
+      .brave-search-card,
+      .scanner-state,
+      .scanner-performance,
+      .scan-progress,
+      .settings-section,
+      .share-upload-card,
+      .share-storage-card,
+      .lzt-hero,
+      .drawer
+    ) {
+    border: 7px solid var(--fs-line);
+    border-image-source: var(--fs-frame-medium);
+    border-image-slice: 15%;
+    border-image-width: 7px;
+    border-image-repeat: stretch;
+  }
+
+  :root[data-theme="forskin-hella"]
+    :is(.file-share-error, .lzt-error, .auth-error, .notice.error) {
+    border: 6px solid var(--fs-danger);
+    border-image-source: var(--fs-frame-error);
+    border-image-slice: 12%;
+    border-image-width: 6px;
+    border-image-repeat: stretch;
+  }
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.forskin-asset-failed, .forskin-border-asset-failed),
+:root:is(
+    [data-theme="forskin-subtle"],
+    [data-theme="forskin-hella"]
+  )[data-forskin-assets="failed"]
+  .forskin-frame {
+  border: 2px solid var(--fs-line-strong);
+  border-image: none;
+  background-color: var(--fs-surface);
+}
+
+:root[data-theme="forskin-hella"] .sidebar nav a.active::after {
+  content: "";
+  position: absolute;
+  right: 8px;
+  bottom: -5px;
+  left: 8px;
+  height: 12px;
+  pointer-events: none;
+  background: var(--fs-nav-active) center / 100% 100% no-repeat;
+  opacity: 0.38;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .progress {
+  background-color: var(--fs-charcoal-800);
+  background-image: var(--fs-progress-track);
+  background-position: center;
+  background-size: 100% 100%;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .progress
+  > span {
+  background-color: var(--fs-functional);
+  background-image: var(--fs-progress-fill);
+  background-position: left center;
+  background-size: 100% 100%;
+}
+
+/* Controls */
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .btn,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .icon-btn,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .actions-inline
+  button,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .actions-inline
+  a,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .shared-file-actions
+  button,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .shared-file-actions
+  a {
+  border-radius: var(--fs-radius-small);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .btn.primary,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .auth-panel
+  form
+  > button {
+  border-color: var(--fs-cyan-300);
+  color: #061214;
+  background: linear-gradient(180deg, var(--fs-cyan-300), var(--fs-cyan-500));
+  box-shadow: 0 8px 24px rgba(53, 174, 186, 0.16);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .btn.primary:hover,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .auth-panel
+  form
+  > button:hover:not(:disabled) {
+  border-color: #a7f4f4;
+  background: linear-gradient(180deg, #91e7e9, var(--fs-cyan-400));
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .btn.secondary,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .actions-inline
+  button,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .actions-inline
+  a,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .shared-file-actions
+  button,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .shared-file-actions
+  a,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .icon-btn {
+  border-color: var(--fs-line);
+  color: var(--fs-text);
+  background: var(--fs-surface-soft);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .btn.secondary:hover,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .btn.ghost:hover,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .icon-btn:hover,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .actions-inline
+  button:hover,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .actions-inline
+  a:hover {
+  border-color: var(--fs-line-strong);
+  color: var(--fs-text-strong);
+  background: rgba(216, 180, 109, 0.11);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .btn.ghost {
+  color: var(--fs-muted);
+  background: transparent;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .btn.danger,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .actions-inline
+  button.danger {
+  border-color: rgba(250, 129, 124, 0.44);
+  color: var(--fs-red-300);
+  background: rgba(221, 95, 90, 0.11);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(button, a, input, select, textarea, [role="button"]):focus-visible {
+  outline: 3px solid var(--fs-focus);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px var(--fs-focus-ring);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not(
+    [type="file"]
+  ),
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) select,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) textarea {
+  border-color: var(--fs-line);
+  border-radius: var(--fs-radius-small);
+  color: var(--fs-text);
+  caret-color: var(--fs-functional-strong);
+  background-color: var(--fs-charcoal-950);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  input::placeholder,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  textarea::placeholder {
+  color: var(--fs-muted-soft);
+  opacity: 0.9;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) select,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  select
+  option {
+  color-scheme: dark;
+  color: var(--fs-text);
+  background: var(--fs-charcoal-950);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  input[type="checkbox"],
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  input[type="radio"] {
+  accent-color: var(--fs-functional);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  input[type="file"]::file-selector-button {
+  margin-right: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--fs-line);
+  border-radius: var(--fs-radius-small);
+  color: var(--fs-text);
+  background: var(--fs-surface-soft);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(input, select, textarea):disabled,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  button:disabled {
+  opacity: 0.48;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .searchbox,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .brave-query,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .brave-limit,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .brave-custom,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .tag-editor,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .setup-steps,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .scan-attempts {
+  border-color: var(--fs-line);
+  border-radius: var(--fs-radius-small);
+  color: var(--fs-text);
+  background: var(--fs-charcoal-950);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .searchbox
+  input,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .brave-query
+  input,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .brave-limit
+  select,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .brave-custom
+  input {
+  color: var(--fs-text);
+  background: transparent;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.searchbox, .brave-query, .brave-custom):focus-within {
+  border-color: var(--fs-functional);
+  box-shadow: 0 0 0 3px var(--fs-focus-ring);
+}
+
+/* Tables, badges, progress, and transient UI */
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) th {
+  color: var(--fs-muted);
+  background: rgba(216, 180, 109, 0.045);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) td {
+  border-color: var(--fs-line-soft);
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) td b,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .listing-price,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .provider-identity
+  b {
+  color: var(--fs-text-strong);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  tbody
+  tr:hover {
+  background: rgba(81, 199, 210, 0.045);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) td a,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .provider-link,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .nfa-public-link,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .sortable-table-heading:hover,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .sortable-table-heading.active {
+  color: var(--fs-functional-strong);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .badge {
+  border-color: var(--fs-line);
+  color: var(--fs-muted);
+  background: rgba(216, 180, 109, 0.065);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .badge:is(.completed, .connected, .won),
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .provider-stock.available {
+  border-color: rgba(109, 204, 146, 0.38);
+  color: #91e0ad;
+  background: rgba(71, 173, 118, 0.11);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .badge:is(.scanning, .ready, .contacted, .tag) {
+  border-color: rgba(81, 199, 210, 0.36);
+  color: var(--fs-functional-strong);
+  background: rgba(53, 174, 186, 0.1);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .badge:is(.failed, .blocked, .timeout, .high),
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .price-change.up {
+  border-color: rgba(250, 129, 124, 0.38);
+  color: var(--fs-red-300);
+  background: rgba(221, 95, 90, 0.1);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .badge:is(.medium, .interested) {
+  border-color: rgba(216, 180, 109, 0.42);
+  color: var(--fs-gold);
+  background: rgba(187, 146, 86, 0.11);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .price-change.down {
+  color: var(--fs-success);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .progress {
+  border: 1px solid var(--fs-line-soft);
+  background: var(--fs-charcoal-800);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .progress
+  span {
+  background: linear-gradient(90deg, var(--fs-cyan-500), var(--fs-cyan-300));
+  box-shadow: 0 0 12px rgba(81, 199, 210, 0.42);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .scrim {
+  background: rgba(4, 4, 3, 0.74);
+  backdrop-filter: blur(5px) saturate(0.5);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .drawer {
+  border-color: var(--fs-line-strong);
+  color: var(--fs-text);
+  background: var(--fs-charcoal-950);
+  box-shadow: -30px 0 90px rgba(0, 0, 0, 0.58);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .drawer
+  > header,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .drawer-actions.sticky {
+  border-color: var(--fs-line);
+  background: linear-gradient(transparent, var(--fs-charcoal-950) 24%);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .toast {
+  border-color: rgba(109, 204, 146, 0.52);
+  border-radius: var(--fs-radius);
+  color: #dff7e7;
+  background: #122018;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.62);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lead-hover-preview,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lzt-inventory-tooltip {
+  border-color: var(--fs-line-strong);
+  border-radius: var(--fs-radius);
+  color: var(--fs-muted);
+  background: var(--fs-surface-raised);
+  box-shadow: 0 22px 60px var(--fs-shadow);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lzt-inventory-tooltip::after {
+  pointer-events: none;
+  background: var(--fs-surface-raised);
+}
+
+/* Notices and state */
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .dot.green,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .scanner-live-dot.running,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .provider-status.ready
+  i {
+  color: var(--fs-success);
+  background: var(--fs-success);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .dot.blue {
+  color: var(--fs-functional);
+  background: var(--fs-functional);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .dot.red,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .state-orb.error {
+  color: var(--fs-danger);
+  background: var(--fs-danger);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.notice, .discovery-notice, .import-intro) {
+  border-color: rgba(81, 199, 210, 0.34);
+  border-radius: var(--fs-radius);
+  color: var(--fs-functional-strong);
+  background: rgba(53, 174, 186, 0.085);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.notice, .discovery-notice, .import-intro)
+  :is(span, p) {
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.security-note, .share-link-ready, .file-share-security) {
+  border-color: rgba(109, 204, 146, 0.38);
+  color: #91e0ad;
+  background: rgba(71, 173, 118, 0.085);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.error-box, .malformed, .auth-error, .file-share-error, .lzt-error) {
+  border-color: rgba(250, 129, 124, 0.42);
+  color: var(--fs-red-300);
+  background: rgba(221, 95, 90, 0.1);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.loading, .auth-loading, .shared-file-loading) {
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.success, .success-box, [data-state="success"]) {
+  color: var(--fs-success);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.error, .error-message, [data-state="error"]) {
+  color: var(--fs-danger);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--fs-danger);
+  box-shadow: 0 0 0 3px rgba(250, 129, 124, 0.16);
+}
+
+/* Searcher, scanner, and performance */
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .brave-search-card,
+    .brave-discovery-progress,
+    .scanner-state,
+    .scanner-performance,
+    .discord-check-progress,
+    .scan-progress.enhanced
+  ) {
+  border-color: var(--fs-line);
+  background: linear-gradient(
+    145deg,
+    var(--fs-surface-raised),
+    var(--fs-surface)
+  );
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.brave-search-icon, .discord-check-pulse, .source-count) {
+  border-color: rgba(81, 199, 210, 0.34);
+  color: var(--fs-functional-strong);
+  background: rgba(53, 174, 186, 0.095);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .brave-search-heading small,
+    .brave-limit small,
+    .brave-custom small,
+    .scanner-state small,
+    .scanner-performance small,
+    .discord-check-progress small,
+    .scan-progress-heading span,
+    .scan-progress-summary small
+  ) {
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .brave-search-heading b,
+    .brave-discovery-progress b,
+    .scanner-performance b,
+    .discord-check-progress b,
+    .scan-progress-heading b
+  ) {
+  color: var(--fs-text);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .brave-discovery-progress strong,
+    .discord-check-progress > header strong,
+    .scan-progress-heading strong,
+    .target-outcome
+  ) {
+  color: var(--fs-functional-strong);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .performance-metrics
+  > span,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .engine-summary
+  > span,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .import-summary
+  > span,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .current-search-stats
+  > span {
+  border-color: var(--fs-line-soft);
+  background: rgba(216, 180, 109, 0.045);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .engine-health.healthy,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .state-orb.running,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .discord-check-progress.completed {
+  border-color: rgba(109, 204, 146, 0.34);
+  color: var(--fs-success);
+  background: rgba(71, 173, 118, 0.075);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .engine-health.offline,
+    .brave-discovery-progress.failed,
+    .discord-check-progress.failed
+  ) {
+  border-color: rgba(250, 129, 124, 0.4);
+  color: var(--fs-danger);
+}
+
+/* Leads, kanban, and editor */
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .toolbar,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .view-toggle,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .kanban-column {
+  border-color: var(--fs-line);
+  background: rgba(13, 13, 10, 0.78);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .view-toggle
+  button {
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .view-toggle
+  button.active,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .kanban-column.is-drop-target {
+  border-color: var(--fs-functional);
+  color: var(--fs-functional-strong);
+  background: rgba(53, 174, 186, 0.11);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .kanban-column
+  > header {
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .kanban-column
+  > header
+  b {
+  color: var(--fs-gold);
+  background: rgba(187, 146, 86, 0.12);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lead-card:hover {
+  border-color: var(--fs-line-strong);
+  box-shadow: 0 14px 34px var(--fs-shadow);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lead-card-link,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lead-card
+  footer,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lead-hover-preview
+  small {
+  color: var(--fs-muted);
+  border-color: var(--fs-line-soft);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lead-card-link:hover,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .activity-list
+  i,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .timeline
+  i {
+  color: var(--fs-functional-strong);
+  background: var(--fs-functional);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lead-summary,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lead-preview-discord {
+  border-color: rgba(81, 199, 210, 0.28);
+  background: rgba(53, 174, 186, 0.075);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .editor-field input,
+    .editor-field select,
+    .editor-field textarea,
+    .tag-editor input,
+    .notes
+  ) {
+  border-color: var(--fs-line);
+  color: var(--fs-text);
+  background: var(--fs-charcoal-950);
+}
+
+/* Rust market, LZT, and providers */
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .market-subtabs,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lzt-subtabs {
+  border-color: var(--fs-line);
+  border-radius: var(--fs-radius);
+  background: rgba(12, 11, 8, 0.88);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.market-subtabs, .lzt-subtabs)
+  button {
+  border-radius: var(--fs-radius-small);
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.market-subtabs, .lzt-subtabs)
+  button:hover {
+  color: var(--fs-text);
+  background: rgba(216, 180, 109, 0.075);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.market-subtabs, .lzt-subtabs)
+  button.active {
+  border-color: rgba(81, 199, 210, 0.42);
+  color: var(--fs-text-strong);
+  background: rgba(53, 174, 186, 0.13);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.price-search-icon, .share-storage-card header > span) {
+  border-color: var(--fs-line);
+  color: var(--fs-functional-strong);
+  background: rgba(53, 174, 186, 0.075);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .product-switcher > div small,
+    .currency-picker svg,
+    .price-source-strip .card-head > svg
+  ) {
+  color: var(--fs-functional-strong);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .provider-overview
+  article,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lzt-status-grid
+  article,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .category-market-grid
+  article,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .converted-market-stats
+  dl
+  div {
+  border-color: var(--fs-line);
+  border-radius: var(--fs-radius);
+  background: linear-gradient(
+    145deg,
+    var(--fs-surface-raised),
+    var(--fs-surface)
+  );
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .provider-overview strong,
+    .market-overview strong,
+    .lzt-status-grid strong,
+    .converted-market-stats dd,
+    .category-market-grid dd,
+    .market-currency-grid dd
+  ) {
+  color: var(--fs-text-strong);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .provider-overview small,
+    .provider-overview span,
+    .provider-identity small,
+    .currency-picker > span,
+    .market-currency-selector > span,
+    .market-overview small,
+    .market-overview span,
+    .converted-market-stats dt,
+    .category-market-grid dt,
+    .market-currency-grid dt,
+    .original-listing-price,
+    .table-subline
+  ) {
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.converted-market-stats, .market-currency-grid) {
+  border-color: var(--fs-line-soft);
+  background: rgba(53, 174, 186, 0.045);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .market-overview article,
+    .market-currency-grid > article,
+    .price-source-strip article,
+    .category-market-section,
+    .market-original-heading,
+    .price-pagination,
+    .pagination
+  ) {
+  border-color: var(--fs-line-soft);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .lzt-hero,
+    .lzt-controls,
+    .lzt-test-panel,
+    .haze-message-panel,
+    .lzt-haze-delivery
+  ) {
+  border-color: var(--fs-line);
+  background-color: rgba(13, 13, 10, 0.78);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lzt-config-warning,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lzt-listing-state.inactive {
+  border-color: rgba(231, 200, 125, 0.42);
+  color: var(--fs-warning);
+  background: rgba(187, 146, 86, 0.1);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.lzt-listing-state.active, .lzt-alert-summary, .lzt-haze-delivery.sent) {
+  border-color: rgba(109, 204, 146, 0.4);
+  color: #91e0ad;
+  background: rgba(71, 173, 118, 0.1);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.lzt-listing-state.sold, .lzt-haze-delivery.failed) {
+  border-color: rgba(250, 129, 124, 0.42);
+  color: var(--fs-red-300);
+  background: rgba(221, 95, 90, 0.1);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lzt-inventory-total {
+  border-color: rgba(81, 199, 210, 0.38);
+  border-radius: var(--fs-radius-small);
+  color: var(--fs-functional-strong);
+  background: rgba(53, 174, 186, 0.1);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .lzt-rank-lock {
+  border-color: var(--fs-line-strong);
+  background: linear-gradient(
+    135deg,
+    rgba(187, 146, 86, 0.13),
+    var(--fs-surface)
+  );
+}
+
+/* File sharing */
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .file-share-page {
+  --vault-accent: var(--fs-functional-strong);
+  --vault-violet: var(--fs-bronze-300);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .share-drop-zone {
+  border-color: var(--fs-line-strong);
+  border-radius: var(--fs-radius);
+  color: var(--fs-text);
+  background:
+    linear-gradient(var(--fs-grid-strong) 1px, transparent 1px),
+    linear-gradient(90deg, var(--fs-grid) 1px, transparent 1px),
+    var(--fs-charcoal-950);
+  background-size: 22px 22px;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .share-drop-zone::before,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .share-drop-zone::after,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .upload-orbit::after {
+  pointer-events: none;
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .share-drop-zone::before {
+  color: var(--fs-muted-soft);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .share-drop-zone::after {
+  border-color: var(--fs-bronze-400);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .share-drop-zone:hover,
+    .share-drop-zone:focus-visible,
+    .share-drop-zone.dragging
+  ) {
+  border-color: var(--fs-functional);
+  background-color: var(--fs-surface-raised);
+  box-shadow: inset 0 0 44px rgba(53, 174, 186, 0.055);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.upload-orbit, .selected-file-visual, .shared-file-icon) {
+  border-color: rgba(81, 199, 210, 0.34);
+  color: var(--fs-functional-strong);
+  background: rgba(53, 174, 186, 0.08);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .share-storage-card {
+  border-color: var(--fs-line-strong);
+  background: linear-gradient(
+    155deg,
+    rgba(128, 96, 56, 0.14),
+    var(--fs-surface) 56%
+  );
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.selected-file-copy strong, .shared-file-name strong) {
+  color: var(--fs-text-strong);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .selected-file-copy span,
+    .share-upload-footer span,
+    .share-storage-scale,
+    .shared-file-name small,
+    .shared-file-metric small,
+    .shared-file-metric b
+  ) {
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .shared-file-list
+  > article {
+  border-color: var(--fs-line-soft);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .shared-file-list
+  > article:hover {
+  background: rgba(81, 199, 210, 0.045);
+}
+
+/* Auth, settings, and admin */
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .auth-shell {
+  color: var(--fs-text);
+  background:
+    radial-gradient(
+      circle at 50% 8%,
+      rgba(81, 199, 210, 0.1),
+      transparent 34rem
+    ),
+    linear-gradient(var(--fs-grid-strong) 1px, transparent 1px),
+    linear-gradient(90deg, var(--fs-grid) 1px, transparent 1px), var(--fs-bg);
+  background-size:
+    auto,
+    40px 40px,
+    40px 40px,
+    auto;
+}
+
+html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .auth-panel {
+  border-color: var(--fs-line-strong);
+  border-radius: var(--fs-radius);
+  color: var(--fs-text);
+  background: rgba(16, 15, 12, 0.97);
+  box-shadow: 0 32px 100px var(--fs-shadow);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .auth-brand,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .auth-panel
+  footer,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .settings-section
+  > header,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .settings-section
+  label,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .rank-chip-list {
+  border-color: var(--fs-line-soft);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(.auth-brand > span, .auth-icon, .settings-section > header > span) {
+  border-color: rgba(81, 199, 210, 0.34);
+  color: var(--fs-functional-strong);
+  background: rgba(53, 174, 186, 0.085);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  :is(
+    .auth-panel > p,
+    .auth-panel label,
+    .auth-panel .remember,
+    .auth-panel footer,
+    .password-hint,
+    .settings-section label small,
+    .setup-steps ol
+  ) {
+  color: var(--fs-muted);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .admin-form,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .rank-chip-list {
+  background: rgba(8, 8, 6, 0.22);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .rank-permission-check {
+  color: var(--fs-gold);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .rank-delete {
+  color: var(--fs-red-300);
+}
+
+/* Heavy shell ornaments stay outside content and never receive input. */
+:root[data-theme="forskin-hella"] .app::before,
+:root[data-theme="forskin-hella"] .app::after {
+  content: "";
+  position: fixed;
+  inset: 4px;
+  z-index: 35;
+  pointer-events: none;
+}
+
+:root[data-theme="forskin-hella"] .app::before {
+  border: 10px solid var(--fs-bronze-500);
+  border-image-source: var(--fs-frame-heavy);
+  border-image-slice: 19%;
+  border-image-width: 10px;
+  border-image-repeat: stretch;
+  opacity: 0.68;
+}
+
+:root[data-theme="forskin-hella"] .app::after {
+  background: var(--fs-vignette) center / cover no-repeat;
+  opacity: 0.16;
+}
+
+@media (min-width: 1441px) {
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+    .sidebar,
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+    .member-sidebar {
+    box-shadow:
+      0 0 0 1px rgba(216, 180, 109, 0.04),
+      0 0 44px rgba(0, 0, 0, 0.42);
+  }
+
+  :root[data-theme="forskin-hella"] .page {
+    padding-inline: 52px;
+  }
+}
+
+@media (max-width: 1050px) {
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) main {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]),
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) body {
+    max-width: 100%;
+    overflow-x: clip;
+    background-attachment: scroll;
+  }
+
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+    :is(
+      .app,
+      main,
+      .page,
+      .page-header,
+      .header-actions,
+      .toolbar,
+      .card,
+      .settings-grid,
+      .file-share-grid
+    ) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+    :is(
+      .header-actions,
+      .button-row,
+      .drawer-actions,
+      .card-head > div:last-child
+    ) {
+    flex-wrap: wrap;
+  }
+
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+    .table-wrap,
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+    .market-subtabs,
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+    .kanban {
+    max-width: 100%;
+    overscroll-behavior-inline: contain;
+  }
+
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .toast {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+  }
+
+  :root[data-theme="forskin-hella"] .app::before,
+  :root[data-theme="forskin-hella"] .app::after,
+  :root[data-theme="forskin-hella"] .forskin-ornaments,
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+    .forskin-ornament::before,
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+    .forskin-ornament::after {
+    display: none;
+  }
+
+  :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+    .forskin-ornament {
+    padding-inline: 0;
+  }
+}
+
+@supports not (overflow: clip) {
+  @media (max-width: 760px) {
+    :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]),
+    :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) body {
+      overflow-x: hidden;
+    }
+  }
+}

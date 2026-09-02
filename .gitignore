@@ -22,3 +22,4 @@ deploy/*.tar.gz
 __pycache__/
 *.pyc
 query_engine-*.tmp*
+tests/visual/test-results/

@@ -71,9 +71,23 @@ const deniedFile = (name) =>
   ) ||
   /^query_engine-.*\.tmp/i.test(name);
 
+const excludedReleasePaths = [
+  "tests/visual/screenshots/",
+  "tests/visual/test-results/",
+];
+
 async function includeSource(source) {
   const pathFromRoot = relative(sourceRoot, source);
   if (!pathFromRoot) return true;
+  const normalizedPath = pathFromRoot.split(sep).join("/");
+  if (
+    excludedReleasePaths.some(
+      (prefix) =>
+        normalizedPath === prefix.slice(0, -1) ||
+        normalizedPath.startsWith(prefix),
+    )
+  )
+    return false;
   const parts = pathFromRoot.split(sep);
   if (parts.some((part) => deniedDirectories.has(part))) return false;
   if (deniedFile(basename(source))) return false;

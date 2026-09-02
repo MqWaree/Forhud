@@ -7,13 +7,17 @@ import "./styles.css";
 import "./enhancements.css";
 import "./identity.css";
 import "./file-sharing.css";
+import "./themes/forskin/forskin.css";
+import { ForskinThemeProvider } from "./themes/forskin";
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <AuthRoot>
-        <App />
-      </AuthRoot>
-    </BrowserRouter>
+    <ForskinThemeProvider>
+      <BrowserRouter>
+        <AuthRoot>
+          <App />
+        </AuthRoot>
+      </BrowserRouter>
+    </ForskinThemeProvider>
   </React.StrictMode>,
 );

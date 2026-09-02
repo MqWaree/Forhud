@@ -875,7 +875,7 @@
   line-height: 1.6;
 }
 .import-links-input {
-  height: 260px !important;
+  height: clamp(160px, 24vh, 260px) !important;
   margin: 0 !important;
   font-family: "JetBrains Mono", monospace;
   font-size: 10px;

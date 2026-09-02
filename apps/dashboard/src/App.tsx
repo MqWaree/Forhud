@@ -59,6 +59,14 @@ import MemberSidebar from "./MemberSidebar";
 import FileSharingPage from "./FileSharingPage";
 import { useAuth } from "./Auth";
 import {
+  ForskinLogo,
+  ForskinOrnamentsLayer,
+  ForskinPlaque,
+  ForskinQuickToggle,
+  ForskinThemeSettings,
+  useForskinTheme,
+} from "./themes/forskin";
+import {
   Badge,
   Button,
   Drawer,
@@ -175,6 +183,7 @@ type Ctx = ReturnType<typeof useData>;
 let ctx: Ctx;
 export default function App() {
   const { user, logout } = useAuth();
+  const { mode } = useForskinTheme();
   const location = useLocation();
   const priceMode = location.pathname.startsWith("/rust-prices");
   const hasLztAccess =
@@ -190,11 +199,21 @@ export default function App() {
   useEffect(() => {
     const fn = (e: any) => {
       setToast(e.detail);
-      setTimeout(() => setToast(""), 3000);
+      delete document.documentElement.dataset.forskinNotice;
     };
     window.addEventListener("toast", fn);
+    const pendingNotice = document.documentElement.dataset.forskinNotice;
+    if (pendingNotice) {
+      setToast(pendingNotice);
+      delete document.documentElement.dataset.forskinNotice;
+    }
     return () => window.removeEventListener("toast", fn);
   }, []);
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(""), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
   useEffect(() => {
     if (!hasLztAccess) return;
     const events = new EventSource("/api/events");
@@ -240,9 +259,19 @@ export default function App() {
   }, [hasLztAccess]);
   return (
     <div className="app">
+      <ForskinOrnamentsLayer />
       <aside className={`sidebar ${mobile ? "open" : ""}`}>
         <div className="brand">
-          <img className="brand-logo" src="/fgp-logo.png" alt="FGP" />
+          <img
+            className="brand-logo forskin-default-brand"
+            src="/fgp-logo.png"
+            alt="FGP"
+          />
+          {mode !== "default" && (
+            <span className="forskin-sidebar-medallion" aria-hidden="true">
+              <ForskinLogo alt="" aria-hidden="true" />
+            </span>
+          )}
           <div>
             <b>FGP</b>
             <small>Forhuds Panel</small>
@@ -271,6 +300,11 @@ export default function App() {
           )}
         </nav>
         <div className="system">
+          {mode === "forskin-hella" && (
+            <div className="forskin-sidebar-plaque" aria-hidden="true">
+              <ForskinPlaque />
+            </div>
+          )}
           <p>
             <i className="dot green" />
             Database connected
@@ -367,6 +401,7 @@ export default function App() {
               </section>
             )}
           </div>
+          <ForskinQuickToggle />
           <span className="identity-spacer" />
           <div className="identity-user">
             <b>{user.username}</b>
@@ -416,7 +451,7 @@ export default function App() {
       </main>
       <MemberSidebar />
       {toast && (
-        <div className="toast">
+        <div className="toast" role="status" aria-live="polite">
           <CheckCircle2 />
           {toast}
         </div>
@@ -1593,6 +1628,18 @@ function Settings() {
       />
       <div className="settings-grid">
         <AccountSettings />
+        <article className="card settings-section forskin-appearance-settings">
+          <header>
+            <span>
+              <SettingsIcon />
+            </span>
+            <div>
+              <h2>Appearance</h2>
+              <p>Your display preferences</p>
+            </div>
+          </header>
+          <ForskinThemeSettings />
+        </article>
         {user.role === "ADMIN" && (
           <>
             <article className="card settings-section">
@@ -1605,15 +1652,6 @@ function Settings() {
                   <p>Workspace preferences</p>
                 </div>
               </header>
-              <label>
-                <span>
-                  <b>Theme</b>
-                  <small>Application appearance</small>
-                </span>
-                <select disabled>
-                  <option>Dark</option>
-                </select>
-              </label>
               <label>
                 <span>
                   <b>Default lead status</b>

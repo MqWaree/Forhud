@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 260" role="img" aria-labelledby="title">
+  <title id="title">ForhudsGangProductions wordmark</title>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#f0d291"/><stop offset=".3" stop-color="#b18443"/><stop offset=".68" stop-color="#55462f"/><stop offset="1" stop-color="#211812"/></linearGradient></defs>
+  <g fill="url(#g)" stroke="#110e0b" stroke-width="10" stroke-linejoin="bevel">
+    <path d="M32 224V36h150l-12 38H82v39h75v39H82v72Z"/>
+    <path fill-rule="evenodd" d="M205 66q0-34 34-34h111q34 0 34 34v128q0 34-34 34H239q-34 0-34-34Zm52 10v108h75V76Z"/>
+    <path fill-rule="evenodd" d="M413 224V36h151q34 0 34 34v49q0 27-25 33l37 72h-58l-34-66h-53v66Zm52-148v44h78V76Z"/>
+    <path d="M630 224v-43h113v-29h-79q-34 0-34-34V70q0-34 34-34h126v42H682v30h79q34 0 34 34v48q0 34-34 34Z"/>
+    <path d="M824 224V36h52v72l67-72h65l-83 88 89 100h-68l-70-82v82Z"/>
+    <path d="M1035 224V36h53v188Z"/>
+    <path d="M1122 224V36h49l65 99V36h48v188h-47l-67-101v101Z"/>
+  </g>
+  <path d="M23 242q311-29 617 0t617-1" fill="none" stroke="#537b65" stroke-width="9" opacity=".7"/>
+</svg>
