@@ -9,6 +9,10 @@ const scraperSetupScript = readFileSync(
   new URL("../../scraper/scripts/setup.mjs", import.meta.url),
   "utf8",
 );
+const windowsDeploymentScript = readFileSync(
+  new URL("../../../deploy-release.ps1", import.meta.url),
+  "utf8",
+);
 
 describe("production Python preflight installation", () => {
   it("keeps the release source locked while building from a disposable unprivileged copy", () => {
@@ -55,5 +59,37 @@ describe("production Python preflight installation", () => {
     expect(scraperSetupScript).toContain(
       'process.env.SCRAPER_INSTALL_EDITABLE === "false"',
     );
+  });
+
+  it("handles an SSH connection failure without trimming null command output", () => {
+    expect(windowsDeploymentScript).toContain(
+      '$remoteUploadOutput = @(& ssh @sshOptions "${User}@${Server}"',
+    );
+    expect(windowsDeploymentScript).toContain(
+      "$remoteUploadDirectory = (($remoteUploadOutput | Out-String).Trim())",
+    );
+    expect(windowsDeploymentScript).toContain(
+      "SSH exit code $remoteUploadExit",
+    );
+    expect(windowsDeploymentScript).not.toContain(
+      '$remoteUploadDirectory = (& ssh "${User}@${Server}"',
+    );
+  });
+
+  it("uses the real Windows user profile host-key file for every SSH transport", () => {
+    expect(windowsDeploymentScript).toContain(
+      "[Environment+SpecialFolder]::UserProfile",
+    );
+    expect(windowsDeploymentScript).toContain(
+      '(Join-Path $sshDirectory "known_hosts").Replace("\\", "/")',
+    );
+    expect(windowsDeploymentScript).toContain(
+      '"-o", "UserKnownHostsFile=$sshKnownHostsFile"',
+    );
+    expect(windowsDeploymentScript).toContain(
+      '"-o", "StrictHostKeyChecking=ask"',
+    );
+    expect(windowsDeploymentScript.match(/& ssh @sshOptions/g)).toHaveLength(3);
+    expect(windowsDeploymentScript.match(/& scp @sshOptions/g)).toHaveLength(2);
   });
 });

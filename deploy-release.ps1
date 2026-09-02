@@ -9,6 +9,22 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$sshUserProfile = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
+if ([string]::IsNullOrWhiteSpace($sshUserProfile)) {
+  $sshUserProfile = $env:USERPROFILE
+}
+if ([string]::IsNullOrWhiteSpace($sshUserProfile)) {
+  throw "Could not resolve the Windows user profile for SSH host verification."
+}
+$sshDirectory = Join-Path $sshUserProfile ".ssh"
+$sshKnownHostsFile = (Join-Path $sshDirectory "known_hosts").Replace("\", "/")
+New-Item -ItemType Directory -Path $sshDirectory -Force | Out-Null
+$sshOptions = @(
+  "-o", "UserKnownHostsFile=$sshKnownHostsFile",
+  "-o", "StrictHostKeyChecking=ask",
+  "-o", "ConnectTimeout=20"
+)
+
 $releasePaths = @(
   ".gitattributes",
   ".env.example",
@@ -168,26 +184,28 @@ $outputDirectory = Join-Path $PSScriptRoot "outputs"
 New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
 $log = Join-Path $outputDirectory "deploy-release-$stamp.log"
 
-$remoteUploadDirectory = (& ssh "${User}@${Server}" "umask 077; mktemp -d /tmp/fgp-upload.XXXXXX").Trim()
-if ($LASTEXITCODE -ne 0 -or $remoteUploadDirectory -notmatch '^/tmp/fgp-upload\.[A-Za-z0-9]+$') {
-  throw "Could not create a private remote upload directory."
+$remoteUploadOutput = @(& ssh @sshOptions "${User}@${Server}" "umask 077; mktemp -d /tmp/fgp-upload.XXXXXX")
+$remoteUploadExit = $LASTEXITCODE
+$remoteUploadDirectory = (($remoteUploadOutput | Out-String).Trim())
+if ($remoteUploadExit -ne 0 -or $remoteUploadDirectory -notmatch '^/tmp/fgp-upload\.[A-Za-z0-9]+$') {
+  throw "Could not create a private remote upload directory (SSH exit code $remoteUploadExit). Check VPS reachability and the root password, then retry."
 }
 $remoteArchive = "$remoteUploadDirectory/fgp-release.tar.gz"
 $remoteScript = "$remoteUploadDirectory/deploy-fgp-release.sh"
 
 try {
   Write-Host "Uploading release $archiveHash"
-  & scp -- $resolvedArchive "${User}@${Server}:$remoteArchive"
+  & scp @sshOptions -- $resolvedArchive "${User}@${Server}:$remoteArchive"
   if ($LASTEXITCODE -ne 0) {
     throw "Archive upload failed."
   }
-  & scp -- $resolvedScript "${User}@${Server}:$remoteScript"
+  & scp @sshOptions -- $resolvedScript "${User}@${Server}:$remoteScript"
   if ($LASTEXITCODE -ne 0) {
     throw "Deployment-script upload failed."
   }
 }
 catch {
-  & ssh "${User}@${Server}" "rm -rf -- '$remoteUploadDirectory'" 2>$null
+  & ssh @sshOptions "${User}@${Server}" "rm -rf -- '$remoteUploadDirectory'" 2>$null
   throw
 }
 
@@ -211,7 +229,7 @@ $remoteCommand = $bootstrapTemplate.Replace("__REMOTE_SCRIPT__", $remoteScript).
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 try {
-  & ssh "${User}@${Server}" $remoteCommand 2>&1 | Tee-Object -FilePath $log
+  & ssh @sshOptions "${User}@${Server}" $remoteCommand 2>&1 | Tee-Object -FilePath $log
   $sshExit = $LASTEXITCODE
 }
 finally {
