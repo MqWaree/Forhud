@@ -59,6 +59,7 @@ preflight=""
 config_backup=""
 environment_work=""
 venv_home=""
+scraper_build_source=""
 database_path=""
 database_backup=""
 database_existed=0
@@ -619,15 +620,21 @@ chmod -R a+rX,go-w "$preflight"
 venv_home="$(mktemp -d /tmp/fgp-venv-$stamp.XXXXXX)"
 chown nobody "$venv_home"
 chmod 0700 "$venv_home"
+scraper_build_source="$venv_home/scraper-source"
+install -d -o nobody -g root -m 0700 "$scraper_build_source"
+runuser -u nobody -- cp -R --no-preserve=ownership -- \
+  "$preflight/apps/scraper/." "$scraper_build_source/"
 install -d -o nobody -g root -m 0700 "$preflight/apps/scraper/.venv"
 runuser -u nobody -- env \
   HOME="$venv_home" \
   SCRAPER_BROWSER_EXECUTABLE="$browser_path" \
   SCRAPER_INSTALL_EDITABLE=false \
+  SCRAPER_PACKAGE_SOURCE="$scraper_build_source" \
   SCRAPER_SKIP_BROWSER_INSTALL=true \
   node apps/scraper/scripts/setup.mjs
 rm -rf -- "$venv_home"
 venv_home=""
+scraper_build_source=""
 sed -i 's/\r$//' "$preflight/deploy/deploy-fgp-release.sh" "$preflight/deploy/restore-fgp-backup.sh"
 chown -R root:root "$preflight"
 chmod -R a+rX,go-w "$preflight"

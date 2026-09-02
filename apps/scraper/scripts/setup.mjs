@@ -3,10 +3,20 @@ import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "../../..");
+const packageSource = process.env.SCRAPER_PACKAGE_SOURCE
+  ? resolve(process.env.SCRAPER_PACKAGE_SOURCE)
+  : resolve(root, "apps/scraper");
 const venvPython =
   process.platform === "win32"
     ? resolve(root, "apps/scraper/.venv/Scripts/python.exe")
     : resolve(root, "apps/scraper/.venv/bin/python");
+
+if (!existsSync(resolve(packageSource, "pyproject.toml"))) {
+  console.error(
+    `Scrapling package source is missing pyproject.toml: ${packageSource}`,
+  );
+  process.exit(1);
+}
 
 function run(command, args) {
   const result = spawnSync(command, args, { cwd: root, stdio: "inherit" });
@@ -34,8 +44,8 @@ if (!existsSync(venvPython)) {
 
 const packageArguments =
   process.env.SCRAPER_INSTALL_EDITABLE === "false"
-    ? [resolve(root, "apps/scraper")]
-    : ["-e", resolve(root, "apps/scraper")];
+    ? [packageSource]
+    : ["-e", packageSource];
 run(venvPython, ["-m", "pip", "install", ...packageArguments]);
 const scrapling =
   process.platform === "win32"
