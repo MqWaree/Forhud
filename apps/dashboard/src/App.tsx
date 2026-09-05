@@ -274,7 +274,9 @@ export default function App() {
           )}
           <div>
             <b>FGP</b>
-            <small>Forhuds Panel</small>
+            <small>
+              {mode === "default" ? "Forhuds Panel" : "Foreskin Panel"}
+            </small>
           </div>
         </div>
         <nav>

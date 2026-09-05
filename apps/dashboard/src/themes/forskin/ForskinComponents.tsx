@@ -56,7 +56,7 @@ export function ForskinAsset({
     setFailedUrl(src);
     if (isDevelopment() && !warnedAssetUrls.has(src)) {
       warnedAssetUrls.add(src);
-      console.warn(`[ForskinAsset] Kunne ikke indlæse ${src}`);
+      console.warn(`[ForskinAsset] Could not load ${src}`);
     }
     onError?.(event);
   };
@@ -229,7 +229,7 @@ export function ForskinOrnamentsLayer({
     >
       <ForskinAsset
         className="forskin-ambient-piece forskin-tendril-left"
-        src={forskinAssets.ornaments.tendrilLeft}
+        src={forskinAssets.ornaments.skinTendril}
         alt=""
         loading="lazy"
       />
@@ -241,16 +241,23 @@ export function ForskinOrnamentsLayer({
       />
       <ForskinAsset
         className="forskin-ambient-piece forskin-tendril-right"
-        src={forskinAssets.ornaments.tendrilRight}
+        src={forskinAssets.ornaments.skinTendril}
         alt=""
         loading="lazy"
       />
-      <ForskinAsset
-        className="forskin-ambient-piece forskin-shell-medallion"
-        src={forskinAssets.ornaments.medallion}
-        alt=""
-        loading="lazy"
-      />
+      <div className="forskin-shell-medallion">
+        <ForskinAsset
+          src={forskinAssets.ornaments.medallion}
+          alt=""
+          loading="lazy"
+        />
+        <span className="forskin-medallion-top forskin-decorative-copy">
+          FORESKIN
+        </span>
+        <span className="forskin-medallion-bottom forskin-decorative-copy">
+          FOREVER
+        </span>
+      </div>
       <div className="forskin-hero-emblem">
         <ForskinAsset
           className="forskin-hero-crown"
@@ -263,7 +270,7 @@ export function ForskinOrnamentsLayer({
           <strong>FGP</strong>
         </span>
         <b>
-          FORHUDSGANG
+          FORESKIN GANG
           <br />
           PRODUCTIONS
         </b>
@@ -280,9 +287,51 @@ export function ForskinOrnamentsLayer({
         alt=""
         loading="lazy"
       />
+      <div className="forskin-graffiti forskin-graffiti-top">
+        <ForskinAsset src={forskinAssets.plaques.graffiti} alt="" loading="lazy" />
+        <span className="forskin-decorative-copy">
+          INTACT IS
+          <br />
+          PURE
+          <br />
+          <em>ART</em>
+        </span>
+      </div>
+      <div className="forskin-graffiti forskin-graffiti-side">
+        <ForskinAsset src={forskinAssets.plaques.graffiti} alt="" loading="lazy" />
+        <span className="forskin-decorative-copy">
+          <em>REAL</em>
+          <br />
+          FORESKIN
+          <br />
+          NO
+          <br />
+          FILTER
+        </span>
+      </div>
+      <div className="forskin-torn-warning">
+        <ForskinAsset src={forskinAssets.plaques.torn} alt="" loading="lazy" />
+        <span className="forskin-decorative-copy">
+          SLAVERY FOR
+          <br />
+          THE CIRCUMCISER
+          <br />
+          IS OVER
+        </span>
+      </div>
       <div className="forskin-mug-ornament">
         <ForskinAsset src={forskinAssets.ornaments.mug} alt="" loading="lazy" />
-        <span className="forskin-decorative-copy">{forskinCopy.mug}</span>
+        <span className="forskin-decorative-copy">
+          BETTER
+          <br />
+          A CUP OF
+          <br />
+          FORESKIN
+          <br />
+          THAN A
+          <br />
+          CUP OF SHIT
+        </span>
       </div>
     </div>
   );

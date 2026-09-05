@@ -1,5 +1,6 @@
 import { type MouseEvent, useEffect, useMemo, useState } from "react";
 import {
+  ArrowRight,
   Columns3,
   Download,
   ExternalLink,
@@ -48,6 +49,10 @@ export default function LeadsPage({
     [draggingId, setDraggingId] = useState<string>(),
     [dropStatus, setDropStatus] = useState<string>(),
     [recentlyDroppedId, setRecentlyDroppedId] = useState<string>(),
+    [moveSearch, setMoveSearch] = useState(""),
+    [moveLeadId, setMoveLeadId] = useState(""),
+    [moveDestination, setMoveDestination] = useState(""),
+    [movingLeadId, setMovingLeadId] = useState<string>(),
     [optimisticStatuses, setOptimisticStatuses] = useState<
       Record<string, string>
     >({}),
@@ -83,14 +88,37 @@ export default function LeadsPage({
     const optimisticStatus = optimisticStatuses[lead.id];
     return optimisticStatus ? { ...lead, status: optimisticStatus } : lead;
   });
+  const matchesLeadSearch = (lead: ExpandedLead, value: string) => {
+    const needle = value.trim().toLowerCase();
+    if (!needle) return true;
+    return [
+      lead.domain.hostname,
+      lead.companyName,
+      lead.contactName,
+      lead.email,
+      lead.website,
+      lead.discordInvite,
+      leadDiscordUrl(lead),
+      lead.telegram,
+    ].some((candidate) => candidate?.toLowerCase().includes(needle));
+  };
   const filtered = visibleLeads.filter(
-    (l) =>
-      (status === "All" || l.status === status) &&
-      (tag === "All" || l.tags?.some((t) => t.tag.name === tag)) &&
-      [l.domain.hostname, l.companyName, l.contactName, l.email].some((v) =>
-        v?.toLowerCase().includes(query.toLowerCase()),
-      ),
+    (lead) =>
+      (status === "All" || lead.status === status) &&
+      (tag === "All" || lead.tags?.some((item) => item.tag.name === tag)) &&
+      matchesLeadSearch(lead, query),
   );
+  const moveMatches =
+    moveSearch.trim().length < 2
+      ? []
+      : visibleLeads
+          .filter((lead) => matchesLeadSearch(lead, moveSearch))
+          .sort((left, right) =>
+            (left.companyName || left.domain.hostname).localeCompare(
+              right.companyName || right.domain.hostname,
+            ),
+          )
+          .slice(0, 50);
   function open(lead: ExpandedLead) {
     setDetail(lead);
     setDraft(structuredClone(lead));
@@ -167,9 +195,13 @@ export default function LeadsPage({
     setSelected(new Set());
     await refresh();
   }
-  async function moveLead(id: string, nextStatus: string) {
+  async function moveLead(id: string, nextStatus: string): Promise<boolean> {
     const originalStatus = leads.find((lead) => lead.id === id)?.status;
-    if (!originalStatus || originalStatus === nextStatus) return;
+    if (!originalStatus) return false;
+    if (originalStatus === nextStatus) {
+      notify(`Lead is already in ${nextStatus}.`);
+      return false;
+    }
     setOptimisticStatuses((current) => ({
       ...current,
       [id]: nextStatus,
@@ -186,6 +218,7 @@ export default function LeadsPage({
       await api.send(`/leads/${id}`, "PATCH", { status: nextStatus });
       notify(`Lead moved to ${nextStatus}.`);
       await refresh();
+      return true;
     } catch (error) {
       setOptimisticStatuses((current) => {
         const next = { ...current };
@@ -194,6 +227,20 @@ export default function LeadsPage({
       });
       notify(error instanceof Error ? error.message : "Lead move failed.");
       await refresh();
+      return false;
+    }
+  }
+  async function moveSpecificLead() {
+    if (!moveLeadId || !moveDestination || movingLeadId) return;
+    setMovingLeadId(moveLeadId);
+    try {
+      if (await moveLead(moveLeadId, moveDestination)) {
+        setMoveSearch("");
+        setMoveLeadId("");
+        setMoveDestination("");
+      }
+    } finally {
+      setMovingLeadId(undefined);
     }
   }
   function showPreview(event: MouseEvent<HTMLElement>, lead: ExpandedLead) {
@@ -325,6 +372,64 @@ export default function LeadsPage({
         </div>
         <span className="count">{filtered.length} leads</span>
       </div>
+      {view === "kanban" && (
+        <section
+          className="kanban-quick-move card"
+          aria-label="Move a specific server to a Kanban category"
+        >
+          <div className="kanban-quick-move-copy">
+            <b>Move a server</b>
+            <small>Find one lead and place it directly in a category.</small>
+          </div>
+          <SearchBox
+            value={moveSearch}
+            onChange={(value) => {
+              setMoveSearch(value);
+              setMoveLeadId("");
+            }}
+            placeholder="Search server, domain, or contact…"
+          />
+          <select
+            value={moveLeadId}
+            aria-label="Choose matching server"
+            disabled={moveMatches.length === 0}
+            onChange={(event) => setMoveLeadId(event.target.value)}
+          >
+            <option value="">
+              {moveSearch.trim().length < 2
+                ? "Type at least 2 characters…"
+                : moveMatches.length
+                  ? `Choose from ${moveMatches.length} match${moveMatches.length === 1 ? "" : "es"}…`
+                  : "No matching server"}
+            </option>
+            {moveMatches.map((lead) => (
+              <option key={lead.id} value={lead.id}>
+                {lead.companyName && lead.companyName !== lead.domain.hostname
+                  ? `${lead.companyName} — ${lead.domain.hostname}`
+                  : lead.domain.hostname}
+              </option>
+            ))}
+          </select>
+          <select
+            value={moveDestination}
+            aria-label="Choose destination category"
+            onChange={(event) => setMoveDestination(event.target.value)}
+          >
+            <option value="">Choose category…</option>
+            {leadStatuses.map((leadStatus) => (
+              <option key={leadStatus} value={leadStatus}>
+                {leadStatus}
+              </option>
+            ))}
+          </select>
+          <Button
+            disabled={!moveLeadId || !moveDestination || Boolean(movingLeadId)}
+            onClick={() => void moveSpecificLead()}
+          >
+            <ArrowRight /> {movingLeadId ? "Moving…" : "Move lead"}
+          </Button>
+        </section>
+      )}
       {view === "table" ? (
         <article className="card table-card">
           {filtered.length ? (

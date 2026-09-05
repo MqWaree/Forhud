@@ -1285,11 +1285,25 @@ article.forskin-preview[data-theme="forskin-hella"] .forskin-ornaments span {
 /* Leads, kanban, and editor */
 :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) .toolbar,
 :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .kanban-quick-move,
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
   .view-toggle,
 :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
   .kanban-column {
   border-color: var(--fs-line);
   background: rgba(13, 13, 10, 0.78);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .kanban-quick-move-copy
+  b {
+  color: var(--fs-text);
+}
+
+:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
+  .kanban-quick-move-copy
+  small {
+  color: var(--fs-muted);
 }
 
 :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
@@ -1843,9 +1857,12 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
 
 /* Reference composition: organic copper shell on a compact instrument panel. */
 :root[data-theme="forskin-hella"] {
-  --fs-copper-deep: #632f27;
-  --fs-copper: #a45542;
-  --fs-copper-hot: #d18467;
+  --fs-copper-deep: #40251f;
+  --fs-copper: #755044;
+  --fs-copper-hot: #ad7965;
+  --fs-flesh-deep: #211513;
+  --fs-flesh: #55352f;
+  --fs-flesh-soft: #7b5248;
 }
 
 :root[data-theme="forskin-hella"] body {
@@ -1853,36 +1870,48 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
   background-image:
     radial-gradient(
       circle at 72% 0%,
-      rgba(30, 125, 144, 0.08),
+      rgba(30, 125, 144, 0.055),
       transparent 34rem
     ),
     radial-gradient(
       circle at 16% 84%,
-      rgba(151, 66, 48, 0.1),
+      rgba(116, 68, 58, 0.16),
       transparent 28rem
+    ),
+    radial-gradient(
+      ellipse at 50% 112%,
+      rgba(111, 70, 62, 0.12),
+      transparent 48rem
     ),
     linear-gradient(rgba(76, 113, 122, 0.085) 1px, transparent 1px),
     linear-gradient(90deg, rgba(76, 113, 122, 0.065) 1px, transparent 1px),
-    var(--fs-texture-grain), linear-gradient(155deg, #091116, #040709 64%);
+    var(--fs-texture-mottle), var(--fs-texture-grain),
+    linear-gradient(155deg, #091116, #040709 64%);
   background-size:
     auto,
     auto,
+    auto,
     28px 28px,
     28px 28px,
+    420px 420px,
     260px 260px,
     auto;
-  background-blend-mode: normal, normal, normal, normal, soft-light, normal;
+  background-blend-mode:
+    normal, normal, normal, normal, normal, soft-light, soft-light, normal;
 }
 
 :root[data-theme="forskin-hella"] .app::before {
-  inset: 1px;
-  border: 20px solid transparent;
+  inset: 2px;
+  box-sizing: border-box;
+  border: 27px solid transparent;
   border-image-source: var(--fs-frame-organic);
-  border-image-slice: 160;
-  border-image-width: 20px;
+  /* Keep the complete corner hardware in each corner tile. The previous
+     160px cut crossed the curved joints, offsetting the straight rails. */
+  border-image-slice: 218;
+  border-image-width: 27px;
   border-image-repeat: stretch;
-  opacity: 0.92;
-  filter: saturate(0.82) brightness(0.84) contrast(1.08);
+  opacity: 0.96;
+  filter: saturate(0.88) brightness(0.84) contrast(1.06);
 }
 
 :root[data-theme="forskin-hella"] .app::after {
@@ -1893,17 +1922,22 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
 :root[data-theme="forskin-hella"] :is(.sidebar, .member-sidebar) {
   border-color: rgba(193, 101, 76, 0.48);
   background:
+    linear-gradient(90deg, rgba(103, 61, 52, 0.12), transparent 30%),
     linear-gradient(rgba(71, 103, 111, 0.055) 1px, transparent 1px),
     linear-gradient(90deg, rgba(71, 103, 111, 0.04) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(15, 23, 28, 0.985), rgba(5, 9, 12, 0.99));
+    var(--fs-texture-mottle),
+    linear-gradient(180deg, rgba(15, 23, 28, 0.88), rgba(5, 9, 12, 0.93));
   background-size:
+    auto,
     28px 28px,
     28px 28px,
+    260px 260px,
     auto;
+  background-blend-mode: normal, normal, normal, soft-light, normal;
   box-shadow:
     0 0 0 1px rgba(229, 137, 103, 0.07),
     0 0 34px rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(14px) saturate(0.75);
+  backdrop-filter: blur(2px) saturate(0.76);
 }
 
 :root[data-theme="forskin-hella"] .sidebar {
@@ -1928,8 +1962,10 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
   height: 54px;
   padding: 8px 17px 0;
   gap: 7px;
-  border-bottom-color: rgba(193, 101, 76, 0.44);
-  background: rgba(5, 10, 13, 0.93);
+  border-bottom-color: rgba(136, 85, 72, 0.5);
+  background:
+    linear-gradient(180deg, rgba(94, 56, 48, 0.08), transparent 70%),
+    rgba(5, 10, 13, 0.94);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
 }
 
@@ -1979,10 +2015,10 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
 }
 
 :root[data-theme="forskin-hella"] .sidebar nav a.active {
-  border-color: rgba(218, 126, 92, 0.7);
+  border-color: rgba(173, 121, 101, 0.74);
   background: linear-gradient(
     90deg,
-    rgba(185, 83, 60, 0.22),
+    rgba(112, 65, 54, 0.28),
     rgba(18, 27, 33, 0.72)
   );
   box-shadow:
@@ -2042,7 +2078,7 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
 :root[data-theme="forskin-hella"] .btn {
   height: 34px;
   padding-inline: 11px;
-  border-color: rgba(180, 91, 69, 0.5);
+  border-color: rgba(124, 79, 68, 0.62);
   border-radius: 4px;
   font-size: 10px;
   background: linear-gradient(
@@ -2065,7 +2101,7 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
 }
 
 :root[data-theme="forskin-hella"] .btn.secondary {
-  border-color: rgba(193, 101, 76, 0.5);
+  border-color: rgba(135, 86, 73, 0.62);
   background: linear-gradient(
     180deg,
     rgba(19, 28, 34, 0.98),
@@ -2079,23 +2115,25 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
 }
 
 :root[data-theme="forskin-hella"] .card {
-  border: 8px solid transparent;
-  border-image-source: var(--fs-frame-organic);
-  border-image-slice: 160;
-  border-image-width: 8px;
-  border-image-repeat: stretch;
-  border-radius: 0;
+  border: 1px solid rgba(128, 83, 72, 0.52);
+  border-radius: 7px;
   background:
+    linear-gradient(125deg, rgba(112, 71, 61, 0.055), transparent 34%),
     linear-gradient(rgba(71, 103, 111, 0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(71, 103, 111, 0.025) 1px, transparent 1px),
+    var(--fs-texture-mottle),
     linear-gradient(150deg, rgba(13, 21, 26, 0.985), rgba(5, 10, 13, 0.985));
   background-size:
+    auto,
     28px 28px,
     28px 28px,
+    360px 360px,
     auto;
+  background-blend-mode: normal, normal, normal, soft-light, normal;
   box-shadow:
     0 18px 42px rgba(0, 0, 0, 0.4),
-    inset 0 1px rgba(255, 255, 255, 0.025);
+    inset 0 1px rgba(255, 255, 255, 0.025),
+    inset 0 0 26px rgba(75, 42, 36, 0.06);
 }
 
 :root[data-theme="forskin-hella"]
@@ -2109,10 +2147,15 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
     .table-card,
     .toolbar
   ) {
-  border-width: 10px;
+  border: 14px solid transparent;
+  border-radius: 0;
   border-image-source: var(--fs-frame-organic);
-  border-image-slice: 160;
-  border-image-width: 10px;
+  border-image-slice: 218;
+  border-image-width: 14px;
+  border-image-repeat: stretch;
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.42),
+    inset 0 0 34px rgba(95, 55, 47, 0.055);
 }
 
 :root[data-theme="forskin-hella"] .brave-search-card {
@@ -2163,11 +2206,20 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
 :root[data-theme="forskin-hella"] .stat {
   min-width: 0;
   padding: 11px 12px;
-  border: 9px solid transparent;
-  border-image-source: var(--fs-frame-organic);
-  border-image-slice: 160;
-  border-image-width: 9px;
-  border-image-repeat: stretch;
+  border: 1px solid rgba(126, 82, 71, 0.56);
+  border-radius: 7px;
+  background:
+    radial-gradient(circle at 100% 0, rgba(122, 72, 60, 0.12), transparent 42%),
+    var(--fs-texture-mottle),
+    linear-gradient(150deg, rgba(13, 21, 26, 0.98), rgba(5, 10, 13, 0.98));
+  background-size:
+    auto,
+    280px 280px,
+    auto;
+  background-blend-mode: normal, soft-light, normal;
+  box-shadow:
+    inset 0 0 0 1px rgba(192, 126, 105, 0.035),
+    0 12px 28px rgba(0, 0, 0, 0.32);
 }
 
 :root[data-theme="forskin-hella"] .stat strong {
@@ -2198,52 +2250,169 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
 }
 
 :root[data-theme="forskin-hella"] .forskin-ornaments img {
-  filter: saturate(1.2) hue-rotate(-8deg)
-    drop-shadow(0 12px 18px rgba(0, 0, 0, 0.65));
+  filter: saturate(0.64) brightness(0.68) contrast(1.06)
+    drop-shadow(0 8px 10px rgba(0, 0, 0, 0.62));
 }
 
 :root[data-theme="forskin-hella"] .forskin-ornaments .forskin-tendril-left {
-  top: -52px;
-  left: -42px;
-  width: 205px;
-  height: 470px;
-  opacity: 0.82;
+  top: 72px;
+  left: 130px;
+  width: 124px;
+  height: 710px;
+  object-fit: contain;
+  opacity: 0.54;
+  rotate: -4deg;
 }
 
 :root[data-theme="forskin-hella"] .forskin-ornaments .forskin-chain-corner {
-  top: 38px;
-  right: 44px;
-  width: 204px;
-  height: 204px;
-  opacity: 0.8;
+  top: 10px;
+  right: 18px;
+  width: 218px;
+  height: 148px;
+  object-fit: contain;
+  object-position: right top;
+  opacity: 0.64;
 }
 
 :root[data-theme="forskin-hella"] .forskin-ornaments .forskin-tendril-right {
-  right: -42px;
-  bottom: -52px;
-  width: 205px;
-  height: 430px;
-  opacity: 0.82;
+  right: 158px;
+  bottom: -80px;
+  width: 132px;
+  height: 720px;
+  object-fit: contain;
+  opacity: 0.5;
+  rotate: 176deg;
+  scale: -1 1;
 }
 
-:root[data-theme="forskin-hella"] .forskin-ornaments .forskin-shell-medallion {
-  right: auto;
-  bottom: 115px;
-  left: 202px;
-  width: 118px;
-  height: 118px;
+:root[data-theme="forskin-hella"] .forskin-shell-medallion {
+  position: fixed;
+  top: 355px;
+  left: 211px;
+  width: 108px;
+  height: 108px;
   opacity: 0.78;
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.7));
+}
+
+:root[data-theme="forskin-hella"] .forskin-shell-medallion > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+}
+
+:root[data-theme="forskin-hella"] .forskin-shell-medallion > span {
+  position: absolute;
+  left: 50%;
+  z-index: 1;
+  width: 82%;
+  color: #d9b16b;
+  font: 800 8px/1 var(--fs-font-body);
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-shadow: 0 2px 3px #000;
+  transform: translateX(-50%);
+}
+
+:root[data-theme="forskin-hella"] .forskin-medallion-top {
+  top: 14px;
+}
+
+:root[data-theme="forskin-hella"] .forskin-medallion-bottom {
+  bottom: 14px;
 }
 
 :root[data-theme="forskin-hella"] .forskin-mug-ornament {
-  right: 35px;
-  bottom: 46px;
+  right: 25px;
+  bottom: 38px;
   width: 150px;
-  height: 150px;
+  height: 160px;
 }
 
 :root[data-theme="forskin-hella"] .forskin-mug-ornament > img {
-  opacity: 0.88;
+  opacity: 0.78;
+}
+
+:root[data-theme="forskin-hella"] .forskin-mug-ornament > span {
+  inset: 50px 44px auto 27px;
+  color: #20100b;
+  font: 950 10px/0.91 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px rgba(255, 224, 176, 0.22);
+  transform: rotate(-1.5deg);
+}
+
+:root[data-theme="forskin-hella"] :is(.forskin-graffiti, .forskin-torn-warning) {
+  position: fixed;
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 7px 10px rgba(0, 0, 0, 0.68));
+}
+
+:root[data-theme="forskin-hella"] :is(.forskin-graffiti, .forskin-torn-warning) > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+}
+
+:root[data-theme="forskin-hella"] :is(.forskin-graffiti, .forskin-torn-warning) > span {
+  position: relative;
+  z-index: 1;
+  color: #eee5d2;
+  font: 950 17px/0.9 Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+  letter-spacing: 0.015em;
+  text-align: center;
+  text-shadow:
+    2px 2px #090707,
+    -1px -1px #090707;
+  transform: rotate(-2deg);
+}
+
+:root[data-theme="forskin-hella"] .forskin-graffiti em {
+  color: #de6682;
+  font-style: normal;
+}
+
+:root[data-theme="forskin-hella"] .forskin-graffiti-top {
+  top: 151px;
+  right: 49px;
+  width: 104px;
+  height: 142px;
+  opacity: 0.74;
+  transform: rotate(2deg);
+}
+
+:root[data-theme="forskin-hella"] .forskin-graffiti-side {
+  top: 526px;
+  left: 30px;
+  width: 116px;
+  height: 174px;
+  opacity: 0.78;
+  transform: rotate(-2deg);
+}
+
+:root[data-theme="forskin-hella"] .forskin-graffiti-side > span {
+  font-size: 18px;
+}
+
+:root[data-theme="forskin-hella"] .forskin-torn-warning {
+  top: 452px;
+  right: 27px;
+  width: 150px;
+  height: 86px;
+  opacity: 0.76;
+  transform: rotate(-4deg);
+}
+
+:root[data-theme="forskin-hella"] .forskin-torn-warning > span {
+  color: #24100c;
+  font-size: 12px;
+  line-height: 0.95;
+  text-shadow: 0 1px rgba(255, 232, 199, 0.22);
 }
 
 .forskin-hero-emblem {
@@ -2251,6 +2420,10 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
 }
 
 @media (min-width: 1400px) {
+  :root[data-theme="forskin-hella"] .forskin-sidebar-plaque {
+    display: none;
+  }
+
   :root[data-theme="forskin-hella"] .page {
     padding-left: 178px;
     padding-right: 18px;
@@ -2266,7 +2439,18 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
     flex-direction: column;
     color: #d4a66d;
     text-align: center;
+    isolation: isolate;
     filter: drop-shadow(0 16px 20px rgba(0, 0, 0, 0.82));
+  }
+
+  :root[data-theme="forskin-hella"] .forskin-hero-emblem::before {
+    content: "";
+    position: absolute;
+    inset: -25px -19px -12px;
+    z-index: -1;
+    background: var(--fs-frame-organic) center / 100% 100% no-repeat;
+    opacity: 0.72;
+    filter: saturate(0.72) brightness(0.68) contrast(1.08);
   }
 
   :root[data-theme="forskin-hella"] .forskin-hero-crown {

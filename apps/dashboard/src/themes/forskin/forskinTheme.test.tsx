@@ -20,6 +20,7 @@ import {
   ForskinThemeToggle,
   THEME_STORAGE_KEY,
   forskinAssets,
+  forskinCopy,
   parseForskinPreferences,
 } from ".";
 
@@ -103,10 +104,40 @@ describe("Forskin asset registry", () => {
       "/assets/themes/forskin/frames/frame-heavy-9slice.webp",
     );
     expect(forskinAssets.frames.organic).toBe(
-      "/assets/themes/forskin/frames/frame-organic-copper-v3.png",
+      "/assets/themes/forskin/frames/frame-organic-forskin-v4.webp",
     );
-    expect(forskinAssets.ornaments.tendrilLeft).toBe(
-      "/assets/themes/forskin/ornaments/tendril-left.webp",
+    expect(forskinAssets.ornaments.skinTendril).toBe(
+      "/assets/themes/forskin/ornaments/tendril-skin-v4.webp",
+    );
+    expect(forskinAssets.ornaments.chainCorner).toBe(
+      "/assets/themes/forskin/ornaments/chain-top-right-v4.webp",
+    );
+    expect(forskinAssets.ornaments.medallion).toBe(
+      "/assets/themes/forskin/ornaments/forhud-forevig-medallion-v4.webp",
+    );
+    expect(forskinAssets.ornaments.mug).toBe(
+      "/assets/themes/forskin/ornaments/forskin-mug-blank-v4.webp",
+    );
+    expect(forskinAssets.plaques.graffiti).toBe(
+      "/assets/themes/forskin/plaques/graffiti-sticker-tall-v4.webp",
+    );
+    expect(forskinAssets.plaques.torn).toBe(
+      "/assets/themes/forskin/plaques/torn-warning-plaque-v4.webp",
+    );
+  });
+});
+
+describe("Forskin copy", () => {
+  it("keeps every operator-facing theme slogan in English", () => {
+    expect(forskinCopy.brandingSubtitle).toBe("Foreskin Panel");
+    expect(forskinCopy.primaryPlaque).toBe("Intact is pure art");
+    expect(forskinCopy.secondaryPlaque).toBe("Real foreskin, no filter");
+    expect(forskinCopy.medallion).toBe("Foreskin forever");
+    expect(forskinCopy.mug).toBe(
+      "Better a cup of foreskin than a cup of shit",
+    );
+    expect(forskinCopy.warningPlaque).toBe(
+      "Slavery for the circumciser is over",
     );
   });
 });

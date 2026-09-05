@@ -68,6 +68,24 @@ test("Searcher Import Links drawer", async ({ page }) => {
   expectCleanDiagnostics(diagnostics);
 });
 
+test("Leads Kanban direct move controls", async ({ page }) => {
+  const diagnostics = createDiagnostics(page);
+  await installApiMocks(page, diagnostics);
+  await setTheme(page, "forskin-hella");
+  await openApp(page, "/leads", "Leads funnel");
+  await page.getByRole("button", { name: "Kanban" }).click();
+  await expect(
+    page.getByRole("region", {
+      name: "Move a specific server to a Kanban category",
+    }),
+  ).toBeVisible();
+
+  await expect(page).toHaveScreenshot(
+    "leads-kanban-direct-move-hella-1440x900.png",
+  );
+  expectCleanDiagnostics(diagnostics);
+});
+
 test("file-sharing error state", async ({ page }) => {
   const diagnostics = createDiagnostics(page);
   await installApiMocks(page, diagnostics);

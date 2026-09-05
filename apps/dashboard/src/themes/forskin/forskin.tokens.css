@@ -61,13 +61,15 @@ html:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"]) {
   --fs-frame-thin: url("/assets/themes/forskin/frames/frame-thin-9slice.webp");
   --fs-frame-active: url("/assets/themes/forskin/frames/frame-active-9slice.webp");
   --fs-frame-error: url("/assets/themes/forskin/frames/frame-error-9slice.webp");
-  --fs-frame-organic: url("/assets/themes/forskin/frames/frame-organic-copper-v3.png");
+  --fs-frame-organic: url("/assets/themes/forskin/frames/frame-organic-forskin-v4.webp");
+  --fs-texture-skin: url("/assets/themes/forskin/ornaments/tendril-skin-v4.webp");
   --fs-nav-active: url("/assets/themes/forskin/frames/nav-active-drip.webp");
   --fs-progress-track: url("/assets/themes/forskin/frames/progress-tube-track.webp");
   --fs-progress-fill: url("/assets/themes/forskin/frames/progress-tube-fill.webp");
   --fs-texture-charcoal: url("/assets/themes/forskin/textures/charcoal-surface.webp");
   --fs-texture-grid: url("/assets/themes/forskin/textures/grid-mask.svg");
   --fs-texture-grain: url("/assets/themes/forskin/textures/fine-grain.webp");
+  --fs-texture-mottle: url("/assets/themes/forskin/textures/organic-mottle.webp");
   --fs-vignette: url("/assets/themes/forskin/textures/vignette.webp");
   --fs-border-image: var(--fs-frame-thin);
 

@@ -7,14 +7,14 @@
   "license": "Original project artwork. May be used, modified, and redistributed with this project under the project license. No third-party artwork is included.",
   "budgets": {
     "initial": {
-      "bytes": 1521902,
+      "bytes": 445056,
       "limitBytes": 1572864,
       "assets": [
         "branding/fgp-forskin-emblem.svg",
         "branding/fgp-forskin-mini-mark.svg",
         "branding/fgp-forskin-wordmark.svg",
         "frames/divider-horizontal.webp",
-        "frames/frame-organic-copper-v3.png",
+        "frames/frame-organic-forskin-v4.webp",
         "frames/frame-thin-9slice.webp",
         "frames/nav-active-drip.webp",
         "frames/progress-tube-fill.webp",
@@ -31,9 +31,11 @@
       ]
     },
     "full": {
-      "bytes": 2097590,
+      "bytes": 2812556,
       "limitBytes": 5242880,
-      "excludes": ["ASSET-MANIFEST.json"]
+      "excludes": [
+        "ASSET-MANIFEST.json"
+      ]
     }
   },
   "assets": [
@@ -123,7 +125,16 @@
       "bytes": 1197196,
       "width": 1254,
       "height": 1254,
-      "role": "Photorealistic organic copper 9-slice frame for Forskin Hella",
+      "role": "Legacy bright organic copper 9-slice frame retained for rollback",
+      "lazy": true,
+      "provenance": "Original project artwork generated with OpenAI ImageGen from the operator-provided visual direction, then curated for this interface; no third-party artwork is included."
+    },
+    {
+      "path": "frames/frame-organic-forskin-v4.webp",
+      "bytes": 120350,
+      "width": 1254,
+      "height": 1254,
+      "role": "Dark skin-and-copper 9-slice frame for the blended Forskin Hella shell",
       "lazy": false,
       "provenance": "Original project artwork generated with OpenAI ImageGen from the operator-provided visual direction, then curated for this interface; no third-party artwork is included."
     },
@@ -218,6 +229,15 @@
       "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
     },
     {
+      "path": "ornaments/chain-top-right-v4.webp",
+      "bytes": 27326,
+      "width": 720,
+      "height": 480,
+      "role": "Aged bronze chain for the upper-right shell corner",
+      "lazy": true,
+      "provenance": "Original project artwork generated with OpenAI ImageGen from the operator-provided visual direction, then curated for this interface; no third-party artwork is included."
+    },
+    {
       "path": "ornaments/crown-gold.svg",
       "bytes": 837,
       "width": 512,
@@ -245,6 +265,15 @@
       "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
     },
     {
+      "path": "ornaments/forhud-forevig-medallion-v4.webp",
+      "bytes": 104750,
+      "width": 560,
+      "height": 560,
+      "role": "Blank embossed bronze medallion with live interface lettering",
+      "lazy": true,
+      "provenance": "Original project artwork generated with OpenAI ImageGen from the operator-provided visual direction, then curated for this interface; no third-party artwork is included."
+    },
+    {
       "path": "ornaments/forhud-forevig-medallion.webp",
       "bytes": 25048,
       "width": 640,
@@ -252,6 +281,15 @@
       "role": "Commemorative fantasy machinery medallion",
       "lazy": true,
       "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "ornaments/forskin-mug-blank-v4.webp",
+      "bytes": 131410,
+      "width": 610,
+      "height": 648,
+      "role": "Blank worn ceramic mug with a restrained organic base tendril",
+      "lazy": true,
+      "provenance": "Original project artwork generated with OpenAI ImageGen from the operator-provided visual direction, then curated for this interface; no third-party artwork is included."
     },
     {
       "path": "ornaments/forskin-mug.webp",
@@ -288,6 +326,24 @@
       "role": "Decorative right organic-machine tendril",
       "lazy": true,
       "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "ornaments/tendril-skin-v4.webp",
+      "bytes": 81300,
+      "width": 768,
+      "height": 1152,
+      "role": "Dark folded-skin tendril for restrained edge ornamentation",
+      "lazy": true,
+      "provenance": "Original project artwork generated with OpenAI ImageGen from the operator-provided visual direction, then curated for this interface; no third-party artwork is included."
+    },
+    {
+      "path": "plaques/graffiti-sticker-tall-v4.webp",
+      "bytes": 103910,
+      "width": 480,
+      "height": 720,
+      "role": "Blank distressed graffiti sticker for live interface lettering",
+      "lazy": true,
+      "provenance": "Original project artwork generated with OpenAI ImageGen from the operator-provided visual direction, then curated for this interface; no third-party artwork is included."
     },
     {
       "path": "plaques/plaque-rusted-small.webp",
@@ -333,6 +389,15 @@
       "role": "Path-only warning sigil sticker",
       "lazy": true,
       "provenance": "Original procedural SVG recipe rendered by apps/dashboard/scripts/generate-forskin-assets.mjs; no external artwork or model output."
+    },
+    {
+      "path": "plaques/torn-warning-plaque-v4.webp",
+      "bytes": 145920,
+      "width": 940,
+      "height": 529,
+      "role": "Blank torn hide-and-parchment warning plaque for live interface lettering",
+      "lazy": true,
+      "provenance": "Original project artwork generated with OpenAI ImageGen from the operator-provided visual direction, then curated for this interface; no third-party artwork is included."
     },
     {
       "path": "reference/forskin-mode-reference.png",

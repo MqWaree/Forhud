@@ -2,7 +2,7 @@ import type { ThemeMode } from "./forskinTheme";
 
 export const forskinCopy = {
   brand: "FGP",
-  brandingSubtitle: "Forhuds Panel",
+  brandingSubtitle: "Foreskin Panel",
   settingsTitle: "Theme mode",
   modeGroupLabel: "Application theme",
   modeLabels: {
@@ -14,13 +14,13 @@ export const forskinCopy = {
   ambientMotionLabel: "Ambient motion",
   previewTitle: "Theme preview",
   progressLabel: "Progress",
-  primaryPlaque: "Intakt er kun kunst",
-  secondaryPlaque: "Ægte forhud, ingen filter",
-  medallion: "Forhud for evigt",
-  mug: "Hellere en kop forhud end en kop lort",
-  warningPlaque: "Slaveri for cirkumcideren er forbi",
+  primaryPlaque: "Intact is pure art",
+  secondaryPlaque: "Real foreskin, no filter",
+  medallion: "Foreskin forever",
+  mug: "Better a cup of foreskin than a cup of shit",
+  warningPlaque: "Slavery for the circumciser is over",
   decorative: {
-    plaque: "Intakt er kun kunst",
-    preview: "Ægte forhud, ingen filter",
+    plaque: "Intact is pure art",
+    preview: "Real foreskin, no filter",
   },
 } as const;

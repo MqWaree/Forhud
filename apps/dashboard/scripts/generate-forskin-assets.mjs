@@ -41,8 +41,43 @@ const staticAssets = [
 const curatedAssets = [
   [
     "frames/frame-organic-copper-v3.png",
-    "Photorealistic organic copper 9-slice frame for Forskin Hella",
+    "Legacy bright organic copper 9-slice frame retained for rollback",
+    true,
+  ],
+  [
+    "frames/frame-organic-forskin-v4.webp",
+    "Dark skin-and-copper 9-slice frame for the blended Forskin Hella shell",
     false,
+  ],
+  [
+    "ornaments/tendril-skin-v4.webp",
+    "Dark folded-skin tendril for restrained edge ornamentation",
+    true,
+  ],
+  [
+    "ornaments/chain-top-right-v4.webp",
+    "Aged bronze chain for the upper-right shell corner",
+    true,
+  ],
+  [
+    "ornaments/forhud-forevig-medallion-v4.webp",
+    "Blank embossed bronze medallion with live interface lettering",
+    true,
+  ],
+  [
+    "ornaments/forskin-mug-blank-v4.webp",
+    "Blank worn ceramic mug with a restrained organic base tendril",
+    true,
+  ],
+  [
+    "plaques/graffiti-sticker-tall-v4.webp",
+    "Blank distressed graffiti sticker for live interface lettering",
+    true,
+  ],
+  [
+    "plaques/torn-warning-plaque-v4.webp",
+    "Blank torn hide-and-parchment warning plaque for live interface lettering",
+    true,
   ],
 ];
 
@@ -51,7 +86,7 @@ const initialSubset = new Set([
   "branding/fgp-forskin-wordmark.svg",
   "branding/fgp-forskin-mini-mark.svg",
   "frames/frame-thin-9slice.webp",
-  "frames/frame-organic-copper-v3.png",
+  "frames/frame-organic-forskin-v4.webp",
   "frames/divider-horizontal.webp",
   "frames/nav-active-drip.webp",
   "frames/progress-tube-track.webp",
