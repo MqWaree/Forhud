@@ -3,10 +3,9 @@ import type { ThemeMode } from "./forskinTheme";
 export const forskinCopy = {
   brand: "FGP",
   brandingSubtitle: "Foreskin Panel",
-  settingsTitle: "Theme mode",
-  modeGroupLabel: "Application theme",
+  settingsTitle: "Forskin style",
+  modeGroupLabel: "Forskin intensity",
   modeLabels: {
-    default: "Default",
     "forskin-subtle": "Forskin - Subtle",
     "forskin-hella": "Forskin - Hella",
   } satisfies Record<ThemeMode, string>,

@@ -262,21 +262,12 @@ export default function App() {
       <ForskinOrnamentsLayer />
       <aside className={`sidebar ${mobile ? "open" : ""}`}>
         <div className="brand">
-          <img
-            className="brand-logo forskin-default-brand"
-            src="/fgp-logo.png"
-            alt="FGP"
-          />
-          {mode !== "default" && (
-            <span className="forskin-sidebar-medallion" aria-hidden="true">
-              <ForskinLogo alt="" aria-hidden="true" />
-            </span>
-          )}
+          <span className="forskin-sidebar-medallion" aria-hidden="true">
+            <ForskinLogo alt="" aria-hidden="true" />
+          </span>
           <div>
             <b>FGP</b>
-            <small>
-              {mode === "default" ? "Forhuds Panel" : "Foreskin Panel"}
-            </small>
+            <small>Foreskin Panel</small>
           </div>
         </div>
         <nav>

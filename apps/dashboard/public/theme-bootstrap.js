@@ -1,12 +1,11 @@
 (function () {
   "use strict";
   var defaults = {
-    mode: "default",
+    mode: "forskin-hella",
     decorativeCopy: true,
     ambientMotion: true,
   };
   var colors = {
-    default: "#05070b",
     "forskin-subtle": "#0b0b09",
     "forskin-hella": "#070705",
   };
@@ -21,10 +20,14 @@
       Object.prototype.hasOwnProperty.call(parsed, "mode") &&
       Object.prototype.hasOwnProperty.call(parsed, "decorativeCopy") &&
       Object.prototype.hasOwnProperty.call(parsed, "ambientMotion") &&
-      Object.prototype.hasOwnProperty.call(colors, parsed.mode) &&
+      (Object.prototype.hasOwnProperty.call(colors, parsed.mode) ||
+        parsed.mode === "default") &&
       typeof parsed.decorativeCopy === "boolean" &&
       typeof parsed.ambientMotion === "boolean";
-    if (valid) preferences = parsed;
+    if (valid) {
+      preferences = parsed;
+      if (preferences.mode === "default") preferences.mode = "forskin-hella";
+    }
   } catch {}
 
   var reducedMotion =

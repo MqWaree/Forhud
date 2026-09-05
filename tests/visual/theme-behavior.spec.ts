@@ -9,14 +9,13 @@ import {
   type ThemeMode,
 } from "./support";
 
-test("Default, Subtle, and Hella root modes apply", async ({ page }) => {
+test("Subtle and Hella root modes apply without the retired Forhud mode", async ({ page }) => {
   const diagnostics = createDiagnostics(page);
   await installApiMocks(page, diagnostics);
-  await setTheme(page, "default");
+  await setTheme(page, "forskin-subtle");
   await page.clock.setFixedTime(new Date("2026-08-02T12:00:00.000Z"));
 
   const expectedColors: Record<ThemeMode, string> = {
-    default: "#05070b",
     "forskin-subtle": "#0b0b09",
     "forskin-hella": "#070705",
   };
@@ -30,7 +29,7 @@ test("Default, Subtle, and Hella root modes apply", async ({ page }) => {
     } else {
       await expect(page.locator(".forskin-ornaments")).toHaveCount(0);
     }
-    const nextMode: ThemeMode = mode === "default" ? "forskin-subtle" : "forskin-hella";
+    const nextMode: ThemeMode = mode === "forskin-subtle" ? "forskin-hella" : "forskin-subtle";
     await page.evaluate(
       ({ key, value }) => localStorage.setItem(key, JSON.stringify(value)),
       {
@@ -50,7 +49,7 @@ test("quick toggle changes theme without changing route", async ({ page }) => {
   const before = page.url();
 
   await page.getByRole("button", { name: /Theme: Forskin - Hella/ }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "default");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "forskin-subtle");
   expect(page.url()).toBe(before);
   expectCleanDiagnostics(diagnostics);
 });

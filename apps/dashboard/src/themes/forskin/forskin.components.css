@@ -43,11 +43,6 @@ html:root[data-theme="forskin-hella"] .member-sidebar {
 }
 
 :root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
-  .forskin-default-brand {
-  display: none;
-}
-
-:root:is([data-theme="forskin-subtle"], [data-theme="forskin-hella"])
   .forskin-sidebar-medallion {
   display: grid;
   flex: 0 0 43px;

@@ -3,7 +3,7 @@ import { expect, type Page, type Route } from "@playwright/test";
 export const fixedTime = "2026-08-02T12:00:00.000Z";
 export const themeStorageKey = "fgp.ui.theme.v1";
 
-export type ThemeMode = "default" | "forskin-subtle" | "forskin-hella";
+export type ThemeMode = "forskin-subtle" | "forskin-hella";
 
 export type MockOptions = {
   authenticated?: boolean;

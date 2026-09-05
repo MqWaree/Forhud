@@ -11,11 +11,7 @@ import { forskinAssets } from "./forskinAssets";
 
 export const THEME_STORAGE_KEY = "fgp.ui.theme.v1";
 
-export const THEME_MODES = [
-  "default",
-  "forskin-subtle",
-  "forskin-hella",
-] as const;
+export const THEME_MODES = ["forskin-subtle", "forskin-hella"] as const;
 
 export type ThemeMode = (typeof THEME_MODES)[number];
 
@@ -26,13 +22,12 @@ export type ForskinPreferences = {
 };
 
 export const DEFAULT_FORSKIN_PREFERENCES: Readonly<ForskinPreferences> = {
-  mode: "default",
+  mode: "forskin-hella",
   decorativeCopy: true,
   ambientMotion: true,
 };
 
 export const THEME_COLORS: Record<ThemeMode, string> = {
-  default: "#05070b",
   "forskin-subtle": "#0b0b09",
   "forskin-hella": "#070705",
 };
@@ -65,6 +60,24 @@ export function parseForskinPreferences(
   if (typeof serialized !== "string") return defaultPreferences();
   try {
     const parsed: unknown = JSON.parse(serialized);
+    const legacy =
+      parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null;
+    if (
+      legacy &&
+      Object.keys(legacy).length === preferenceKeys.length &&
+      preferenceKeys.every((key) => key in legacy) &&
+      legacy.mode === "default" &&
+      typeof legacy.decorativeCopy === "boolean" &&
+      typeof legacy.ambientMotion === "boolean"
+    ) {
+      return {
+        mode: "forskin-hella",
+        decorativeCopy: legacy.decorativeCopy,
+        ambientMotion: legacy.ambientMotion,
+      };
+    }
     return isForskinPreferences(parsed) ? { ...parsed } : defaultPreferences();
   } catch {
     return defaultPreferences();
@@ -195,11 +208,6 @@ export function ForskinThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement;
-    if (preferences.mode === "default") {
-      delete root.dataset.forskinAssets;
-      return;
-    }
-
     let cancelled = false;
     root.dataset.forskinAssets = "loading";
     const load = (src: string) =>
@@ -223,26 +231,19 @@ export function ForskinThemeProvider({ children }: { children: ReactNode }) {
       },
       (error: unknown) => {
         if (cancelled) return;
-        const fallback = {
-          ...preferencesRef.current,
-          mode: "default" as const,
-        };
-        preferencesRef.current = fallback;
-        applyForskinPreferences(fallback);
-        persistForskinPreferences(fallback);
-        setPreferenceState(fallback);
+        root.dataset.forskinAssets = "failed";
         const development = Boolean(
           (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV,
         );
         if (!warnedAboutCriticalAssets && development) {
           warnedAboutCriticalAssets = true;
           console.warn(
-            "[ForskinTheme] Critical asset failed; using Default",
+            "[ForskinTheme] Critical artwork failed; using simplified Forskin styling",
             error,
           );
         }
         const notice =
-          "Forskin assets could not be loaded. Default theme restored.";
+          "Forskin artwork could not be loaded. Simplified styling enabled.";
         document.documentElement.dataset.forskinNotice = notice;
         window.dispatchEvent(
           new CustomEvent("toast", {

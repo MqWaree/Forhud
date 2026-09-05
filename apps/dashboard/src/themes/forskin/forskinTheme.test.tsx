@@ -93,6 +93,22 @@ describe("Forskin preference parsing", () => {
       preferences,
     );
   });
+
+  it("migrates the retired Forhud mode to Forskin Hella", () => {
+    expect(
+      parseForskinPreferences(
+        JSON.stringify({
+          mode: "default",
+          decorativeCopy: false,
+          ambientMotion: false,
+        }),
+      ),
+    ).toEqual({
+      mode: "forskin-hella",
+      decorativeCopy: false,
+      ambientMotion: false,
+    });
+  });
 });
 
 describe("Forskin asset registry", () => {
@@ -143,7 +159,7 @@ describe("Forskin copy", () => {
 });
 
 describe("ForskinThemeProvider", () => {
-  it("loads persistence and applies all three modes live", () => {
+  it("loads persistence and applies both Forskin modes live", () => {
     localStorage.setItem(
       THEME_STORAGE_KEY,
       JSON.stringify({
@@ -164,11 +180,9 @@ describe("ForskinThemeProvider", () => {
       "#0b0b09",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Default" }));
-    expect(document.documentElement.dataset.theme).toBe("default");
-
     fireEvent.click(screen.getByRole("button", { name: "Forskin - Hella" }));
     expect(document.documentElement.dataset.theme).toBe("forskin-hella");
+    expect(screen.queryByRole("button", { name: "Default" })).toBeNull();
     expect(JSON.parse(localStorage.getItem(THEME_STORAGE_KEY))).toMatchObject({
       mode: "forskin-hella",
     });
@@ -189,7 +203,7 @@ describe("ForskinThemeProvider", () => {
     expect(document.documentElement.dataset.forskinCopy).toBe("off");
     expect(document.documentElement.dataset.forskinMotion).toBe("off");
     expect(JSON.parse(localStorage.getItem(THEME_STORAGE_KEY))).toEqual({
-      mode: "default",
+      mode: "forskin-hella",
       decorativeCopy: false,
       ambientMotion: false,
     });
@@ -258,7 +272,7 @@ describe("ForskinThemeProvider", () => {
       </ForskinThemeProvider>,
     );
     const toggle = screen.getByRole("button", {
-      name: /Theme: Default\. Switch to Forskin - Subtle/,
+      name: /Theme: Forskin - Hella\. Switch to Forskin - Subtle/,
     });
     fireEvent.click(toggle);
     expect(document.documentElement.dataset.theme).toBe("forskin-subtle");
@@ -270,7 +284,7 @@ describe("ForskinThemeProvider", () => {
     expect(document.documentElement.dataset.theme).toBe("forskin-hella");
   });
 
-  it("restores Default when a critical theme asset fails", async () => {
+  it("keeps Forskin active with simplified styling when artwork fails", async () => {
     class FailingImage {
       onload: (() => void) | null = null;
       onerror: (() => void) | null = null;
@@ -294,17 +308,18 @@ describe("ForskinThemeProvider", () => {
       </ForskinThemeProvider>,
     );
     await waitFor(() =>
-      expect(document.documentElement.dataset.theme).toBe("default"),
+      expect(document.documentElement.dataset.forskinAssets).toBe("failed"),
     );
+    expect(document.documentElement.dataset.theme).toBe("forskin-subtle");
     expect(document.documentElement.dataset.forskinNotice).toBe(
-      "Forskin assets could not be loaded. Default theme restored.",
+      "Forskin artwork could not be loaded. Simplified styling enabled.",
     );
     expect(JSON.parse(localStorage.getItem(THEME_STORAGE_KEY))).toMatchObject({
-      mode: "default",
+      mode: "forskin-subtle",
     });
   });
 
-  it("restores Default across tabs when storage is cleared", () => {
+  it("restores Forskin Hella across tabs when storage is cleared", () => {
     localStorage.setItem(
       THEME_STORAGE_KEY,
       JSON.stringify({
@@ -322,7 +337,7 @@ describe("ForskinThemeProvider", () => {
 
     fireEvent(window, new StorageEvent("storage", { key: null }));
 
-    expect(document.documentElement.dataset.theme).toBe("default");
+    expect(document.documentElement.dataset.theme).toBe("forskin-hella");
     expect(document.documentElement.dataset.forskinCopy).toBe("on");
     expect(document.documentElement.dataset.forskinMotion).toBe("on");
   });

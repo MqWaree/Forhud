@@ -426,7 +426,7 @@ export function ForskinQuickToggle({
   const { mode, setMode } = useForskinTheme();
   const currentIndex = THEME_MODES.indexOf(mode);
   const nextMode =
-    THEME_MODES[(currentIndex + 1) % THEME_MODES.length] ?? "default";
+    THEME_MODES[(currentIndex + 1) % THEME_MODES.length] ?? "forskin-hella";
   const label = `Theme: ${forskinCopy.modeLabels[mode]}. Switch to ${forskinCopy.modeLabels[nextMode]}`;
 
   return (
@@ -438,7 +438,7 @@ export function ForskinQuickToggle({
         className,
       )}
       aria-label={label}
-      aria-pressed={mode !== "default"}
+      aria-pressed={mode === "forskin-hella"}
       title={label}
       onClick={(event) => {
         setMode(nextMode);
