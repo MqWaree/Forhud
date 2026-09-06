@@ -72,6 +72,11 @@ const deniedFile = (name) =>
   /^query_engine-.*\.tmp/i.test(name);
 
 const excludedReleasePaths = [
+  "apps/dashboard/public/assets/themes/forskin/",
+  "apps/dashboard/public/theme-bootstrap.js",
+  "apps/dashboard/scripts/generate-forskin-assets.mjs",
+  "apps/dashboard/src/themes/forskin/",
+  "docs/FORSKIN_MODE.md",
   "tests/visual/screenshots/",
   "tests/visual/test-results/",
 ];

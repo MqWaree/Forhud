@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Users } from "lucide-react";
 import { api } from "./api";
-import { ForskinAsset, forskinAssets } from "./themes/forskin";
 
 type Rank = {
   id: string;
@@ -76,20 +75,7 @@ export default function MemberSidebar() {
                 <i />
               </span>
               <span>
-                <b>
-                  {member.username}
-                  {member.ranks.some(
-                    (memberRank) => memberRank.name === "Owner",
-                  ) && (
-                    <ForskinAsset
-                      className="forskin-owner-crown"
-                      src={forskinAssets.ornaments.crown}
-                      alt=""
-                      aria-hidden="true"
-                      loading="lazy"
-                    />
-                  )}
-                </b>
+                <b>{member.username}</b>
                 <small>
                   {member.online
                     ? "Online"

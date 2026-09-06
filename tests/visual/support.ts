@@ -1,9 +1,6 @@
 import { expect, type Page, type Route } from "@playwright/test";
 
 export const fixedTime = "2026-08-02T12:00:00.000Z";
-export const themeStorageKey = "fgp.ui.theme.v1";
-
-export type ThemeMode = "forskin-subtle" | "forskin-hella";
 
 export type MockOptions = {
   authenticated?: boolean;
@@ -28,7 +25,7 @@ const user = {
   requirePasswordChange: false,
   workspace: {
     id: "workspace-visual",
-    name: "Forskin Visual Lab",
+    name: "FGP Visual Lab",
     scannerId: "FGP-VISUAL-2026",
   },
   ranks: [
@@ -388,23 +385,10 @@ export async function installApiMocks(
   });
 }
 
-export async function setTheme(page: Page, mode: ThemeMode, decorativeCopy = true, ambientMotion = true) {
-  await page.addInitScript(
-    ({ key, value }) => {
-      if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(value));
-    },
-    {
-      key: themeStorageKey,
-      value: { mode, decorativeCopy, ambientMotion },
-    },
-  );
-}
-
 export async function openApp(page: Page, path: string, readyText: string | RegExp) {
   await page.clock.setFixedTime(new Date(fixedTime));
   await page.goto(path);
   await expect(page.getByRole("heading", { name: readyText, exact: typeof readyText === "string" })).toBeVisible();
-  await expect(page.locator("html")).toHaveAttribute("data-forskin-assets", "ready");
   await page.locator("img:visible").evaluateAll(async (images: HTMLImageElement[]) => {
     await Promise.all(
       images.map((image) =>

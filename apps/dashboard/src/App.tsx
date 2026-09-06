@@ -59,14 +59,6 @@ import MemberSidebar from "./MemberSidebar";
 import FileSharingPage from "./FileSharingPage";
 import { useAuth } from "./Auth";
 import {
-  ForskinLogo,
-  ForskinOrnamentsLayer,
-  ForskinPlaque,
-  ForskinQuickToggle,
-  ForskinThemeSettings,
-  useForskinTheme,
-} from "./themes/forskin";
-import {
   Badge,
   Button,
   Drawer,
@@ -183,7 +175,6 @@ type Ctx = ReturnType<typeof useData>;
 let ctx: Ctx;
 export default function App() {
   const { user, logout } = useAuth();
-  const { mode } = useForskinTheme();
   const location = useLocation();
   const priceMode = location.pathname.startsWith("/rust-prices");
   const hasLztAccess =
@@ -199,14 +190,8 @@ export default function App() {
   useEffect(() => {
     const fn = (e: any) => {
       setToast(e.detail);
-      delete document.documentElement.dataset.forskinNotice;
     };
     window.addEventListener("toast", fn);
-    const pendingNotice = document.documentElement.dataset.forskinNotice;
-    if (pendingNotice) {
-      setToast(pendingNotice);
-      delete document.documentElement.dataset.forskinNotice;
-    }
     return () => window.removeEventListener("toast", fn);
   }, []);
   useEffect(() => {
@@ -259,15 +244,12 @@ export default function App() {
   }, [hasLztAccess]);
   return (
     <div className="app">
-      <ForskinOrnamentsLayer />
       <aside className={`sidebar ${mobile ? "open" : ""}`}>
         <div className="brand">
-          <span className="forskin-sidebar-medallion" aria-hidden="true">
-            <ForskinLogo alt="" aria-hidden="true" />
-          </span>
+          <img className="brand-logo" src="/fgp-logo.png" alt="FGP" />
           <div>
             <b>FGP</b>
-            <small>Foreskin Panel</small>
+            <small>Forhuds Panel</small>
           </div>
         </div>
         <nav>
@@ -293,11 +275,6 @@ export default function App() {
           )}
         </nav>
         <div className="system">
-          {mode === "forskin-hella" && (
-            <div className="forskin-sidebar-plaque" aria-hidden="true">
-              <ForskinPlaque />
-            </div>
-          )}
           <p>
             <i className="dot green" />
             Database connected
@@ -394,7 +371,6 @@ export default function App() {
               </section>
             )}
           </div>
-          <ForskinQuickToggle />
           <span className="identity-spacer" />
           <div className="identity-user">
             <b>{user.username}</b>
@@ -1621,18 +1597,6 @@ function Settings() {
       />
       <div className="settings-grid">
         <AccountSettings />
-        <article className="card settings-section forskin-appearance-settings">
-          <header>
-            <span>
-              <SettingsIcon />
-            </span>
-            <div>
-              <h2>Appearance</h2>
-              <p>Your display preferences</p>
-            </div>
-          </header>
-          <ForskinThemeSettings />
-        </article>
         {user.role === "ADMIN" && (
           <>
             <article className="card settings-section">
