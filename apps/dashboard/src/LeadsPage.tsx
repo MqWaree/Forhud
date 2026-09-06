@@ -7,6 +7,7 @@ import {
   PanelLeft,
   Plus,
   Save,
+  Search,
   Trash2,
   X,
 } from "lucide-react";
@@ -50,6 +51,8 @@ export default function LeadsPage({
     [dropStatus, setDropStatus] = useState<string>(),
     [recentlyDroppedId, setRecentlyDroppedId] = useState<string>(),
     [moveSearch, setMoveSearch] = useState(""),
+    [moveSearchOpen, setMoveSearchOpen] = useState(false),
+    [moveActiveIndex, setMoveActiveIndex] = useState(0),
     [moveLeadId, setMoveLeadId] = useState(""),
     [moveDestination, setMoveDestination] = useState(""),
     [movingLeadId, setMovingLeadId] = useState<string>(),
@@ -89,9 +92,9 @@ export default function LeadsPage({
     return optimisticStatus ? { ...lead, status: optimisticStatus } : lead;
   });
   const matchesLeadSearch = (lead: ExpandedLead, value: string) => {
-    const needle = value.trim().toLowerCase();
-    if (!needle) return true;
-    return [
+    const needles = value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!needles.length) return true;
+    const haystack = [
       lead.domain.hostname,
       lead.companyName,
       lead.contactName,
@@ -100,7 +103,11 @@ export default function LeadsPage({
       lead.discordInvite,
       leadDiscordUrl(lead),
       lead.telegram,
-    ].some((candidate) => candidate?.toLowerCase().includes(needle));
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return needles.every((needle) => haystack.includes(needle));
   };
   const filtered = visibleLeads.filter(
     (lead) =>
@@ -108,17 +115,42 @@ export default function LeadsPage({
       (tag === "All" || lead.tags?.some((item) => item.tag.name === tag)) &&
       matchesLeadSearch(lead, query),
   );
+  const moveNeedle = moveSearch.trim().toLowerCase();
   const moveMatches =
-    moveSearch.trim().length < 2
+    moveNeedle.length < 1
       ? []
       : visibleLeads
           .filter((lead) => matchesLeadSearch(lead, moveSearch))
-          .sort((left, right) =>
-            (left.companyName || left.domain.hostname).localeCompare(
-              right.companyName || right.domain.hostname,
-            ),
-          )
+          .sort((left, right) => {
+            const score = (lead: ExpandedLead) => {
+              const names = [lead.companyName, lead.domain.hostname]
+                .filter(Boolean)
+                .map((value) => value.toLowerCase());
+              if (names.some((value) => value === moveNeedle)) return 0;
+              if (names.some((value) => value.startsWith(moveNeedle))) return 1;
+              return 2;
+            };
+            return (
+              score(left) - score(right) ||
+              (left.companyName || left.domain.hostname).localeCompare(
+                right.companyName || right.domain.hostname,
+              )
+            );
+          })
           .slice(0, 50);
+  const selectedMoveLead = visibleLeads.find(
+    (lead) => lead.id === moveLeadId,
+  );
+  const moveLeadLabel = (lead: ExpandedLead) =>
+    lead.companyName && lead.companyName !== lead.domain.hostname
+      ? `${lead.companyName} — ${lead.domain.hostname}`
+      : lead.domain.hostname;
+  const selectMoveLead = (lead: ExpandedLead) => {
+    setMoveLeadId(lead.id);
+    setMoveSearch(moveLeadLabel(lead));
+    setMoveSearchOpen(false);
+    setMoveActiveIndex(0);
+  };
   function open(lead: ExpandedLead) {
     setDetail(lead);
     setDraft(structuredClone(lead));
@@ -381,35 +413,98 @@ export default function LeadsPage({
             <b>Move a server</b>
             <small>Find one lead and place it directly in a category.</small>
           </div>
-          <SearchBox
-            value={moveSearch}
-            onChange={(value) => {
-              setMoveSearch(value);
-              setMoveLeadId("");
-            }}
-            placeholder="Search server, domain, or contact…"
-          />
-          <select
-            value={moveLeadId}
-            aria-label="Choose matching server"
-            disabled={moveMatches.length === 0}
-            onChange={(event) => setMoveLeadId(event.target.value)}
-          >
-            <option value="">
-              {moveSearch.trim().length < 2
-                ? "Type at least 2 characters…"
-                : moveMatches.length
-                  ? `Choose from ${moveMatches.length} match${moveMatches.length === 1 ? "" : "es"}…`
-                  : "No matching server"}
-            </option>
-            {moveMatches.map((lead) => (
-              <option key={lead.id} value={lead.id}>
-                {lead.companyName && lead.companyName !== lead.domain.hostname
-                  ? `${lead.companyName} — ${lead.domain.hostname}`
-                  : lead.domain.hostname}
-              </option>
-            ))}
-          </select>
+          <div className="kanban-server-picker">
+            <label className="searchbox">
+              <Search />
+              <input
+                value={moveSearch}
+                role="combobox"
+                aria-label="Search server, domain, or contact…"
+                aria-autocomplete="list"
+                aria-controls="kanban-server-matches"
+                aria-expanded={moveSearchOpen && moveNeedle.length > 0}
+                aria-activedescendant={
+                  moveSearchOpen && moveMatches[moveActiveIndex]
+                    ? `kanban-server-${moveMatches[moveActiveIndex].id}`
+                    : undefined
+                }
+                placeholder="Search server, domain, or contact…"
+                onFocus={() => setMoveSearchOpen(moveNeedle.length > 0)}
+                onBlur={() =>
+                  window.setTimeout(() => setMoveSearchOpen(false), 100)
+                }
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setMoveSearch(value);
+                  setMoveLeadId("");
+                  setMoveActiveIndex(0);
+                  setMoveSearchOpen(value.trim().length > 0);
+                }}
+                onKeyDown={(event) => {
+                  if (!moveSearchOpen || !moveMatches.length) {
+                    if (event.key === "ArrowDown" && moveNeedle.length > 0)
+                      setMoveSearchOpen(true);
+                    return;
+                  }
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setMoveActiveIndex((index) =>
+                      Math.min(index + 1, moveMatches.length - 1),
+                    );
+                  } else if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setMoveActiveIndex((index) => Math.max(index - 1, 0));
+                  } else if (event.key === "Enter") {
+                    event.preventDefault();
+                    const highlightedLead =
+                      moveMatches[moveActiveIndex] || moveMatches[0];
+                    if (highlightedLead) selectMoveLead(highlightedLead);
+                  } else if (event.key === "Escape") {
+                    setMoveSearchOpen(false);
+                  }
+                }}
+              />
+            </label>
+            {moveSearchOpen && moveNeedle.length > 0 && (
+              <div
+                id="kanban-server-matches"
+                className="kanban-server-results"
+                role="listbox"
+                aria-label="Matching servers"
+              >
+                {moveMatches.length ? (
+                  moveMatches.map((lead, index) => (
+                    <button
+                      key={lead.id}
+                      id={`kanban-server-${lead.id}`}
+                      type="button"
+                      role="option"
+                      aria-selected={index === moveActiveIndex}
+                      className={index === moveActiveIndex ? "active" : ""}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onMouseEnter={() => setMoveActiveIndex(index)}
+                      onClick={() => selectMoveLead(lead)}
+                    >
+                      <span>{moveLeadLabel(lead)}</span>
+                      <small>
+                        {leadDiscordUrl(lead) ||
+                          lead.telegram ||
+                          lead.email ||
+                          lead.website}
+                      </small>
+                    </button>
+                  ))
+                ) : (
+                  <p>No possible matching server</p>
+                )}
+              </div>
+            )}
+            {selectedMoveLead && (
+              <small className="kanban-server-selected">
+                Selected: {moveLeadLabel(selectedMoveLead)}
+              </small>
+            )}
+          </div>
           <select
             value={moveDestination}
             aria-label="Choose destination category"

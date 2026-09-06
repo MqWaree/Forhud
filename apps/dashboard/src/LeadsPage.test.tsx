@@ -2,7 +2,14 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck -- The focused fixture intentionally supplies only UI-used lead fields.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import LeadsPage from "./LeadsPage";
 import { api } from "./api";
 
@@ -49,7 +56,7 @@ describe("Leads Kanban direct move", () => {
     vi.clearAllMocks();
   });
 
-  it("finds a specific server by Discord invite and moves it to a category", async () => {
+  it("filters impossible servers letter by letter and moves the selected match", async () => {
     const refresh = vi.fn().mockResolvedValue(undefined);
     render(
       <LeadsPage
@@ -65,18 +72,26 @@ describe("Leads Kanban direct move", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Kanban" }));
-    fireEvent.change(
-      screen.getByRole("textbox", {
-        name: "Search server, domain, or contact…",
-      }),
-      { target: { value: "alpha-rust" } },
-    );
-
-    const server = screen.getByRole("combobox", {
-      name: "Choose matching server",
+    const serverSearch = screen.getByRole("combobox", {
+      name: "Search server, domain, or contact…",
     });
-    expect((server as HTMLSelectElement).disabled).toBe(false);
-    fireEvent.change(server, { target: { value: "lead-one" } });
+    fireEvent.change(serverSearch, { target: { value: "u" } });
+    let suggestions = within(
+      screen.getByRole("listbox", { name: "Matching servers" }),
+    );
+    expect(suggestions.getByRole("option", { name: /Rust One/ })).toBeTruthy();
+    expect(suggestions.queryByRole("option", { name: /other\.example/ })).toBeNull();
+
+    fireEvent.change(serverSearch, { target: { value: "alpha-rust" } });
+    suggestions = within(
+      screen.getByRole("listbox", { name: "Matching servers" }),
+    );
+    const matchingServer = suggestions.getByRole("option", {
+      name: /Rust One/,
+    });
+    expect(suggestions.getAllByRole("option")).toHaveLength(1);
+    fireEvent.click(matchingServer);
+    expect(screen.getByText(/Selected: Rust One/)).toBeTruthy();
     fireEvent.change(
       screen.getByRole("combobox", { name: "Choose destination category" }),
       { target: { value: "Interested" } },
