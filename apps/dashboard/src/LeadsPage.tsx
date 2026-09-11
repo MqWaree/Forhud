@@ -31,14 +31,7 @@ import { leadStatuses, normalizeDiscordUrl, priorities } from "@lead/shared";
 import { api, type ExpandedLead, type OutreachTemplate } from "./api";
 import { outreachValues, renderOutreachTemplate } from "./outreach";
 import { useAuth } from "./Auth";
-import {
-  Badge,
-  Button,
-  Drawer,
-  Empty,
-  PageHeader,
-  SearchBox,
-} from "./components";
+import { Badge, Button, Drawer, Empty, SearchBox } from "./components";
 
 const notify = (message: string) =>
   window.dispatchEvent(new CustomEvent("toast", { detail: message }));
@@ -105,6 +98,53 @@ const shortDate = (value: string) =>
     day: "numeric",
   });
 type SortKey = "lead" | "status" | "priority" | "updated";
+/** Short relative age for table rows: "now", "12m", "3h", "5d", then a date. */
+const relativeTime = (value: string) => {
+  const minutes = Math.round((Date.now() - new Date(value).getTime()) / 60_000);
+  if (!Number.isFinite(minutes) || minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  if (days < 14) return `${days}d`;
+  return shortDate(value);
+};
+/** The next stage in the funnel, or undefined for terminal stages. */
+const nextStage = (status: string) => {
+  const terminal = new Set(["Won", "Lost", "Ignore"]);
+  if (terminal.has(status)) return undefined;
+  const index = leadStatuses.indexOf(status as (typeof leadStatuses)[number]);
+  return index >= 0 ? leadStatuses[index + 1] : undefined;
+};
+const initials = (name: string) =>
+  name
+    .split(/[\s._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || name.slice(0, 2).toUpperCase();
+function PriorityMark({
+  priority,
+  showLabel = false,
+}: {
+  priority: string;
+  showLabel?: boolean;
+}) {
+  return (
+    <span
+      className={`priority-mark ${priority.toLowerCase()}`}
+      title={showLabel ? undefined : `${priority} priority`}
+      aria-label={showLabel ? undefined : `${priority} priority`}
+    >
+      <span className="bars" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      {showLabel && priority}
+    </span>
+  );
+}
 export default function LeadsPage({
   leads,
   refresh,
@@ -145,6 +185,14 @@ export default function LeadsPage({
     dir: "desc",
   });
   const [highlightedColumn, setHighlightedColumn] = useState<string>();
+  const [expandedEmpty, setExpandedEmpty] = useState<Set<string>>(new Set());
+  const toggleEmptyColumn = (leadStatus: string) =>
+    setExpandedEmpty((current) => {
+      const next = new Set(current);
+      if (next.has(leadStatus)) next.delete(leadStatus);
+      else next.add(leadStatus);
+      return next;
+    });
   const [templates, setTemplates] = useState<OutreachTemplate[]>([]);
   const [workspaceName, setWorkspaceName] = useState("");
   const [outreachTemplateId, setOutreachTemplateId] = useState("");
@@ -331,6 +379,10 @@ export default function LeadsPage({
       counts.set(lead.status, (counts.get(lead.status) ?? 0) + 1);
     return counts;
   }, [baseFiltered]);
+  const contactableCount = useMemo(
+    () => leads.filter((lead) => leadContact(lead).kind !== "none").length,
+    [leads],
+  );
   const filtered = useMemo(
     () =>
       status === "All"
@@ -560,34 +612,104 @@ export default function LeadsPage({
     setTagText("");
   }
   return (
-    <section className="page">
-      <PageHeader
-        eyebrow="Relationship workspace"
-        title="Leads funnel"
-        subtitle="Review Discord-, Telegram-, and email-qualified scanner leads and manually created opportunities."
-        actions={
-          <>
-            <a className="btn secondary" href="/api/export/leads.csv">
-              <Download /> Export
-            </a>
-            <a
-              className="btn secondary"
-              href="/api/export/lead-discord-links.txt"
-            >
-              <Download /> Discord links
-            </a>
-            {canAssign && (
-              <Button variant="danger" onClick={() => void clearAll()}>
-                <Trash2 /> Clear all
-              </Button>
-            )}
-            <Button onClick={add}>
-              <Plus /> Add lead
+    <section className="page leads-page">
+      <header className="leads-hero">
+        <div className="leads-hero-title">
+          <div className="eyebrow">Relationship workspace</div>
+          <h1>Leads funnel</h1>
+          <p>
+            {leads.length === 0
+              ? "Scanner leads with a Discord, Telegram, or email contact land here."
+              : `${leads.length} lead${leads.length === 1 ? "" : "s"} · ${contactableCount} reachable · ${stageCounts.get("Won") ?? 0} won`}
+          </p>
+        </div>
+        {leads.length > 0 && (
+          <nav
+            className="leads-funnel"
+            aria-label={
+              view === "kanban" ? "Jump to a Kanban stage" : "Filter by stage"
+            }
+          >
+            <div className="leads-funnel-bar" aria-hidden="true">
+              {leadStatuses.map((leadStatus) => {
+                const count = stageCounts.get(leadStatus) ?? 0;
+                return count ? (
+                  <span
+                    key={leadStatus}
+                    data-stage={stageSlug(leadStatus)}
+                    style={{ flexGrow: count }}
+                    title={`${leadStatus}: ${count}`}
+                  />
+                ) : null;
+              })}
+            </div>
+            <div className="leads-funnel-legend">
+              {view === "table" && (
+                <button
+                  type="button"
+                  className={status === "All" ? "active" : ""}
+                  onClick={() => setStatus("All")}
+                >
+                  <span>All</span>
+                  <b>{baseFiltered.length}</b>
+                </button>
+              )}
+              {leadStatuses.map((leadStatus) => {
+                const count = stageCounts.get(leadStatus) ?? 0;
+                return (
+                  <button
+                    key={leadStatus}
+                    type="button"
+                    data-stage={stageSlug(leadStatus)}
+                    className={`${status === leadStatus ? "active" : ""}${count ? "" : " is-empty"}`}
+                    title={
+                      view === "kanban"
+                        ? `Scroll to ${leadStatus}`
+                        : `Show only ${leadStatus} leads`
+                    }
+                    onClick={() =>
+                      view === "kanban"
+                        ? jumpToColumn(leadStatus)
+                        : setStatus((current) =>
+                            current === leadStatus ? "All" : leadStatus,
+                          )
+                    }
+                  >
+                    <i aria-hidden="true" />
+                    <span>{leadStatus}</span>
+                    <b>{count}</b>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        )}
+        <div className="leads-hero-actions">
+          <a
+            className="btn secondary"
+            href="/api/export/leads.csv"
+            title="Download every lead as CSV"
+          >
+            <Download /> CSV
+          </a>
+          <a
+            className="btn secondary"
+            href="/api/export/lead-discord-links.txt"
+            title="Download only the Discord links"
+          >
+            <MessageCircle /> Discord links
+          </a>
+          {canAssign && (
+            <Button variant="danger" onClick={() => void clearAll()}>
+              <Trash2 /> Clear all
             </Button>
-          </>
-        }
-      />
-      <div className="toolbar card leads-toolbar">
+          )}
+          <Button onClick={add}>
+            <Plus /> Add lead
+          </Button>
+        </div>
+      </header>
+      <div className="leads-commandbar card">
         <SearchBox
           value={query}
           onChange={setQuery}
@@ -628,97 +750,64 @@ export default function LeadsPage({
             <X /> Clear
           </button>
         )}
-        {canAssign && selected.size > 0 && (
-          <select
-            defaultValue=""
-            aria-label="Assign selected leads"
-            onChange={(event) => {
-              if (event.target.value)
-                void assign(
-                  [...selected],
-                  event.target.value === "UNASSIGNED"
-                    ? null
-                    : event.target.value,
-                );
-            }}
-          >
-            <option value="" disabled>
-              Assign {selected.size} selected…
-            </option>
-            <option value="UNASSIGNED">Unassigned</option>
-            {team.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.username}
-              </option>
-            ))}
-          </select>
-        )}
-        <div className="view-toggle">
-          <button
-            className={view === "table" ? "active" : ""}
-            onClick={() => setView("table")}
-          >
-            <PanelLeft /> Table
-          </button>
-          <button
-            className={view === "kanban" ? "active" : ""}
-            onClick={() => setView("kanban")}
-          >
-            <Columns3 /> Kanban
-          </button>
-        </div>
-        <span className="count">
-          {filtered.length === leads.length
-            ? `${leads.length} lead${leads.length === 1 ? "" : "s"}`
-            : `${filtered.length} of ${leads.length} leads`}
-        </span>
-      </div>
-      {leads.length > 0 && (
-        <nav
-          className="lead-stage-strip"
-          aria-label={
-            view === "kanban" ? "Jump to a Kanban stage" : "Filter by stage"
-          }
-        >
-          {view === "table" && (
-            <button
-              type="button"
-              className={status === "All" ? "active" : ""}
-              onClick={() => setStatus("All")}
-            >
-              <span>All</span>
-              <b>{baseFiltered.length}</b>
-            </button>
-          )}
-          {leadStatuses.map((leadStatus) => {
-            const count = stageCounts.get(leadStatus) ?? 0;
-            return (
-              <button
-                key={leadStatus}
-                type="button"
-                data-stage={stageSlug(leadStatus)}
-                className={`${status === leadStatus ? "active" : ""}${count ? "" : " is-empty"}`}
-                title={
-                  view === "kanban"
-                    ? `Scroll to ${leadStatus}`
-                    : `Show only ${leadStatus} leads`
-                }
-                onClick={() =>
-                  view === "kanban"
-                    ? jumpToColumn(leadStatus)
-                    : setStatus((current) =>
-                        current === leadStatus ? "All" : leadStatus,
-                      )
-                }
+        <div className="leads-commandbar-right">
+          {canAssign && selected.size > 0 && (
+            <div className="leads-selection" role="status">
+              <b>{selected.size} selected</b>
+              <select
+                defaultValue=""
+                aria-label="Assign selected leads"
+                onChange={(event) => {
+                  if (event.target.value)
+                    void assign(
+                      [...selected],
+                      event.target.value === "UNASSIGNED"
+                        ? null
+                        : event.target.value,
+                    );
+                }}
               >
-                <i aria-hidden="true" />
-                <span>{leadStatus}</span>
-                <b>{count}</b>
+                <option value="" disabled>
+                  Assign to…
+                </option>
+                <option value="UNASSIGNED">Unassigned</option>
+                {team.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.username}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn ghost"
+                aria-label="Clear selection"
+                onClick={() => setSelected(new Set())}
+              >
+                <X />
               </button>
-            );
-          })}
-        </nav>
-      )}
+            </div>
+          )}
+          <div className="view-toggle">
+            <button
+              className={view === "table" ? "active" : ""}
+              onClick={() => setView("table")}
+            >
+              <PanelLeft /> Table
+            </button>
+            <button
+              className={view === "kanban" ? "active" : ""}
+              onClick={() => setView("kanban")}
+            >
+              <Columns3 /> Kanban
+            </button>
+          </div>
+          <span className="count">
+            {filtered.length === leads.length
+              ? `${leads.length} lead${leads.length === 1 ? "" : "s"}`
+              : `${filtered.length} of ${leads.length}`}
+          </span>
+        </div>
+      </div>
       {view === "kanban" && (
         <section
           className="kanban-quick-move card"
@@ -841,7 +930,7 @@ export default function LeadsPage({
         </section>
       )}
       {view === "table" ? (
-        <article className="card table-card">
+        <article className="card leads-table-card">
           {filtered.length ? (
             <div className="table-wrap leads-table-wrap">
               <table className="leads-table">
@@ -870,10 +959,10 @@ export default function LeadsPage({
                       [
                         ["lead", "Lead"],
                         [null, "Contact"],
-                        [null, "Tags"],
+                        [null, "Signals"],
                         ["status", "Stage"],
                         ["priority", "Priority"],
-                        [null, "Assigned"],
+                        [null, "Owner"],
                         ["updated", "Updated"],
                       ] as Array<[SortKey | null, string]>
                     ).map(([key, label]) => (
@@ -914,8 +1003,15 @@ export default function LeadsPage({
                 <tbody>
                   {sortedLeads.map((l) => {
                     const contact = leadContact(l);
+                    const rust = leadRustProducts(l);
+                    const next = nextStage(l.status);
+                    const name = l.companyName || l.domain.hostname;
                     return (
-                      <tr key={l.id} onClick={() => open(l)}>
+                      <tr
+                        key={l.id}
+                        className={selected.has(l.id) ? "is-selected" : ""}
+                        onClick={() => open(l)}
+                      >
                         {canAssign && (
                           <td
                             className="select-col"
@@ -923,33 +1019,28 @@ export default function LeadsPage({
                           >
                             <input
                               type="checkbox"
-                              aria-label={`Select ${l.companyName || l.domain.hostname}`}
+                              aria-label={`Select ${name}`}
                               checked={selected.has(l.id)}
                               onChange={(event) => {
-                                const next = new Set(selected);
+                                const nextSelection = new Set(selected);
                                 event.target.checked
-                                  ? next.add(l.id)
-                                  : next.delete(l.id);
-                                setSelected(next);
+                                  ? nextSelection.add(l.id)
+                                  : nextSelection.delete(l.id);
+                                setSelected(nextSelection);
                               }}
                             />
                           </td>
                         )}
                         <td>
-                          <div className="domain-cell">
-                            <span>{l.domain.hostname[0]?.toUpperCase()}</span>
+                          <div className="lead-identity">
+                            <span
+                              className="lead-avatar"
+                              data-stage={stageSlug(l.status)}
+                            >
+                              {l.domain.hostname[0]?.toUpperCase()}
+                            </span>
                             <div>
-                              <b>
-                                {l.companyName || l.domain.hostname}
-                                {leadRustProducts(l) > 0 && (
-                                  <em
-                                    className="rust-count"
-                                    title="Rust products found by the scanner"
-                                  >
-                                    {leadRustProducts(l)} Rust
-                                  </em>
-                                )}
-                              </b>
+                              <b>{name}</b>
                               <small>
                                 {l.domain.hostname}
                                 {l.domain.location?.country &&
@@ -981,32 +1072,85 @@ export default function LeadsPage({
                           </div>
                         </td>
                         <td>
-                          <div className="tag-row nowrap">
-                            {l.tags?.slice(0, 2).map((t) => (
-                              <Badge key={t.tag.id} tone="tag">
+                          <div className="lead-signals">
+                            {rust > 0 && (
+                              <em
+                                className="signal rust"
+                                title="Rust products found by the scanner"
+                              >
+                                {rust} Rust
+                              </em>
+                            )}
+                            {l.tags?.slice(0, rust > 0 ? 1 : 2).map((t) => (
+                              <em key={t.tag.id} className="signal tag">
                                 {t.tag.name}
-                              </Badge>
+                              </em>
                             ))}
-                            {l.tags?.length > 2 && (
-                              <small>+{l.tags.length - 2}</small>
+                            {l.tags?.length > (rust > 0 ? 1 : 2) && (
+                              <small>
+                                +{l.tags.length - (rust > 0 ? 1 : 2)}
+                              </small>
+                            )}
+                            {rust === 0 && !l.tags?.length && (
+                              <span className="muted">—</span>
                             )}
                           </div>
                         </td>
                         <td>
-                          <Badge>{l.status}</Badge>
+                          <span
+                            className="stage-pill"
+                            data-stage={stageSlug(l.status)}
+                          >
+                            <i aria-hidden="true" />
+                            {l.status}
+                          </span>
                         </td>
                         <td>
-                          <Badge tone={l.priority.toLowerCase()}>
-                            {l.priority}
-                          </Badge>
+                          <PriorityMark priority={l.priority} showLabel />
                         </td>
                         <td>
-                          {l.assignedTo?.username || (
+                          {l.assignedTo ? (
+                            <span className="owner">
+                              <span className="owner-chip" aria-hidden="true">
+                                {initials(l.assignedTo.username)}
+                              </span>
+                              {l.assignedTo.username}
+                            </span>
+                          ) : (
                             <span className="muted">Unassigned</span>
                           )}
                         </td>
-                        <td title={new Date(l.updatedAt).toLocaleString()}>
-                          {shortDate(l.updatedAt)}
+                        <td
+                          className="updated-col"
+                          title={new Date(l.updatedAt).toLocaleString()}
+                        >
+                          <span>{relativeTime(l.updatedAt)}</span>
+                          <div
+                            className="row-actions"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {contact.href && (
+                              <a
+                                href={contact.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={`Open ${contactKindLabels[contact.kind]}`}
+                                aria-label={`Open ${contactKindLabels[contact.kind]} for ${name}`}
+                              >
+                                <ExternalLink aria-hidden="true" />
+                              </a>
+                            )}
+                            {next && (
+                              <button
+                                type="button"
+                                title={`Move to ${next}`}
+                                aria-label={`Move ${name} to ${next}`}
+                                onClick={() => void moveLead(l.id, next)}
+                              >
+                                <ArrowRight aria-hidden="true" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1041,130 +1185,178 @@ export default function LeadsPage({
           )}
         </article>
       ) : (
-        <div className="kanban" aria-label="Lead status board">
-          {leadStatuses.map((leadStatus) => (
-            <section
-              key={leadStatus}
-              ref={(element) => {
-                if (element) columnRefs.current.set(leadStatus, element);
-                else columnRefs.current.delete(leadStatus);
-              }}
-              data-stage={stageSlug(leadStatus)}
-              className={`kanban-column${dropStatus === leadStatus ? " is-drop-target" : ""}${highlightedColumn === leadStatus ? " is-highlighted" : ""}`}
-              onDragEnter={() => {
-                if (draggingId) setDropStatus(leadStatus);
-              }}
-              onDragLeave={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget as Node))
-                  setDropStatus((current) =>
-                    current === leadStatus ? undefined : current,
-                  );
-              }}
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-                if (draggingId && dropStatus !== leadStatus)
-                  setDropStatus(leadStatus);
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                const id =
-                  draggingId || event.dataTransfer.getData("text/plain");
-                setDraggingId(undefined);
-                setDropStatus(undefined);
-                if (id) void moveLead(id, leadStatus);
-              }}
-            >
-              <header>
-                <i className="stage-dot" aria-hidden="true" />
-                <span>{leadStatus}</span>
-                <b>{(leadsByStatus.get(leadStatus) ?? []).length}</b>
-              </header>
-              <div className="kanban-column-body">
-                {(leadsByStatus.get(leadStatus) ?? []).length === 0 && (
-                  <p className="kanban-column-empty">Drop leads here</p>
+        <div className="kanban leads-board" aria-label="Lead status board">
+          {leadStatuses.map((leadStatus) => {
+            const column = leadsByStatus.get(leadStatus) ?? [];
+            const collapsed =
+              column.length === 0 &&
+              !draggingId &&
+              dropStatus !== leadStatus &&
+              !expandedEmpty.has(leadStatus);
+            return (
+              <section
+                key={leadStatus}
+                ref={(element) => {
+                  if (element) columnRefs.current.set(leadStatus, element);
+                  else columnRefs.current.delete(leadStatus);
+                }}
+                data-stage={stageSlug(leadStatus)}
+                className={`kanban-column${dropStatus === leadStatus ? " is-drop-target" : ""}${highlightedColumn === leadStatus ? " is-highlighted" : ""}${collapsed ? " is-collapsed" : ""}`}
+                onDragEnter={() => {
+                  if (draggingId) setDropStatus(leadStatus);
+                }}
+                onDragLeave={(event) => {
+                  if (
+                    !event.currentTarget.contains(event.relatedTarget as Node)
+                  )
+                    setDropStatus((current) =>
+                      current === leadStatus ? undefined : current,
+                    );
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  if (draggingId && dropStatus !== leadStatus)
+                    setDropStatus(leadStatus);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const id =
+                    draggingId || event.dataTransfer.getData("text/plain");
+                  setDraggingId(undefined);
+                  setDropStatus(undefined);
+                  if (id) void moveLead(id, leadStatus);
+                }}
+              >
+                {column.length === 0 ? (
+                  <button
+                    type="button"
+                    className="kanban-column-toggle"
+                    aria-expanded={!collapsed}
+                    title={
+                      collapsed
+                        ? `Expand ${leadStatus}`
+                        : `Collapse ${leadStatus}`
+                    }
+                    onClick={() => toggleEmptyColumn(leadStatus)}
+                  >
+                    <i className="stage-dot" aria-hidden="true" />
+                    <span>{leadStatus}</span>
+                    <b>0</b>
+                  </button>
+                ) : (
+                  <header>
+                    <i className="stage-dot" aria-hidden="true" />
+                    <span>{leadStatus}</span>
+                    <b>{column.length}</b>
+                  </header>
                 )}
-                {(leadsByStatus.get(leadStatus) ?? []).map((lead) => {
-                  const contact = leadContact(lead);
-                  return (
-                    <article
-                      key={lead.id}
-                      className={`lead-card card${draggingId === lead.id ? " is-dragging" : ""}${recentlyDroppedId === lead.id ? " just-dropped" : ""}`}
-                      draggable
-                      aria-describedby={
-                        preview?.lead.id === lead.id
-                          ? "kanban-lead-preview"
-                          : undefined
-                      }
-                      onMouseEnter={(event) => showPreview(event, lead)}
-                      onMouseLeave={() => setPreview(undefined)}
-                      onDragStart={(event) => {
-                        if (
-                          event.target instanceof Element &&
-                          event.target.closest(
-                            "a, button, input, select, textarea",
-                          )
-                        ) {
-                          event.preventDefault();
-                          return;
-                        }
-                        event.dataTransfer.effectAllowed = "move";
-                        event.dataTransfer.setData("text/plain", lead.id);
-                        setPreview(undefined);
-                        setDraggingId(lead.id);
-                      }}
-                      onDragEnd={() => {
-                        setDraggingId(undefined);
-                        setDropStatus(undefined);
-                      }}
-                      onClick={() => open(lead)}
-                    >
-                      <div className="lead-card-head">
-                        <span className="site-icon">
-                          {lead.domain.hostname[0]?.toUpperCase()}
-                        </span>
-                        <b title={lead.domain.hostname}>
-                          {lead.companyName || lead.domain.hostname}
-                        </b>
-                        <Badge tone={lead.priority.toLowerCase()}>
-                          {lead.priority}
-                        </Badge>
-                      </div>
-                      {contact.kind === "none" ? (
-                        <small className="lead-card-nocontact">
-                          {contact.label}
-                        </small>
-                      ) : (
-                        <a
-                          className={`lead-card-link ${contact.kind}`}
-                          href={contact.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          draggable={false}
-                          title={`${contactKindLabels[contact.kind]}: ${contact.label}`}
-                          onClick={(event) => event.stopPropagation()}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onDragStart={(event) => event.preventDefault()}
+                {!collapsed && (
+                  <div className="kanban-column-body">
+                    {column.length === 0 && (
+                      <p className="kanban-column-empty">Drop leads here</p>
+                    )}
+                    {column.map((lead) => {
+                      const contact = leadContact(lead);
+                      const rust = leadRustProducts(lead);
+                      return (
+                        <article
+                          key={lead.id}
+                          className={`lead-card card${draggingId === lead.id ? " is-dragging" : ""}${recentlyDroppedId === lead.id ? " just-dropped" : ""}`}
+                          draggable
+                          aria-describedby={
+                            preview?.lead.id === lead.id
+                              ? "kanban-lead-preview"
+                              : undefined
+                          }
+                          onMouseEnter={(event) => showPreview(event, lead)}
+                          onMouseLeave={() => setPreview(undefined)}
+                          onDragStart={(event) => {
+                            if (
+                              event.target instanceof Element &&
+                              event.target.closest(
+                                "a, button, input, select, textarea",
+                              )
+                            ) {
+                              event.preventDefault();
+                              return;
+                            }
+                            event.dataTransfer.effectAllowed = "move";
+                            event.dataTransfer.setData("text/plain", lead.id);
+                            setPreview(undefined);
+                            setDraggingId(lead.id);
+                          }}
+                          onDragEnd={() => {
+                            setDraggingId(undefined);
+                            setDropStatus(undefined);
+                          }}
+                          onClick={() => open(lead)}
                         >
-                          <ContactIcon kind={contact.kind} />
-                          <span>{contact.label}</span>
-                          <ExternalLink aria-hidden="true" />
-                        </a>
-                      )}
-                      <footer>
-                        <span>
-                          {lead.domain.location?.country || "Unknown"}
-                          {leadRustProducts(lead) > 0 &&
-                            ` · ${leadRustProducts(lead)} Rust products`}
-                        </span>
-                        <span>{lead.assignedTo?.username || "Unassigned"}</span>
-                      </footer>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
+                          <div className="lead-card-head">
+                            <span
+                              className="lead-avatar sm"
+                              data-stage={stageSlug(lead.status)}
+                            >
+                              {lead.domain.hostname[0]?.toUpperCase()}
+                            </span>
+                            <b title={lead.domain.hostname}>
+                              {lead.companyName || lead.domain.hostname}
+                            </b>
+                            <PriorityMark priority={lead.priority} />
+                          </div>
+                          {contact.kind === "none" ? (
+                            <small className="lead-card-nocontact">
+                              {contact.label}
+                            </small>
+                          ) : (
+                            <a
+                              className={`lead-card-link ${contact.kind}`}
+                              href={contact.href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              draggable={false}
+                              title={`${contactKindLabels[contact.kind]}: ${contact.label}`}
+                              onClick={(event) => event.stopPropagation()}
+                              onPointerDown={(event) => event.stopPropagation()}
+                              onDragStart={(event) => event.preventDefault()}
+                            >
+                              <ContactIcon kind={contact.kind} />
+                              <span>{contact.label}</span>
+                              <ExternalLink aria-hidden="true" />
+                            </a>
+                          )}
+                          <footer>
+                            <span>
+                              {lead.domain.location?.country &&
+                              lead.domain.location.country !== "Unknown"
+                                ? lead.domain.location.country
+                                : lead.domain.hostname}
+                            </span>
+                            {rust > 0 && (
+                              <em
+                                className="signal rust"
+                                title="Rust products found by the scanner"
+                              >
+                                {rust} Rust
+                              </em>
+                            )}
+                            <span
+                              className={`owner-chip${lead.assignedTo ? "" : " is-empty"}`}
+                              title={lead.assignedTo?.username || "Unassigned"}
+                            >
+                              {lead.assignedTo
+                                ? initials(lead.assignedTo.username)
+                                : "—"}
+                            </span>
+                          </footer>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
       )}
       {view === "kanban" && preview && (
