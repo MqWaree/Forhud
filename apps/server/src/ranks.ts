@@ -19,7 +19,25 @@ function parsePermissions(value: string): RankPermission[] {
   } catch { return []; }
 }
 
-export async function ensureWorkspaceRanks(workspaceId: string) {
+// Rank reconciliation runs a chain of SQLite writes. It used to run on every
+// /auth/me and /members request; now it runs at most once per workspace per
+// window unless a caller forces it (user or rank mutations).
+const ENSURE_RANKS_INTERVAL_MS = 60_000;
+const ensuredWorkspaces = new Map<string, number>();
+const PERMISSION_CACHE_TTL_MS = 3_000;
+const permissionUserIdCache = new Map<RankPermission, { expiresAt: number; userIds: string[] }>();
+
+/** Drop memoized rank data after any rank, assignment, or user mutation. */
+export function invalidateRankCaches(workspaceId?: string) {
+  if (workspaceId) ensuredWorkspaces.delete(workspaceId);
+  else ensuredWorkspaces.clear();
+  permissionUserIdCache.clear();
+}
+
+export async function ensureWorkspaceRanks(workspaceId: string, options: { force?: boolean } = {}) {
+  const lastRun = ensuredWorkspaces.get(workspaceId);
+  if (!options.force && lastRun !== undefined && Date.now() - lastRun < ENSURE_RANKS_INTERVAL_MS) return;
+  ensuredWorkspaces.set(workspaceId, Date.now());
   for (const item of defaults) {
     await prisma.workspaceRank.upsert({
       where: { workspaceId_name: { workspaceId, name: item.name } },
@@ -47,6 +65,8 @@ export async function userHasRankPermission(userId: string, permission: RankPerm
 }
 
 export async function userIdsWithRankPermission(permission: RankPermission) {
+  const cached = permissionUserIdCache.get(permission);
+  if (cached && cached.expiresAt > Date.now()) return cached.userIds;
   const users = await prisma.user.findMany({
     where: { status: "ACTIVE" },
     select: {
@@ -55,9 +75,11 @@ export async function userIdsWithRankPermission(permission: RankPermission) {
       rankAssignments: { select: { rank: { select: { permissionsJson: true } } } },
     },
   });
-  return users
+  const userIds = users
     .filter((user) => user.role === "ADMIN" || user.rankAssignments.some(({ rank }) => parsePermissions(rank.permissionsJson).includes(permission)))
     .map((user) => user.id);
+  permissionUserIdCache.set(permission, { expiresAt: Date.now() + PERMISSION_CACHE_TTL_MS, userIds });
+  return userIds;
 }
 
 export function requireRankPermission(permission: RankPermission) {

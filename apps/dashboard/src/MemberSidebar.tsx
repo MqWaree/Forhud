@@ -28,8 +28,19 @@ export default function MemberSidebar() {
         .then(setMembers)
         .catch(() => undefined);
     load();
-    const timer = window.setInterval(load, 30_000);
-    return () => window.clearInterval(timer);
+    // Poll only while the tab is visible; refresh once when it becomes visible
+    // again so a returning operator sees current presence immediately.
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 30_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
   const groups = useMemo(() => {
     const map = new Map<string, { rank: Rank; members: Member[] }>();

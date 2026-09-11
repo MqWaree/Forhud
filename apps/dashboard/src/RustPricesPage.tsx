@@ -52,18 +52,27 @@ const notify = (message: string) =>
   window.dispatchEvent(new CustomEvent("toast", { detail: message }));
 
 type DisplayCurrency = "DKK" | "EUR" | "USD" | "RUB";
+const currencyFormatters = new Map<string, Intl.NumberFormat>();
+function currencyFormatter(currency: DisplayCurrency) {
+  let formatter = currencyFormatters.get(currency);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    currencyFormatters.set(currency, formatter);
+  }
+  return formatter;
+}
 function formatCurrencyMinor(
   value: number | null | undefined,
   currency: DisplayCurrency,
 ) {
   if (value == null) return "Unknown";
   try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value / 100);
+    return currencyFormatter(currency).format(value / 100);
   } catch {
     return `${(value / 100).toFixed(2)} ${currency}`;
   }
@@ -100,6 +109,7 @@ export default function RustPricesPage() {
   const [lztPage, setLztPage] = useState(1);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [providerSearch, setProviderSearch] = useState("");
   const [preset, setPreset] = useState("All NFA");
   const [minPrice, setMinPrice] = useState("");
@@ -125,11 +135,23 @@ export default function RustPricesPage() {
     useState<ProductType>("RUST_NFA");
   const [draftProductName, setDraftProductName] = useState("Rust NFA accounts");
 
+  // Typing in the search box updates the request only after a short pause,
+  // and any request still in flight is aborted so a stale response can never
+  // overwrite a newer one.
+  const loadController = useRef<AbortController>();
+  const loadLztController = useRef<AbortController>();
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
   const load = useCallback(async () => {
+    loadController.current?.abort();
+    const controller = new AbortController();
+    loadController.current = controller;
     const params = new URLSearchParams({
       page: String(page),
       pageSize: "50",
-      search,
+      search: debouncedSearch,
       preset,
       minPrice,
       maxPrice,
@@ -138,10 +160,19 @@ export default function RustPricesPage() {
       productType,
       productName,
     });
-    setData(await api.get<RustPriceSnapshot>(`/rust-prices?${params}`));
+    try {
+      const snapshot = await api.get<RustPriceSnapshot>(
+        `/rust-prices?${params}`,
+        { signal: controller.signal },
+      );
+      if (!controller.signal.aborted) setData(snapshot);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError"))
+        throw error;
+    }
   }, [
     page,
-    search,
+    debouncedSearch,
     preset,
     minPrice,
     maxPrice,
@@ -153,6 +184,9 @@ export default function RustPricesPage() {
 
   const loadLzt = useCallback(async () => {
     if (!hasLztAccess) return;
+    loadLztController.current?.abort();
+    const controller = new AbortController();
+    loadLztController.current = controller;
     const params = new URLSearchParams({
       page: String(lztPage),
       pageSize: "100",
@@ -160,8 +194,21 @@ export default function RustPricesPage() {
       sort: lztSort,
       currency: displayCurrency,
     });
-    setLzt(await api.get<LztTrackerSnapshot>(`/lzt-tracker?${params}`));
+    try {
+      const snapshot = await api.get<LztTrackerSnapshot>(
+        `/lzt-tracker?${params}`,
+        { signal: controller.signal },
+      );
+      if (!controller.signal.aborted) setLzt(snapshot);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError"))
+        throw error;
+    }
   }, [displayCurrency, hasLztAccess, lztPage, lztSearch, lztSort]);
+  const loadRef = useRef(load);
+  const loadLztRef = useRef(loadLzt);
+  loadRef.current = load;
+  loadLztRef.current = loadLzt;
 
   useEffect(
     () => localStorage.setItem("fgp-rust-price-currency", displayCurrency),
@@ -174,7 +221,9 @@ export default function RustPricesPage() {
   }, [view, loadLzt]);
   useEffect(() => {
     if (view !== "lzt" || !hasLztAccess) return;
-    const refresh = window.setInterval(() => void loadLzt(), 10_000);
+    const refresh = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadLzt();
+    }, 10_000);
     const onVisible = () => {
       if (document.visibilityState === "visible") void loadLzt();
     };
@@ -196,11 +245,11 @@ export default function RustPricesPage() {
     let lztTimer: ReturnType<typeof setTimeout> | undefined;
     const schedulePriceLoad = () => {
       clearTimeout(priceTimer);
-      priceTimer = setTimeout(() => void load(), 150);
+      priceTimer = setTimeout(() => void loadRef.current(), 150);
     };
     const scheduleLztLoad = () => {
       clearTimeout(lztTimer);
-      lztTimer = setTimeout(() => void loadLzt(), 150);
+      lztTimer = setTimeout(() => void loadLztRef.current(), 150);
     };
     ["rust-price-progress", "rust-price-state", "rust-price-reset"].forEach(
       (name) => events.addEventListener(name, schedulePriceLoad),
@@ -219,7 +268,7 @@ export default function RustPricesPage() {
       clearTimeout(lztTimer);
       events.close();
     };
-  }, [load, loadLzt]);
+  }, []);
 
   const urls = useMemo(() => extractHttpUrls(importText), [importText]);
   const running = ["RUNNING", "STOPPING"].includes(data?.state.status || "");
@@ -236,12 +285,16 @@ export default function RustPricesPage() {
         provider.title.toLowerCase().includes(term),
     );
   }, [providers, providerSearch]);
-  const providersWithStock = providers.filter(
-    (provider) => provider.stock > 0,
-  ).length;
-  const totalProviderStock = providers.reduce(
-    (total, provider) => total + provider.stock,
-    0,
+  const { providersWithStock, totalProviderStock } = useMemo(
+    () => ({
+      providersWithStock: providers.filter((provider) => provider.stock > 0)
+        .length,
+      totalProviderStock: providers.reduce(
+        (total, provider) => total + provider.stock,
+        0,
+      ),
+    }),
+    [providers],
   );
   const priceSortDirection =
     sort === "price-asc"

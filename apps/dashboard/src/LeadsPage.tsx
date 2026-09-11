@@ -1,18 +1,35 @@
-import { type MouseEvent, useEffect, useMemo, useState } from "react";
+import {
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowRight,
+  ArrowUpDown,
+  CheckCheck,
+  ChevronDown,
+  ChevronUp,
   Columns3,
+  Copy,
   Download,
   ExternalLink,
+  Globe,
+  Mail,
+  MessageCircle,
   PanelLeft,
   Plus,
   Save,
   Search,
+  Send,
   Trash2,
   X,
 } from "lucide-react";
 import { leadStatuses, normalizeDiscordUrl, priorities } from "@lead/shared";
-import { api, type ExpandedLead } from "./api";
+import { api, type ExpandedLead, type OutreachTemplate } from "./api";
+import { outreachValues, renderOutreachTemplate } from "./outreach";
 import { useAuth } from "./Auth";
 import {
   Badge,
@@ -29,6 +46,65 @@ const leadDiscordUrl = (lead: ExpandedLead) =>
   normalizeDiscordUrl(
     lead.discordInvite || lead.scannerResult?.discordLinks?.[0]?.url || "",
   );
+type ContactKind = "discord" | "telegram" | "email" | "website" | "none";
+type LeadContact = { kind: ContactKind; label: string; href?: string };
+const contactKindLabels: Record<ContactKind, string> = {
+  discord: "Discord",
+  telegram: "Telegram",
+  email: "Email",
+  website: "Website",
+  none: "Contact",
+};
+/**
+ * The single best way to reach a lead, in the product's contact hierarchy:
+ * Discord, then Telegram, then email, then the website as a last resort.
+ */
+const leadContact = (lead: ExpandedLead): LeadContact => {
+  const discord = leadDiscordUrl(lead);
+  if (discord)
+    return {
+      kind: "discord",
+      label: discord.replace(/^https?:\/\//i, ""),
+      href: discord,
+    };
+  const telegram = (lead.telegram || "").trim();
+  if (telegram) {
+    const handle = telegram
+      .replace(/^https?:\/\/(www\.)?t\.me\//i, "")
+      .replace(/^@/, "");
+    return {
+      kind: "telegram",
+      label: `@${handle}`,
+      href: `https://t.me/${handle}`,
+    };
+  }
+  const email = (lead.email || "").trim();
+  if (email) return { kind: "email", label: email, href: `mailto:${email}` };
+  const website = (lead.website || "").trim();
+  if (website)
+    return {
+      kind: "website",
+      label: website.replace(/^https?:\/\//i, "").replace(/\/$/, ""),
+      href: website,
+    };
+  return { kind: "none", label: "No contact yet" };
+};
+function ContactIcon({ kind }: { kind: ContactKind }) {
+  if (kind === "discord") return <MessageCircle aria-hidden="true" />;
+  if (kind === "telegram") return <Send aria-hidden="true" />;
+  if (kind === "email") return <Mail aria-hidden="true" />;
+  return <Globe aria-hidden="true" />;
+}
+const leadRustProducts = (lead: ExpandedLead) =>
+  lead.scannerResult?.rustProductCount ?? 0;
+const stageSlug = (status: string) => status.toLowerCase().replace(/\s+/g, "-");
+const priorityRank: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+const shortDate = (value: string) =>
+  new Date(value).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+type SortKey = "lead" | "status" | "priority" | "updated";
 export default function LeadsPage({
   leads,
   refresh,
@@ -64,9 +140,119 @@ export default function LeadsPage({
       top: number;
       left: number;
     }>();
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
+    key: "updated",
+    dir: "desc",
+  });
+  const [highlightedColumn, setHighlightedColumn] = useState<string>();
+  const [templates, setTemplates] = useState<OutreachTemplate[]>([]);
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [outreachTemplateId, setOutreachTemplateId] = useState("");
+  const [outreachText, setOutreachText] = useState("");
+  const [outreachDirty, setOutreachDirty] = useState(false);
+  const [outreachSending, setOutreachSending] = useState(false);
+  const outreachSeed = useRef("");
+  const columnRefs = useRef(new Map<string, HTMLElement>());
+  const filtersActive =
+    query.trim() !== "" || status !== "All" || tag !== "All";
+  const clearFilters = () => {
+    setQuery("");
+    setStatus("All");
+    setTag("All");
+  };
+  const toggleSort = (key: SortKey) =>
+    setSort((current) =>
+      current.key === key
+        ? { key, dir: current.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "updated" ? "desc" : "asc" },
+    );
+  const jumpToColumn = (leadStatus: string) => {
+    columnRefs.current.get(leadStatus)?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "start",
+    });
+    setHighlightedColumn(leadStatus);
+    window.setTimeout(
+      () =>
+        setHighlightedColumn((current) =>
+          current === leadStatus ? undefined : current,
+        ),
+      900,
+    );
+  };
   useEffect(() => {
     if (canAssign) void api.get<typeof team>("/team/users").then(setTeam);
   }, [canAssign]);
+  useEffect(() => {
+    void api
+      .get<OutreachTemplate[]>("/outreach/templates")
+      .then(setTemplates)
+      .catch(() => undefined);
+    void api
+      .get<{ name?: string }>("/workspace")
+      .then((workspace) => setWorkspaceName(workspace?.name || ""))
+      .catch(() => undefined);
+  }, []);
+  const activeTemplate =
+    templates.find((template) => template.id === outreachTemplateId) ??
+    templates[0];
+  const drawerContact = detail ? leadContact(detail) : undefined;
+  // Rebuild the draft when the lead or template changes, but never throw away
+  // text the operator has already edited for this lead.
+  useEffect(() => {
+    if (!detail || !activeTemplate) return;
+    const seed = `${detail.id}|${activeTemplate.id}`;
+    if (seed === outreachSeed.current && outreachDirty) return;
+    outreachSeed.current = seed;
+    setOutreachDirty(false);
+    setOutreachText(
+      renderOutreachTemplate(
+        activeTemplate.body,
+        outreachValues(detail, {
+          sender: user.username,
+          workspace: workspaceName,
+          contact: drawerContact?.href ? drawerContact.label : "",
+        }),
+      ),
+    );
+  }, [detail, activeTemplate, workspaceName, user.username]);
+  async function copyOutreach() {
+    try {
+      await navigator.clipboard.writeText(outreachText);
+      notify("Message copied.");
+    } catch {
+      notify("Copy failed. Select the text and copy it manually.");
+    }
+  }
+  async function markOutreachSent() {
+    if (!draft || !outreachText.trim() || outreachSending) return;
+    const contact = leadContact(draft);
+    setOutreachSending(true);
+    try {
+      const saved = await api.send<ExpandedLead>(
+        `/leads/${draft.id}/outreach`,
+        "POST",
+        {
+          channel: contact.kind === "none" ? "other" : contact.kind,
+          message: outreachText.trim(),
+          templateName: activeTemplate?.name,
+        },
+      );
+      setDetail(saved);
+      setDraft(saved);
+      notify("Outreach logged. Lead marked as Contacted.");
+      await refresh();
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "Outreach could not be logged.",
+      );
+    } finally {
+      setOutreachSending(false);
+    }
+  }
   const tags = useMemo(
     () =>
       [
@@ -87,60 +273,124 @@ export default function LeadsPage({
       return changed ? next : current;
     });
   }, [leads]);
-  const visibleLeads = leads.map((lead) => {
-    const optimisticStatus = optimisticStatuses[lead.id];
-    return optimisticStatus ? { ...lead, status: optimisticStatus } : lead;
-  });
-  const matchesLeadSearch = (lead: ExpandedLead, value: string) => {
-    const needles = value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if (!needles.length) return true;
-    const haystack = [
-      lead.domain.hostname,
-      lead.companyName,
-      lead.contactName,
-      lead.email,
-      lead.website,
-      lead.discordInvite,
-      leadDiscordUrl(lead),
-      lead.telegram,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return needles.every((needle) => haystack.includes(needle));
-  };
-  const filtered = visibleLeads.filter(
-    (lead) =>
-      (status === "All" || lead.status === status) &&
-      (tag === "All" || lead.tags?.some((item) => item.tag.name === tag)) &&
-      matchesLeadSearch(lead, query),
+  const visibleLeads = useMemo(
+    () =>
+      leads.map((lead) => {
+        const optimisticStatus = optimisticStatuses[lead.id];
+        return optimisticStatus ? { ...lead, status: optimisticStatus } : lead;
+      }),
+    [leads, optimisticStatuses],
   );
+  // One lowercased search string per lead, rebuilt only when the lead list
+  // changes, so typing in a search box does not re-join eight fields per lead
+  // on every keystroke.
+  const leadHaystacks = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const lead of leads)
+      map.set(
+        lead.id,
+        [
+          lead.domain.hostname,
+          lead.companyName,
+          lead.contactName,
+          lead.email,
+          lead.website,
+          lead.discordInvite,
+          leadDiscordUrl(lead),
+          lead.telegram,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase(),
+      );
+    return map;
+  }, [leads]);
+  const matchesLeadSearch = useCallback(
+    (lead: ExpandedLead, value: string) => {
+      const needles = value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      if (!needles.length) return true;
+      const haystack = leadHaystacks.get(lead.id) ?? "";
+      return needles.every((needle) => haystack.includes(needle));
+    },
+    [leadHaystacks],
+  );
+  // Leads matching the search and tag filters, before the stage filter, so the
+  // stage strip can show how many leads sit in each stage for this search.
+  const baseFiltered = useMemo(
+    () =>
+      visibleLeads.filter(
+        (lead) =>
+          (tag === "All" || lead.tags?.some((item) => item.tag.name === tag)) &&
+          matchesLeadSearch(lead, query),
+      ),
+    [visibleLeads, tag, query, matchesLeadSearch],
+  );
+  const stageCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const lead of baseFiltered)
+      counts.set(lead.status, (counts.get(lead.status) ?? 0) + 1);
+    return counts;
+  }, [baseFiltered]);
+  const filtered = useMemo(
+    () =>
+      status === "All"
+        ? baseFiltered
+        : baseFiltered.filter((lead) => lead.status === status),
+    [baseFiltered, status],
+  );
+  const sortedLeads = useMemo(() => {
+    const direction = sort.dir === "asc" ? 1 : -1;
+    const name = (lead: ExpandedLead) =>
+      (lead.companyName || lead.domain.hostname).toLowerCase();
+    return [...filtered].sort((left, right) => {
+      let order = 0;
+      if (sort.key === "lead") order = name(left).localeCompare(name(right));
+      else if (sort.key === "status")
+        order =
+          leadStatuses.indexOf(left.status as (typeof leadStatuses)[number]) -
+          leadStatuses.indexOf(right.status as (typeof leadStatuses)[number]);
+      else if (sort.key === "priority")
+        order =
+          (priorityRank[left.priority] ?? 9) -
+          (priorityRank[right.priority] ?? 9);
+      else order = left.updatedAt.localeCompare(right.updatedAt);
+      return order * direction || name(left).localeCompare(name(right));
+    });
+  }, [filtered, sort]);
+  const leadsByStatus = useMemo(() => {
+    const map = new Map<string, ExpandedLead[]>();
+    for (const lead of filtered) {
+      const column = map.get(lead.status);
+      if (column) column.push(lead);
+      else map.set(lead.status, [lead]);
+    }
+    return map;
+  }, [filtered]);
   const moveNeedle = moveSearch.trim().toLowerCase();
-  const moveMatches =
-    moveNeedle.length < 1
-      ? []
-      : visibleLeads
-          .filter((lead) => matchesLeadSearch(lead, moveSearch))
-          .sort((left, right) => {
-            const score = (lead: ExpandedLead) => {
-              const names = [lead.companyName, lead.domain.hostname]
-                .filter(Boolean)
-                .map((value) => value.toLowerCase());
-              if (names.some((value) => value === moveNeedle)) return 0;
-              if (names.some((value) => value.startsWith(moveNeedle))) return 1;
-              return 2;
-            };
-            return (
-              score(left) - score(right) ||
-              (left.companyName || left.domain.hostname).localeCompare(
-                right.companyName || right.domain.hostname,
-              )
-            );
-          })
-          .slice(0, 50);
-  const selectedMoveLead = visibleLeads.find(
-    (lead) => lead.id === moveLeadId,
-  );
+  const moveMatches = useMemo(() => {
+    if (moveNeedle.length < 1) return [];
+    const score = (lead: ExpandedLead) => {
+      const names = [lead.companyName, lead.domain.hostname]
+        .filter(Boolean)
+        .map((value) => value.toLowerCase());
+      if (names.some((value) => value === moveNeedle)) return 0;
+      if (names.some((value) => value.startsWith(moveNeedle))) return 1;
+      return 2;
+    };
+    return visibleLeads
+      .filter((lead) => matchesLeadSearch(lead, moveSearch))
+      .map((lead) => ({ lead, rank: score(lead) }))
+      .sort(
+        (left, right) =>
+          left.rank - right.rank ||
+          (left.lead.companyName || left.lead.domain.hostname).localeCompare(
+            right.lead.companyName || right.lead.domain.hostname,
+          ),
+      )
+      .slice(0, 50)
+      .map(({ lead }) => lead);
+  }, [visibleLeads, moveSearch, moveNeedle, matchesLeadSearch]);
+  const selectedMoveLead = visibleLeads.find((lead) => lead.id === moveLeadId);
   const moveLeadLabel = (lead: ExpandedLead) =>
     lead.companyName && lead.companyName !== lead.domain.hostname
       ? `${lead.companyName} — ${lead.domain.hostname}`
@@ -337,32 +587,47 @@ export default function LeadsPage({
           </>
         }
       />
-      <div className="toolbar card">
+      <div className="toolbar card leads-toolbar">
         <SearchBox
           value={query}
           onChange={setQuery}
           placeholder="Search leads, companies, or contacts…"
         />
-        <select
-          value={status}
-          aria-label="Filter leads by status"
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option>All</option>
-          {leadStatuses.map((x) => (
-            <option key={x}>{x}</option>
-          ))}
-        </select>
-        <select
-          value={tag}
-          aria-label="Filter leads by tag"
-          onChange={(e) => setTag(e.target.value)}
-        >
-          <option>All</option>
-          {tags.map((x) => (
-            <option key={x}>{x}</option>
-          ))}
-        </select>
+        <label className="filter-select">
+          <small>Stage</small>
+          <select
+            value={status}
+            aria-label="Filter leads by status"
+            onChange={(e) => setStatus(e.target.value)}
+          >
+            <option>All</option>
+            {leadStatuses.map((x) => (
+              <option key={x}>{x}</option>
+            ))}
+          </select>
+        </label>
+        <label className="filter-select">
+          <small>Tag</small>
+          <select
+            value={tag}
+            aria-label="Filter leads by tag"
+            onChange={(e) => setTag(e.target.value)}
+          >
+            <option>All</option>
+            {tags.map((x) => (
+              <option key={x}>{x}</option>
+            ))}
+          </select>
+        </label>
+        {filtersActive && (
+          <button
+            type="button"
+            className="btn ghost filter-clear"
+            onClick={clearFilters}
+          >
+            <X /> Clear
+          </button>
+        )}
         {canAssign && selected.size > 0 && (
           <select
             defaultValue=""
@@ -378,7 +643,7 @@ export default function LeadsPage({
             }}
           >
             <option value="" disabled>
-              Assign selected…
+              Assign {selected.size} selected…
             </option>
             <option value="UNASSIGNED">Unassigned</option>
             {team.map((member) => (
@@ -402,8 +667,58 @@ export default function LeadsPage({
             <Columns3 /> Kanban
           </button>
         </div>
-        <span className="count">{filtered.length} leads</span>
+        <span className="count">
+          {filtered.length === leads.length
+            ? `${leads.length} lead${leads.length === 1 ? "" : "s"}`
+            : `${filtered.length} of ${leads.length} leads`}
+        </span>
       </div>
+      {leads.length > 0 && (
+        <nav
+          className="lead-stage-strip"
+          aria-label={
+            view === "kanban" ? "Jump to a Kanban stage" : "Filter by stage"
+          }
+        >
+          {view === "table" && (
+            <button
+              type="button"
+              className={status === "All" ? "active" : ""}
+              onClick={() => setStatus("All")}
+            >
+              <span>All</span>
+              <b>{baseFiltered.length}</b>
+            </button>
+          )}
+          {leadStatuses.map((leadStatus) => {
+            const count = stageCounts.get(leadStatus) ?? 0;
+            return (
+              <button
+                key={leadStatus}
+                type="button"
+                data-stage={stageSlug(leadStatus)}
+                className={`${status === leadStatus ? "active" : ""}${count ? "" : " is-empty"}`}
+                title={
+                  view === "kanban"
+                    ? `Scroll to ${leadStatus}`
+                    : `Show only ${leadStatus} leads`
+                }
+                onClick={() =>
+                  view === "kanban"
+                    ? jumpToColumn(leadStatus)
+                    : setStatus((current) =>
+                        current === leadStatus ? "All" : leadStatus,
+                      )
+                }
+              >
+                <i aria-hidden="true" />
+                <span>{leadStatus}</span>
+                <b>{count}</b>
+              </button>
+            );
+          })}
+        </nav>
+      )}
       {view === "kanban" && (
         <section
           className="kanban-quick-move card"
@@ -528,12 +843,12 @@ export default function LeadsPage({
       {view === "table" ? (
         <article className="card table-card">
           {filtered.length ? (
-            <div className="table-wrap">
-              <table>
+            <div className="table-wrap leads-table-wrap">
+              <table className="leads-table">
                 <thead>
                   <tr>
                     {canAssign && (
-                      <th>
+                      <th className="select-col">
                         <input
                           type="checkbox"
                           aria-label="Select all visible leads"
@@ -551,89 +866,168 @@ export default function LeadsPage({
                         />
                       </th>
                     )}
-                    <th>Lead</th>
-                    <th>Contact</th>
-                    <th>Discord</th>
-                    <th>Hosting</th>
-                    <th>Tags</th>
-                    <th>Status</th>
-                    <th>Priority</th>
-                    <th>Assigned</th>
-                    <th>Updated</th>
+                    {(
+                      [
+                        ["lead", "Lead"],
+                        [null, "Contact"],
+                        [null, "Tags"],
+                        ["status", "Stage"],
+                        ["priority", "Priority"],
+                        [null, "Assigned"],
+                        ["updated", "Updated"],
+                      ] as Array<[SortKey | null, string]>
+                    ).map(([key, label]) => (
+                      <th
+                        key={label}
+                        aria-sort={
+                          key && sort.key === key
+                            ? sort.dir === "asc"
+                              ? "ascending"
+                              : "descending"
+                            : undefined
+                        }
+                      >
+                        {key ? (
+                          <button
+                            type="button"
+                            className={`sort-button${sort.key === key ? " active" : ""}`}
+                            onClick={() => toggleSort(key)}
+                          >
+                            {label}
+                            {sort.key === key ? (
+                              sort.dir === "asc" ? (
+                                <ChevronUp aria-hidden="true" />
+                              ) : (
+                                <ChevronDown aria-hidden="true" />
+                              )
+                            ) : (
+                              <ArrowUpDown aria-hidden="true" />
+                            )}
+                          </button>
+                        ) : (
+                          label
+                        )}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((l) => (
-                    <tr key={l.id} onClick={() => open(l)}>
-                      {canAssign && (
-                        <td onClick={(event) => event.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            aria-label={`Select ${l.companyName || l.domain.hostname}`}
-                            checked={selected.has(l.id)}
-                            onChange={(event) => {
-                              const next = new Set(selected);
-                              event.target.checked
-                                ? next.add(l.id)
-                                : next.delete(l.id);
-                              setSelected(next);
-                            }}
-                          />
-                        </td>
-                      )}
-                      <td>
-                        <div className="domain-cell">
-                          <span>{l.domain.hostname[0]?.toUpperCase()}</span>
-                          <div>
-                            <b>{l.companyName || l.domain.hostname}</b>
-                            <small>{l.domain.hostname}</small>
+                  {sortedLeads.map((l) => {
+                    const contact = leadContact(l);
+                    return (
+                      <tr key={l.id} onClick={() => open(l)}>
+                        {canAssign && (
+                          <td
+                            className="select-col"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${l.companyName || l.domain.hostname}`}
+                              checked={selected.has(l.id)}
+                              onChange={(event) => {
+                                const next = new Set(selected);
+                                event.target.checked
+                                  ? next.add(l.id)
+                                  : next.delete(l.id);
+                                setSelected(next);
+                              }}
+                            />
+                          </td>
+                        )}
+                        <td>
+                          <div className="domain-cell">
+                            <span>{l.domain.hostname[0]?.toUpperCase()}</span>
+                            <div>
+                              <b>
+                                {l.companyName || l.domain.hostname}
+                                {leadRustProducts(l) > 0 && (
+                                  <em
+                                    className="rust-count"
+                                    title="Rust products found by the scanner"
+                                  >
+                                    {leadRustProducts(l)} Rust
+                                  </em>
+                                )}
+                              </b>
+                              <small>
+                                {l.domain.hostname}
+                                {l.domain.location?.country &&
+                                l.domain.location.country !== "Unknown"
+                                  ? ` · ${l.domain.location.country}`
+                                  : ""}
+                              </small>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td>
-                        {l.contactName || l.email || (
-                          <span className="muted">Not added</span>
-                        )}
-                      </td>
-                      <td>
-                        {l.discordInvite ||
-                          l.scannerResult?.discordLinks?.[0]?.url?.replace(
-                            "https://",
-                            "",
-                          ) || <span className="muted">—</span>}
-                      </td>
-                      <td>{l.domain.location?.country || "Unknown"}</td>
-                      <td>
-                        <div className="tag-row">
-                          {l.tags?.slice(0, 2).map((t) => (
-                            <Badge key={t.tag.id} tone="tag">
-                              {t.tag.name}
-                            </Badge>
-                          ))}
-                          {l.tags?.length > 2 && (
-                            <small>+{l.tags.length - 2}</small>
+                        </td>
+                        <td>
+                          <div className="lead-contact-cell">
+                            {contact.kind === "none" ? (
+                              <span className="muted">{contact.label}</span>
+                            ) : (
+                              <a
+                                className={`lead-contact ${contact.kind}`}
+                                href={contact.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={`${contactKindLabels[contact.kind]}: ${contact.label}`}
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <ContactIcon kind={contact.kind} />
+                                <span>{contact.label}</span>
+                              </a>
+                            )}
+                            {l.contactName && <small>{l.contactName}</small>}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="tag-row nowrap">
+                            {l.tags?.slice(0, 2).map((t) => (
+                              <Badge key={t.tag.id} tone="tag">
+                                {t.tag.name}
+                              </Badge>
+                            ))}
+                            {l.tags?.length > 2 && (
+                              <small>+{l.tags.length - 2}</small>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <Badge>{l.status}</Badge>
+                        </td>
+                        <td>
+                          <Badge tone={l.priority.toLowerCase()}>
+                            {l.priority}
+                          </Badge>
+                        </td>
+                        <td>
+                          {l.assignedTo?.username || (
+                            <span className="muted">Unassigned</span>
                           )}
-                        </div>
-                      </td>
-                      <td>
-                        <Badge>{l.status}</Badge>
-                      </td>
-                      <td>
-                        <Badge tone={l.priority.toLowerCase()}>
-                          {l.priority}
-                        </Badge>
-                      </td>
-                      <td>
-                        {l.assignedTo?.username || (
-                          <span className="muted">Unassigned</span>
-                        )}
-                      </td>
-                      <td>{new Date(l.updatedAt).toLocaleDateString()}</td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td title={new Date(l.updatedAt).toLocaleString()}>
+                          {shortDate(l.updatedAt)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
+          ) : leads.length ? (
+            <Empty
+              title="No leads match these filters"
+              body="Try a different search, or clear the stage and tag filters."
+              action={
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={clearFilters}
+                >
+                  <X /> Clear filters
+                </button>
+              }
+            />
           ) : (
             <Empty
               title="No leads yet"
@@ -651,7 +1045,12 @@ export default function LeadsPage({
           {leadStatuses.map((leadStatus) => (
             <section
               key={leadStatus}
-              className={`kanban-column${dropStatus === leadStatus ? " is-drop-target" : ""}`}
+              ref={(element) => {
+                if (element) columnRefs.current.set(leadStatus, element);
+                else columnRefs.current.delete(leadStatus);
+              }}
+              data-stage={stageSlug(leadStatus)}
+              className={`kanban-column${dropStatus === leadStatus ? " is-drop-target" : ""}${highlightedColumn === leadStatus ? " is-highlighted" : ""}`}
               onDragEnter={() => {
                 if (draggingId) setDropStatus(leadStatus);
               }}
@@ -677,15 +1076,16 @@ export default function LeadsPage({
               }}
             >
               <header>
+                <i className="stage-dot" aria-hidden="true" />
                 <span>{leadStatus}</span>
-                <b>
-                  {filtered.filter((lead) => lead.status === leadStatus).length}
-                </b>
+                <b>{(leadsByStatus.get(leadStatus) ?? []).length}</b>
               </header>
-              {filtered
-                .filter((lead) => lead.status === leadStatus)
-                .map((lead) => {
-                  const discordUrl = leadDiscordUrl(lead);
+              <div className="kanban-column-body">
+                {(leadsByStatus.get(leadStatus) ?? []).length === 0 && (
+                  <p className="kanban-column-empty">Drop leads here</p>
+                )}
+                {(leadsByStatus.get(leadStatus) ?? []).map((lead) => {
+                  const contact = leadContact(lead);
                   return (
                     <article
                       key={lead.id}
@@ -719,42 +1119,50 @@ export default function LeadsPage({
                       }}
                       onClick={() => open(lead)}
                     >
-                      <div>
+                      <div className="lead-card-head">
                         <span className="site-icon">
                           {lead.domain.hostname[0]?.toUpperCase()}
                         </span>
+                        <b title={lead.domain.hostname}>
+                          {lead.companyName || lead.domain.hostname}
+                        </b>
                         <Badge tone={lead.priority.toLowerCase()}>
                           {lead.priority}
                         </Badge>
                       </div>
-                      <b>{lead.companyName || lead.domain.hostname}</b>
-                      {discordUrl ? (
+                      {contact.kind === "none" ? (
+                        <small className="lead-card-nocontact">
+                          {contact.label}
+                        </small>
+                      ) : (
                         <a
-                          className="lead-card-link"
-                          href={discordUrl}
+                          className={`lead-card-link ${contact.kind}`}
+                          href={contact.href}
                           target="_blank"
                           rel="noopener noreferrer"
                           draggable={false}
-                          title={`Open ${discordUrl}`}
+                          title={`${contactKindLabels[contact.kind]}: ${contact.label}`}
                           onClick={(event) => event.stopPropagation()}
                           onPointerDown={(event) => event.stopPropagation()}
                           onDragStart={(event) => event.preventDefault()}
                         >
-                          <span>{discordUrl.replace(/^https?:\/\//, "")}</span>
+                          <ContactIcon kind={contact.kind} />
+                          <span>{contact.label}</span>
                           <ExternalLink aria-hidden="true" />
                         </a>
-                      ) : (
-                        <small>No Discord link</small>
                       )}
                       <footer>
                         <span>
                           {lead.domain.location?.country || "Unknown"}
+                          {leadRustProducts(lead) > 0 &&
+                            ` · ${leadRustProducts(lead)} Rust products`}
                         </span>
                         <span>{lead.assignedTo?.username || "Unassigned"}</span>
                       </footer>
                     </article>
                   );
                 })}
+              </div>
             </section>
           ))}
         </div>
@@ -795,14 +1203,14 @@ export default function LeadsPage({
               <small>Hosting</small>
               <b>{preview.lead.domain.location?.country || "Unknown"}</b>
             </span>
+            <span>
+              <small>Rust products</small>
+              <b>{leadRustProducts(preview.lead)}</b>
+            </span>
           </div>
           <div className="lead-preview-discord">
-            <small>Discord</small>
-            <b>
-              {preview.lead.discordInvite ||
-                preview.lead.scannerResult?.discordLinks?.[0]?.url ||
-                "Not found"}
-            </b>
+            <small>{contactKindLabels[leadContact(preview.lead).kind]}</small>
+            <b>{leadContact(preview.lead).label}</b>
           </div>
           {preview.lead.tags.length > 0 && (
             <footer>
@@ -831,7 +1239,84 @@ export default function LeadsPage({
                 <small>Discovered</small>
                 <b>{new Date(draft.createdAt).toLocaleDateString()}</b>
               </div>
+              <div>
+                <small>Rust products</small>
+                <b>{leadRustProducts(draft)}</b>
+              </div>
             </div>
+            <section className="outreach-panel" aria-label="Outreach message">
+              <header>
+                <div>
+                  <b>Outreach</b>
+                  <small>
+                    A message written for this server. Copy it, send it from
+                    your own account, then mark it as sent.
+                  </small>
+                </div>
+                {templates.length > 0 && (
+                  <select
+                    aria-label="Message template"
+                    value={activeTemplate?.id ?? ""}
+                    onChange={(event) => {
+                      setOutreachTemplateId(event.target.value);
+                      setOutreachDirty(false);
+                    }}
+                  >
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </header>
+              {templates.length ? (
+                <>
+                  <textarea
+                    aria-label="Outreach message"
+                    rows={7}
+                    value={outreachText}
+                    onChange={(event) => {
+                      setOutreachText(event.target.value);
+                      setOutreachDirty(true);
+                    }}
+                  />
+                  <div className="outreach-actions">
+                    <Button
+                      variant="secondary"
+                      onClick={() => void copyOutreach()}
+                    >
+                      <Copy /> Copy
+                    </Button>
+                    {drawerContact?.href && (
+                      <a
+                        className="btn secondary"
+                        href={drawerContact.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <ContactIcon kind={drawerContact.kind} /> Open{" "}
+                        {contactKindLabels[drawerContact.kind]}
+                      </a>
+                    )}
+                    <Button
+                      disabled={!outreachText.trim() || outreachSending}
+                      onClick={() => void markOutreachSent()}
+                    >
+                      <CheckCheck />{" "}
+                      {outreachSending ? "Saving…" : "Mark as sent"}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <p className="outreach-empty">
+                  No message templates yet.{" "}
+                  {canAssign
+                    ? "Add one under Settings → Outreach templates."
+                    : "Ask an administrator to add templates in Settings."}
+                </p>
+              )}
+            </section>
             <div className="form-grid">
               <Field label="Status">
                 <select

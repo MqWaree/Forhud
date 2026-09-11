@@ -313,6 +313,17 @@ export async function installApiMocks(
       await json(route, []);
       return;
     }
+    if (path === "/outreach/templates") {
+      await json(route, [
+        {
+          id: "template-1",
+          name: "Partnership intro",
+          body: "Hi {company} team, {sender} here from {workspace}.",
+          position: 0,
+        },
+      ]);
+      return;
+    }
     if (path === "/settings") {
       await json(route, settings);
       return;

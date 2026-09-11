@@ -51,6 +51,36 @@ describe("workspace ranks", () => {
     );
   });
 
+  it("serves LZT recipients from a short-lived cache that mutations invalidate", async () => {
+    const before = await ranks.userIdsWithRankPermission("LZT_ACCESS");
+    expect(before).toEqual(expect.arrayContaining([adminId, memberId]));
+    const rank = await prisma.workspaceRank.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId, name: "LZT Access" } } });
+    await prisma.userRank.delete({ where: { userId_rankId: { userId: memberId, rankId: rank.id } } });
+    // Without invalidation the cached recipient list is still served.
+    expect(await ranks.userIdsWithRankPermission("LZT_ACCESS")).toBe(before);
+    ranks.invalidateRankCaches();
+    const after = await ranks.userIdsWithRankPermission("LZT_ACCESS");
+    expect(after).toContain(adminId);
+    expect(after).not.toContain(memberId);
+    // Restore the assignment for the directory assertions below.
+    await prisma.userRank.create({ data: { userId: memberId, rankId: rank.id } });
+    ranks.invalidateRankCaches();
+  });
+
+  it("does not repeat rank reconciliation writes on every call within the window", async () => {
+    // Remove the managed Owner assignment for the admin; a throttled call must
+    // not restore it, a forced call must.
+    const owner = await prisma.workspaceRank.findUniqueOrThrow({ where: { workspaceId_name: { workspaceId, name: "Owner" } } });
+    // The previous test invalidated the caches, so this call performs a real
+    // reconciliation and starts the throttle window.
+    await ranks.ensureWorkspaceRanks(workspaceId);
+    await prisma.userRank.delete({ where: { userId_rankId: { userId: adminId, rankId: owner.id } } });
+    await ranks.ensureWorkspaceRanks(workspaceId);
+    expect(await prisma.userRank.findUnique({ where: { userId_rankId: { userId: adminId, rankId: owner.id } } })).toBeNull();
+    await ranks.ensureWorkspaceRanks(workspaceId, { force: true });
+    expect(await prisma.userRank.findUnique({ where: { userId_rankId: { userId: adminId, rankId: owner.id } } })).not.toBeNull();
+  });
+
   it("returns directory data without password fields", async () => {
     const directory = await ranks.workspaceMemberDirectory(workspaceId);
     expect(directory).toHaveLength(2);

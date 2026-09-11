@@ -34,6 +34,10 @@ const host = process.env.HOST || "127.0.0.1";
 const server = app.listen(port, host, () =>
   console.log(`FGP API on http://${host}:${port}`),
 );
+// Keep idle upstream connections open longer than the reverse proxy does so
+// Caddy never reuses a socket that Node has just closed (default 5 s).
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
 
 let closing = false;
 async function close() {

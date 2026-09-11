@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Navigate,
   NavLink,
@@ -51,12 +59,15 @@ import {
   type SearchResult,
   type Session,
 } from "./api";
-import SearcherPage from "./SearcherPage";
-import LeadsPage from "./LeadsPage";
-import AdminPage from "./AdminPage";
-import RustPricesPage from "./RustPricesPage";
+// Route pages are code-split so the login screen and first page do not
+// download every other page's code up front.
+const SearcherPage = lazy(() => import("./SearcherPage"));
+const LeadsPage = lazy(() => import("./LeadsPage"));
+const AdminPage = lazy(() => import("./AdminPage"));
+const RustPricesPage = lazy(() => import("./RustPricesPage"));
+const FileSharingPage = lazy(() => import("./FileSharingPage"));
 import MemberSidebar from "./MemberSidebar";
-import FileSharingPage from "./FileSharingPage";
+import OutreachTemplatesSettings from "./OutreachTemplates";
 import { useAuth } from "./Auth";
 import {
   Badge,
@@ -135,8 +146,12 @@ function useData(pathname: string) {
     if (f.status === "fulfilled") setWorkspace(f.value);
     if (g.status === "fulfilled") setNotifications(g.value);
   }, [needsLeads, needsLocations, needsSessions]);
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+  useEffect(() => {
     const eventNames = [
       ...(needsSessions ? ["import", "scan-complete"] : []),
       ...(needsLeads ? ["lead-update"] : []),
@@ -149,7 +164,7 @@ function useData(pathname: string) {
       if (timer) return;
       timer = setTimeout(() => {
         timer = undefined;
-        void refresh();
+        void refreshRef.current();
       }, 1_000);
     };
     eventNames.forEach((eventName) =>
@@ -159,7 +174,7 @@ function useData(pathname: string) {
       if (timer) clearTimeout(timer);
       es.close();
     };
-  }, [refresh]);
+  }, [needsLeads, needsLocations, needsSessions]);
   return {
     sessions,
     leads,
@@ -388,35 +403,37 @@ export default function App() {
         >
           <Menu />
         </button>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/searcher" element={<SearcherPage />} />
-          <Route path="/rust-prices" element={<RustPricesPage />} />
-          <Route path="/splitter" element={<Splitter />} />
-          <Route path="/files" element={<FileSharingPage />} />
-          <Route
-            path="/leads"
-            element={<LeadsPage leads={ctx.leads} refresh={ctx.refresh} />}
-          />
-          <Route
-            path="/my-leads"
-            element={
-              <LeadsPage
-                leads={ctx.leads.filter(
-                  (lead) => lead.assignedTo?.id === user.id,
-                )}
-                refresh={ctx.refresh}
-              />
-            }
-          />
-          <Route path="/location" element={<Locations />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/settings" element={<Settings />} />
-          {user.role === "ADMIN" && (
-            <Route path="/admin" element={<AdminPage />} />
-          )}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<div className="page-loading" aria-busy="true" />}>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/searcher" element={<SearcherPage />} />
+            <Route path="/rust-prices" element={<RustPricesPage />} />
+            <Route path="/splitter" element={<Splitter />} />
+            <Route path="/files" element={<FileSharingPage />} />
+            <Route
+              path="/leads"
+              element={<LeadsPage leads={ctx.leads} refresh={ctx.refresh} />}
+            />
+            <Route
+              path="/my-leads"
+              element={
+                <LeadsPage
+                  leads={ctx.leads.filter(
+                    (lead) => lead.assignedTo?.id === user.id,
+                  )}
+                  refresh={ctx.refresh}
+                />
+              }
+            />
+            <Route path="/location" element={<Locations />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/settings" element={<Settings />} />
+            {user.role === "ADMIN" && (
+              <Route path="/admin" element={<AdminPage />} />
+            )}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </main>
       <MemberSidebar />
       {toast && (
@@ -1597,6 +1614,9 @@ function Settings() {
       />
       <div className="settings-grid">
         <AccountSettings />
+        {(user.role === "ADMIN" || user.role === "MANAGER") && (
+          <OutreachTemplatesSettings />
+        )}
         {user.role === "ADMIN" && (
           <>
             <article className="card settings-section">

@@ -1024,6 +1024,7 @@ export default function SearcherPage() {
                   <th>Website</th>
                   <th>Sources</th>
                   <th>Discord</th>
+                  <th>Rust products</th>
                   <th>Hosting</th>
                   <th>First seen</th>
                   <th>Status</th>
@@ -1053,6 +1054,13 @@ export default function SearcherPage() {
                         discordDestinationLabel(item.discordLinks[0].url)
                       ) : (
                         <span className="muted">Not found</span>
+                      )}
+                    </td>
+                    <td>
+                      {item.rustProductCount ? (
+                        <b>{item.rustProductCount}</b>
+                      ) : (
+                        <span className="muted">0</span>
                       )}
                     </td>
                     <td>{item.domain.location?.country || "Not checked"}</td>
@@ -1138,6 +1146,10 @@ export default function SearcherPage() {
               <span>
                 <small>Pages visited</small>
                 <b>{detail.pagesVisited || 0}</b>
+              </span>
+              <span>
+                <small>Rust products</small>
+                <b>{detail.rustProductCount || 0}</b>
               </span>
             </div>
             <Detail label="Website" value={detail.finalUrl || detail.url} />

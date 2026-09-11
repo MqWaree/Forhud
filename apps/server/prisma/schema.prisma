@@ -34,6 +34,7 @@ model Workspace {
   rustPriceScanDiagnostics RustPriceScanDiagnostic[]
   ranks                    WorkspaceRank[]
   sharedFiles              SharedFile[]
+  outreachTemplates        OutreachTemplate[]
 }
 
 model User {
@@ -222,6 +223,7 @@ model Domain {
   location       HostingLocation?
   leads          Lead[]
   scannerResults ScannerResult[]
+  @@index([lastSeen])
 }
 
 model HostingLocation {
@@ -271,6 +273,8 @@ model Lead {
   @@index([workspaceId, status])
   @@index([assignedToId])
   @@index([scannerResultId])
+  @@index([workspaceId, updatedAt])
+  @@index([workspaceId, createdAt])
 }
 
 model LeadActivity {
@@ -345,6 +349,7 @@ model ScannerResult {
   faviconUrl             String                  @default("")
   contentType            String                  @default("")
   pagesVisited           Int                     @default(0)
+  rustProductCount       Int                     @default(0)
   emailsJson             String                  @default("[]")
   socialLinksJson        String                  @default("[]")
   pagesJson              String                  @default("[]")
@@ -363,6 +368,9 @@ model ScannerResult {
   @@unique([workspaceId, normalizedUrl])
   @@unique([workspaceId, domainId])
   @@index([workspaceId, scanStatus])
+  @@index([workspaceId, scanStatus, firstSeen])
+  @@index([workspaceId, lastSeen])
+  @@index([workspaceId, scannedAt])
 }
 
 model ScannerFailureHistory {
@@ -560,6 +568,7 @@ model Notification {
   createdAt   DateTime  @default(now())
 
   @@index([userId, readAt, createdAt])
+  @@index([userId, createdAt])
 }
 
 model AuditLog {
@@ -671,6 +680,7 @@ model LztRustListing {
   @@index([rustHours])
   @@index([itemState])
   @@index([soldAt])
+  @@index([baseline, itemState, firstSeenAt])
 }
 
 model LztHazeAlert {
@@ -690,6 +700,7 @@ model LztHazeAlert {
   updatedAt        DateTime       @updatedAt
 
   @@index([status, createdAt])
+  @@index([updatedAt])
 }
 
 model HazeManualMessage {
@@ -720,4 +731,18 @@ model LztMarketAverageSnapshot {
   createdAt            DateTime @default(now())
 
   @@index([date, calculatedAt])
+  @@index([calculatedAt])
+}
+
+model OutreachTemplate {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  body        String
+  position    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([workspaceId, position])
 }

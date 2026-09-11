@@ -51,6 +51,12 @@ const rustPriceListingSchema = z.object({
     "VISIBLE_TEXT",
   ]),
 });
+const rustProductSchema = z.object({
+  name: z.string(),
+  link: z.string(),
+  method: z.string(),
+});
+
 const pageResultSchema = z.object({
   requestedUrl: z.string().url(),
   finalUrl: z.string().url(),
@@ -70,6 +76,7 @@ const pageResultSchema = z.object({
   priorityLinks: z.array(z.string().url()).default([]),
   scriptLinks: z.array(z.string().url()).default([]),
   rustPriceListings: z.array(rustPriceListingSchema).default([]),
+  rustProducts: z.array(rustProductSchema).default([]),
   durationMs: z.number().int().nonnegative(),
   looksDynamic: z.boolean(),
   isSoft404: z.boolean(),

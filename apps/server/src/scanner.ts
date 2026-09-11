@@ -60,6 +60,8 @@ type CrawlCheckpoint = {
   discord: Record<string, string>;
   emails: string[];
   socials: SocialLink[];
+  /** Distinct Rust products seen so far, keyed by product URL or name. */
+  rustProducts?: Record<string, string>;
   root?: Pick<
     ScrapedPage,
     | "title"
@@ -408,8 +410,37 @@ function sameDomain(value: string, hostname: string) {
     return false;
   }
 }
+export const IDLE_CLAIM_DELAY_MS = 750;
+export const MAX_IDLE_CLAIM_DELAY_MS = 5_000;
+
+/**
+ * Delay before the next claim attempt when a worker found nothing queued.
+ * Starts at the historical 750 ms and doubles up to a 5 s ceiling, so an idle
+ * 32-worker scanner stops hammering the database while new imports are still
+ * picked up within a few seconds.
+ */
+export function nextIdleDelayMs(previous: number) {
+  if (previous <= 0) return IDLE_CLAIM_DELAY_MS;
+  return Math.min(previous * 2, MAX_IDLE_CLAIM_DELAY_MS);
+}
+
+const rustProductKey = (product: { name: string; link: string }) =>
+  `${product.link.toLowerCase().replace(/\/$/, "")}|${product.name.toLowerCase()}`;
+
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Sleep for an idle-backoff period, but wake early as soon as a stop has been
+ * requested so Stop never has to wait out a long idle sleep.
+ */
+async function idleWait(workspaceId: string, ms: number) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    await wait(Math.min(250, deadline - Date.now()));
+    if (await stopped(workspaceId)) return;
+  }
 }
 
 async function waitForRetryDelay(workspaceId: string, delayMs: number) {
@@ -943,6 +974,7 @@ async function persistProgress(
       emailsJson: JSON.stringify([...new Set(checkpoint.emails)].sort()),
       socialLinksJson: JSON.stringify(checkpoint.socials),
       pagesJson: JSON.stringify(checkpoint.pages),
+      rustProductCount: Object.keys(checkpoint.rustProducts ?? {}).length,
       crawlCheckpoint: JSON.stringify(checkpoint),
       scanDuration: Date.now() - started,
       scanStatus: paused ? "Pending" : "Scanning",
@@ -1003,6 +1035,7 @@ async function scanOne(
   const socials = new Map(
     checkpoint.socials.map((social) => [social.url, social]),
   );
+  const rustProducts = new Map(Object.entries(checkpoint.rustProducts ?? {}));
   let initialRecoveryPage: RecoveredPage | undefined;
   emit(
     "scanner-progress",
@@ -1124,9 +1157,12 @@ async function scanOne(
       for (const url of page.discordLinks) discord.set(url, page.finalUrl);
       for (const email of page.emails) emails.add(email);
       for (const social of page.socialLinks) socials.set(social.url, social);
+      for (const product of page.rustProducts ?? [])
+        rustProducts.set(rustProductKey(product), product.name);
       checkpoint.discord = Object.fromEntries(discord);
       checkpoint.emails = [...emails];
       checkpoint.socials = [...socials.values()];
+      checkpoint.rustProducts = Object.fromEntries(rustProducts);
       await Promise.all(
         [
           ...new Map(
@@ -1263,6 +1299,7 @@ async function scanOne(
           emailsJson: JSON.stringify([...emails].sort()),
           socialLinksJson: JSON.stringify([...socials.values()]),
           pagesJson: JSON.stringify(checkpoint.pages),
+          rustProductCount: Object.keys(checkpoint.rustProducts ?? {}).length,
           crawlCheckpoint: "",
           error: message,
           scannedAt: new Date(),
@@ -1338,6 +1375,7 @@ async function scanOne(
         emailsJson: JSON.stringify([...emails].sort()),
         socialLinksJson: JSON.stringify([...socials.values()]),
         pagesJson: JSON.stringify(checkpoint.pages),
+        rustProductCount: Object.keys(checkpoint.rustProducts ?? {}).length,
         crawlCheckpoint: "",
         error: null,
         contactFailureCount: 0,
@@ -1520,6 +1558,7 @@ async function scanOne(
           emailsJson: JSON.stringify(savedEmails.sort()),
           socialLinksJson: JSON.stringify(savedSocials),
           pagesJson: JSON.stringify(checkpoint.pages),
+          rustProductCount: Object.keys(checkpoint.rustProducts ?? {}).length,
           crawlCheckpoint: "",
           error: message,
           contactFailureCount: 0,
@@ -1709,6 +1748,7 @@ async function worker(
   controller: AdaptiveConcurrencyController,
   workerIndex: number,
 ) {
+  let idleDelay = 0;
   while (true) {
     if (await stopped(workspaceId)) break;
     if (!controller.allowsWorker(workerIndex)) {
@@ -1717,9 +1757,13 @@ async function worker(
     }
     const next = await claimNext(workspaceId);
     if (!next) {
-      await wait(750);
+      // Nothing to claim: back off gradually instead of polling SQLite at a
+      // fixed 750 ms per worker forever once the queue drains.
+      idleDelay = nextIdleDelayMs(idleDelay);
+      await idleWait(workspaceId, idleDelay);
       continue;
     }
+    idleDelay = 0;
     if (await stopped(workspaceId)) {
       await prisma.scannerResult.update({
         where: { id: next.id },

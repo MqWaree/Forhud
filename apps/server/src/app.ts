@@ -121,6 +121,7 @@ import { queueHazeManualMessage } from "./haze-notifier.js";
 import { syncScannerResultToLead } from "./lead-sync.js";
 import {
   ensureWorkspaceRanks,
+  invalidateRankCaches,
   publicRanksForUser,
   rankPermissions,
   requireRankPermission,
@@ -408,7 +409,8 @@ app.post("/api/auth/setup", async (req, res, next) => {
       },
     });
     await createSession(user.id, false, res);
-    await ensureWorkspaceRanks(user.workspaceId);
+    invalidateRankCaches(user.workspaceId);
+    await ensureWorkspaceRanks(user.workspaceId, { force: true });
     res.status(201).json(
       publicUser({
         ...user,
@@ -474,7 +476,8 @@ app.post("/api/auth/login", async (req, res, next) => {
       data: { lastLoginAt: new Date() },
     });
     await createSession(user.id, input.remember, res);
-    await ensureWorkspaceRanks(user.workspaceId);
+    invalidateRankCaches(user.workspaceId);
+    await ensureWorkspaceRanks(user.workspaceId, { force: true });
     res.json(
       publicUser({
         ...user,
@@ -2460,6 +2463,9 @@ const leadListInclude = {
   domain: { include: { location: true } },
   scannerResult: {
     select: {
+      rustProductCount: true,
+      title: true,
+      metaDescription: true,
       discordLinks: {
         take: 1,
         orderBy: { createdAt: "desc" as const },
@@ -2580,6 +2586,176 @@ app.delete(
     }
   },
 );
+
+// ---- Outreach: per-workspace message templates and the "mark as sent" log ----
+// Messages are drafted here and sent by the operator from their own account.
+// Nothing in this API contacts Discord, Telegram, or email on anyone's behalf.
+const outreachTemplateSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  body: z.string().trim().min(1).max(4000),
+});
+const defaultOutreachTemplates = [
+  {
+    name: "Partnership intro",
+    body: `Hi {company} team,
+
+I came across {website} while researching Rust sellers and saw you offer {rust_products}.
+
+I'm {sender} from {workspace}. We work with Rust shops and communities to bring them more buyers, and I think there could be a good fit here.
+
+Would you be open to a quick chat this week?
+
+Thanks,
+{sender}`,
+  },
+  {
+    name: "Short Discord message",
+    body: `Hey! {sender} here from {workspace}. I found {domain} and liked what you're doing with {rust_products}. We help Rust sellers reach more buyers. Mind if I share a few details?`,
+  },
+];
+async function outreachTemplatesFor(workspaceId: string) {
+  const list = () =>
+    prisma.outreachTemplate.findMany({
+      where: { workspaceId },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    });
+  const existing = await list();
+  if (existing.length) return existing;
+  await prisma.outreachTemplate.createMany({
+    data: defaultOutreachTemplates.map((template, position) => ({
+      workspaceId,
+      position,
+      ...template,
+    })),
+  });
+  return list();
+}
+app.get("/api/outreach/templates", async (req, res, next) => {
+  try {
+    const auth = (req as unknown as AuthRequest).auth;
+    res.json(await outreachTemplatesFor(auth.workspaceId));
+  } catch (error) {
+    next(error);
+  }
+});
+app.post(
+  "/api/outreach/templates",
+  requireRole("ADMIN", "MANAGER"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as unknown as AuthRequest).auth;
+      const input = outreachTemplateSchema.parse(req.body);
+      const position = await prisma.outreachTemplate.count({
+        where: { workspaceId: auth.workspaceId },
+      });
+      const template = await prisma.outreachTemplate.create({
+        data: { workspaceId: auth.workspaceId, position, ...input },
+      });
+      res.status(201).json(template);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.patch(
+  "/api/outreach/templates/:id",
+  requireRole("ADMIN", "MANAGER"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as unknown as AuthRequest).auth;
+      const input = outreachTemplateSchema.partial().parse(req.body);
+      const existing = await prisma.outreachTemplate.findFirst({
+        where: { id: String(req.params.id), workspaceId: auth.workspaceId },
+      });
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      res.json(
+        await prisma.outreachTemplate.update({
+          where: { id: existing.id },
+          data: input,
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+app.delete(
+  "/api/outreach/templates/:id",
+  requireRole("ADMIN", "MANAGER"),
+  async (req, res, next) => {
+    try {
+      const auth = (req as unknown as AuthRequest).auth;
+      const existing = await prisma.outreachTemplate.findFirst({
+        where: { id: String(req.params.id), workspaceId: auth.workspaceId },
+      });
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      await prisma.outreachTemplate.delete({ where: { id: existing.id } });
+      res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+const outreachChannelLabels = {
+  discord: "Discord",
+  telegram: "Telegram",
+  email: "email",
+  website: "website contact form",
+  other: "another channel",
+} as const;
+app.post("/api/leads/:id/outreach", async (req, res, next) => {
+  try {
+    const auth = (req as unknown as AuthRequest).auth;
+    const input = z
+      .object({
+        channel: z.enum(["discord", "telegram", "email", "website", "other"]),
+        message: z.string().trim().min(1).max(4000),
+        templateName: z.string().trim().max(80).optional(),
+      })
+      .parse(req.body);
+    const lead = await prisma.lead.findFirst({
+      where: { id: String(req.params.id), workspaceId: auth.workspaceId },
+    });
+    if (!lead) return res.status(404).json({ error: "Not found" });
+    const excerpt =
+      input.message.length > 300
+        ? `${input.message.slice(0, 300)}…`
+        : input.message;
+    await prisma.leadActivity.create({
+      data: {
+        leadId: lead.id,
+        actorId: auth.id,
+        type: "outreach",
+        description: `Outreach sent via ${outreachChannelLabels[input.channel]}${
+          input.templateName ? ` using "${input.templateName}"` : ""
+        }: ${excerpt}`,
+      },
+    });
+    if (lead.status === "New" || lead.status === "Researching") {
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: { status: "Contacted" },
+      });
+      await prisma.leadActivity.create({
+        data: {
+          leadId: lead.id,
+          actorId: auth.id,
+          type: "status",
+          description: `Status changed: ${lead.status} → Contacted`,
+        },
+      });
+    }
+    emit("lead-update", { id: lead.id }, auth.workspaceId);
+    res.status(201).json(
+      await prisma.lead.findUnique({
+        where: { id: lead.id },
+        include: leadInclude,
+      }),
+    );
+  } catch (error) {
+    next(error);
+  }
+});
 app.patch("/api/leads/:id", async (req, res, next) => {
   try {
     const auth = (req as unknown as AuthRequest).auth;
@@ -3469,6 +3645,7 @@ app.post("/api/admin/ranks", requireRole("ADMIN"), async (req, res, next) => {
         permissions: z.array(z.enum(rankPermissions)).default([]),
       })
       .parse(req.body);
+    invalidateRankCaches();
     const rank = await prisma.workspaceRank.create({
       data: {
         workspaceId: auth.workspaceId,
@@ -3508,6 +3685,7 @@ app.patch(
           permissions: z.array(z.enum(rankPermissions)).optional(),
         })
         .parse(req.body);
+      invalidateRankCaches();
       const updated = await prisma.workspaceRank.update({
         where: { id: rank.id },
         data: {
@@ -3540,6 +3718,7 @@ app.delete(
         return res
           .status(400)
           .json({ error: "Built-in ranks cannot be deleted" });
+      invalidateRankCaches();
       await prisma.workspaceRank.delete({ where: { id: rank.id } });
       await audit(req, "RANK_DELETED", "WorkspaceRank", rank.id, {
         name: rank.name,
@@ -3569,6 +3748,7 @@ app.put(
       });
       if (valid.length !== new Set(input.rankIds).size)
         return res.status(400).json({ error: "One or more ranks are invalid" });
+      invalidateRankCaches();
       await prisma.$transaction([
         prisma.userRank.deleteMany({ where: { userId: user.id } }),
         prisma.userRank.createMany({
@@ -3663,6 +3843,7 @@ app.patch(
         return res
           .status(400)
           .json({ error: "You cannot disable your own account" });
+      invalidateRankCaches();
       const user = await prisma.user.update({
         where: { id: target.id },
         data: {

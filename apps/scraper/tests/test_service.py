@@ -231,6 +231,29 @@ class ExtractionTests(unittest.TestCase):
         self.assertEqual(result["socialLinks"][0]["type"], "telegram")
         self.assertIn("https://example.com/contact", result["internalLinks"])
 
+    def test_rust_products_are_counted_once_across_markup_types(self):
+        html = """<html><head><title>Shop</title>
+        <script type="application/ld+json">{"@type":"Product","name":"Rust NFA account","url":"/product/rust-nfa",
+        "offers":{"@type":"Offer","price":"4.99","priceCurrency":"USD"}}</script></head><body>
+        <div class="product-card"><h3>Rust 2000h account</h3><a href="/product/rust-2000">View</a><span class="price">$12.00</span></div>
+        <div class="product-card"><h3>CS2 Prime account</h3><a href="/product/cs2-prime">View</a><span class="price">$9.00</span></div>
+        <a href="/products/rust-skins-bundle">Rust skins bundle</a>
+        <a href="/product/rust-nfa">Rust NFA account</a>
+        <p>Trusted by 5,000 customers. Rusty tools are not products.</p>
+        </body></html>"""
+        result = extract_page(parsed(html), "https://example.com/", fetch_mode="HTTP", duration_ms=1)
+        names = sorted(item["name"] for item in result["rustProducts"])
+        self.assertEqual(names, ["Rust 2000h account", "Rust NFA account", "Rust skins bundle"])
+        by_name = {item["name"]: item for item in result["rustProducts"]}
+        self.assertEqual(by_name["Rust NFA account"]["method"], "JSON_LD")
+        self.assertEqual(by_name["Rust 2000h account"]["link"], "https://example.com/product/rust-2000")
+
+    def test_pages_without_rust_products_report_an_empty_list(self):
+        html = """<html><body><div class="product"><h3>CS2 Prime</h3><span class="price">$9</span></div>
+        <a href="/products/trust-badge">Trust badge</a></body></html>"""
+        result = extract_page(parsed(html), "https://example.com/", fetch_mode="HTTP", duration_ms=1)
+        self.assertEqual(result["rustProducts"], [])
+
     def test_telegram_variants_are_normalized_from_links_text_and_embedded_data(self):
         html = """<html><body>
         <a href="https://telegram.me/AcmeSupport">Telegram</a>

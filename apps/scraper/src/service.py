@@ -103,6 +103,8 @@ PRICE_CLASS_RE = re.compile(
     re.IGNORECASE,
 )
 OUT_OF_STOCK_RE = re.compile(r"\b(?:out\s+of\s+stock|sold\s+out|unavailable)\b", re.IGNORECASE)
+RUST_WORD_RE = re.compile(r"\brust\b", re.IGNORECASE)
+PRODUCT_PATH_RE = re.compile(r"/(?:products?|items?|shop|store|listings?|buy|p)/[^/?#]+", re.IGNORECASE)
 IN_STOCK_RE = re.compile(r"\b(?:in\s+stock|available|buy\s+now|add\s+to\s+cart)\b", re.IGNORECASE)
 CURRENCY_SYMBOLS = {"$": "USD", "€": "EUR", "£": "GBP", "¥": "JPY", "₽": "RUB", "₴": "UAH", "zł": "PLN", "kr": "SEK"}
 NFA_INTERFACE_RE = re.compile(
@@ -569,6 +571,96 @@ def extract_rust_price_listings(
     return list(listings.values())[:500]
 
 
+def extract_rust_products(page: Any, page_url: str, title: str) -> list[dict[str, Any]]:
+    """Distinct products on this page that are about Rust (the game).
+
+    A product is anything the page sells: a JSON-LD Product node, a product
+    card carrying a price, or a link into a product/shop path. Only entries
+    whose own name or context mentions Rust are counted, so a shop's CS2
+    listings never inflate the number. Entries that share a product URL are
+    merged, so a card, its "View" link, and its structured data count once.
+    """
+    products: dict[str, dict[str, Any]] = {}
+    page_key = page_url.lower().rstrip("/")
+
+    def add(name: str, context: str, link: str, method: str) -> None:
+        cleaned = re.sub(r"\s+", " ", name or "").strip()[:160]
+        if not cleaned or not RUST_WORD_RE.search(f"{cleaned} {context}"):
+            return
+        normalized = normalize_link(link, page_url) if link else None
+        link_key = (normalized or "").lower().rstrip("/")
+        key = link_key if link_key and link_key != page_key else f"name:{cleaned.lower()}"
+        products.setdefault(key, {"name": cleaned, "link": normalized or page_url, "method": method})
+
+    for raw_json in page.css('script[type="application/ld+json"]::text').getall()[:100]:
+        try:
+            payload = json.loads(raw_json)
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+        def walk(node: Any) -> None:
+            if isinstance(node, list):
+                for child in node[:500]:
+                    walk(child)
+                return
+            if not isinstance(node, dict):
+                return
+            if str(node.get("@type", "")).lower() in {"product", "individualproduct", "productgroup"}:
+                add(
+                    str(node.get("name") or ""),
+                    str(node.get("description") or ""),
+                    str(node.get("url") or ""),
+                    "JSON_LD",
+                )
+            for child in node.values():
+                if isinstance(child, (dict, list)):
+                    walk(child)
+
+        walk(payload)
+
+    for node in page.xpath(
+        "//*[@itemprop='price' or @data-price or @data-product-price"
+        " or contains(translate(@class, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'price')]"
+    )[:1000]:
+        classes = f"{node.attrib.get('class', '')} {node.attrib.get('id', '')}"
+        if not (
+            node.attrib.get("itemprop") == "price"
+            or node.attrib.get("data-price")
+            or node.attrib.get("data-product-price")
+            or PRICE_CLASS_RE.search(classes)
+        ):
+            continue
+        container = node.xpath("ancestor::*[self::tr or self::label or self::article or self::li or self::div or self::section][1]")
+        card = container[0] if container else node.parent
+        context = " ".join(card.xpath(".//text()[not(ancestor::script) and not(ancestor::style)]").getall())
+        name = (
+            card.css('[itemprop="name"]::text').get()
+            or card.css("h1::text").get()
+            or card.css("h2::text").get()
+            or card.css("h3::text").get()
+            or card.css("a::attr(title)").get()
+            or card.css("a::text").get()
+            or context
+        )
+        add(
+            name,
+            context,
+            card.css('a[itemprop="url"]::attr(href)').get() or card.css("a::attr(href)").get() or "",
+            "PRODUCT_CARD",
+        )
+
+    for anchor in page.css("a[href]")[:2000]:
+        href = anchor.attrib.get("href") or ""
+        if not PRODUCT_PATH_RE.search(href):
+            continue
+        text = " ".join(anchor.xpath(".//text()").getall())
+        slug = href.split("?")[0].split("#")[0].rstrip("/").rsplit("/", 1)[-1].replace("-", " ").replace("_", " ")
+        name = text if RUST_WORD_RE.search(text) else slug.title()
+        add(name, f"{text} {slug}", href, "PRODUCT_LINK")
+
+    return list(products.values())[:300]
+
+
 def _internal_priority(path: str, *, discord_label: bool = False, priority_label: bool = False) -> int:
     lowered = path.lower()
     if discord_label or re.search(r"(?:^|[-_/])(?:discord|dsc|dc)(?:[-_/.]|$)", lowered):
@@ -927,6 +1019,7 @@ def extract_page(
         product_name=product_name,
         product_type=product_type,
     )
+    rust_products = extract_rust_products(page, page_url, title)
     return {
         "requestedUrl": requested_url,
         "finalUrl": page_url,
@@ -966,6 +1059,7 @@ def extract_page(
         ][:100],
         "scriptLinks": script_links[:12],
         "rustPriceListings": rust_price_listings,
+        "rustProducts": rust_products,
         "durationMs": duration_ms,
         "looksDynamic": shell or framework_page,
         "staticFetchResult": "SUCCESS",

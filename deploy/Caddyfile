@@ -7,6 +7,19 @@ forhud.shop, www.forhud.shop {
 
     handle {
         root * /opt/fgp/apps/dashboard/dist
+
+        # Vite emits content-hashed files under /assets; they never change at a given URL.
+        @immutable path /assets/*
+        header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+        # The brand logo is small and rarely changes; allow a day of caching.
+        @logo path /fgp-logo.png
+        header @logo Cache-Control "public, max-age=86400"
+
+        # Everything else (index.html and SPA routes) must revalidate so a new
+        # release is picked up immediately via ETag.
+        header ?Cache-Control "no-cache"
+
         try_files {path} /index.html
         file_server
     }

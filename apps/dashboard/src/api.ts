@@ -105,6 +105,7 @@ export type ScannerItem = {
   faviconUrl: string;
   contentType: string;
   pagesVisited: number;
+  rustProductCount?: number;
   emails: string[];
   socialLinks: { type: string; url: string; sourcePage: string }[];
   pages: {
@@ -246,6 +247,12 @@ export type DiscordReconciliationProgress = {
 export type DiscordReconciliationStart = {
   started: boolean;
   progress: DiscordReconciliationProgress | null;
+};
+export type OutreachTemplate = {
+  id: string;
+  name: string;
+  body: string;
+  position: number;
 };
 export type LeadTag = { tag: { id: string; name: string } };
 export type ExpandedLead = Lead & {

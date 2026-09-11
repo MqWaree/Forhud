@@ -208,6 +208,7 @@ describe("LZT public client", () => {
       dynamicFetchResult: "NOT_ATTEMPTED" as const,
       dynamicError: "",
       retryAfterSeconds: null,
+      rustProducts: [],
       rustPriceListings: [
         {
           name: "Rust NFA 1,000 hours",
@@ -233,6 +234,7 @@ describe("LZT public client", () => {
         metaDescription: "",
         dynamicError: "",
         httpStatus: 200,
+        rustProducts: [],
         rustPriceListings: [],
       }) as never;
     await expect(new LztPublicClient(scrape).search()).rejects.toMatchObject({

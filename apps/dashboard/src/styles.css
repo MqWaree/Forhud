@@ -1883,7 +1883,8 @@ td select,
 .kanban-quick-move {
   display: grid;
   grid-template-columns:
-    minmax(130px, 0.75fr) minmax(260px, 1.7fr) minmax(130px, 0.75fr) auto;
+    minmax(130px, 0.75fr) minmax(260px, 1.7fr) minmax(130px, 0.75fr)
+    auto;
   align-items: center;
   gap: 10px;
   margin-bottom: 12px;
@@ -3131,4 +3132,513 @@ code {
   .lzt-hero {
     align-items: flex-start;
   }
+}
+
+/* Route code-split loading placeholder: keeps layout height while a page chunk downloads. */
+.page-loading {
+  min-height: 40vh;
+}
+
+/* ---- Leads: toolbar, stage strip, table, kanban refinements ---- */
+.leads-toolbar {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.toolbar .filter-select {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0b1119;
+  padding-left: 9px;
+  gap: 2px;
+}
+.toolbar .filter-select small {
+  color: #5e6a7b;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.toolbar .filter-select select {
+  height: 34px;
+  border: 0;
+  background: transparent;
+  color: #c4cfda;
+  padding: 0 24px 0 6px;
+  font-size: 10px;
+  outline: none;
+}
+.toolbar .filter-clear {
+  height: 34px;
+  padding: 0 9px;
+  font-size: 10px;
+}
+.toolbar .filter-clear svg {
+  width: 12px;
+}
+.lead-stage-strip {
+  display: flex;
+  gap: 5px;
+  margin: -6px 0 14px;
+  padding: 0 2px 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.lead-stage-strip button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  height: 26px;
+  padding: 0 9px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: rgba(12, 17, 25, 0.7);
+  color: #8794a6;
+  font-size: 9px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease;
+}
+.lead-stage-strip button:hover {
+  border-color: rgba(60, 166, 255, 0.28);
+  color: #d5e2f0;
+}
+.lead-stage-strip button.active {
+  border-color: rgba(60, 166, 255, 0.45);
+  background: rgba(60, 166, 255, 0.1);
+  color: #a9d6fb;
+}
+.lead-stage-strip button.is-empty {
+  opacity: 0.5;
+}
+.lead-stage-strip button.is-empty:hover,
+.lead-stage-strip button.active {
+  opacity: 1;
+}
+.lead-stage-strip button b {
+  min-width: 16px;
+  padding: 1px 5px;
+  border-radius: 99px;
+  background: #141d29;
+  color: #b6c2d1;
+  font-size: 8px;
+  text-align: center;
+}
+.lead-stage-strip button i,
+.kanban-column > header .stage-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--stage, #6f7c8e);
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--stage, #6f7c8e) 22%, transparent);
+  flex: 0 0 auto;
+}
+[data-stage="new"] {
+  --stage: #6bbcff;
+}
+[data-stage="researching"] {
+  --stage: #c3a6ff;
+}
+[data-stage="contacted"] {
+  --stage: #70bbf5;
+}
+[data-stage="replied"] {
+  --stage: #f3b85c;
+}
+[data-stage="interested"] {
+  --stage: #9b87f5;
+}
+[data-stage="negotiating"] {
+  --stage: #f7c76b;
+}
+[data-stage="won"] {
+  --stage: #60dcb0;
+}
+[data-stage="lost"] {
+  --stage: #fb8f93;
+}
+[data-stage="ignore"] {
+  --stage: #586476;
+}
+
+/* Table */
+.leads-table-wrap {
+  max-height: calc(100vh - 340px);
+  min-height: 240px;
+}
+.leads-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px;
+  background: #0c1119;
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+.leads-table td {
+  padding: 8px 10px;
+  max-width: 220px;
+}
+.leads-table .domain-cell small {
+  max-width: 190px;
+}
+.leads-table .lead-contact {
+  max-width: 200px;
+}
+.leads-table .select-col {
+  width: 34px;
+  padding-right: 4px;
+}
+.leads-table .sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.leads-table .sort-button svg {
+  width: 11px;
+  height: 11px;
+  opacity: 0.45;
+}
+.leads-table .sort-button:hover,
+.leads-table .sort-button.active {
+  color: #a9cfee;
+}
+.leads-table .sort-button.active svg {
+  opacity: 1;
+}
+.lead-contact-cell {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.lead-contact-cell small {
+  overflow: hidden;
+  color: #6d798b;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lead-contact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  color: #9ca8b8;
+  font-size: 10px;
+  text-decoration: none;
+}
+.lead-contact span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lead-contact svg,
+.lead-card-link svg:first-child {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+.lead-contact:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.lead-contact.discord,
+.lead-card-link.discord {
+  color: #8ea6ff;
+}
+.lead-contact.telegram,
+.lead-card-link.telegram {
+  color: #5fbcf2;
+}
+.lead-contact.email,
+.lead-card-link.email {
+  color: #60dcb0;
+}
+.lead-contact.website,
+.lead-card-link.website {
+  color: #8f9bad;
+}
+.tag-row.nowrap {
+  flex-wrap: nowrap;
+}
+.tag-row.nowrap small {
+  color: #6d798b;
+  font-size: 9px;
+}
+
+/* Kanban */
+.kanban-quick-move select {
+  height: 37px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0b1119;
+  color: #aeb9c8;
+  padding: 0 28px 0 10px;
+  font-size: 10px;
+  color-scheme: dark;
+}
+.kanban {
+  gap: 10px;
+  padding-bottom: 12px;
+  scroll-snap-type: x proximity;
+  scroll-padding-left: 2px;
+  scrollbar-width: thin;
+}
+.kanban-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 228px;
+  width: 228px;
+  min-height: 260px;
+  max-height: calc(100vh - 380px);
+  padding: 0;
+  scroll-snap-align: start;
+  overflow: hidden;
+}
+.kanban-column.is-highlighted {
+  border-color: rgba(60, 166, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(60, 166, 255, 0.12);
+}
+.kanban-column > header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 11px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(10, 14, 21, 0.96);
+}
+.kanban-column > header span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kanban-column-body {
+  flex: 1;
+  min-height: 0;
+  padding: 9px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.kanban-column-empty {
+  margin: 0;
+  padding: 18px 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.07);
+  border-radius: 9px;
+  color: #4f5b6c;
+  font-size: 9px;
+  text-align: center;
+}
+.lead-card {
+  padding: 10px 11px 9px;
+  margin-bottom: 8px;
+}
+.lead-card:last-child {
+  margin-bottom: 0;
+}
+.lead-card > .lead-card-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  justify-content: start;
+  gap: 8px;
+}
+.lead-card-head .site-icon {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+.lead-card-head b {
+  overflow: hidden;
+  color: #e1e9f3;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lead-card > .lead-card-link,
+.lead-card > .lead-card-nocontact {
+  display: inline-flex;
+  margin-top: 8px;
+}
+.lead-card-nocontact {
+  color: #556172;
+  font-size: 9px;
+}
+.lead-card footer {
+  margin-top: 9px;
+  padding-top: 8px;
+}
+@media (max-width: 720px) {
+  .kanban-column {
+    max-height: none;
+  }
+  .leads-table-wrap {
+    max-height: none;
+  }
+}
+
+/* ---- Rust product counts and outreach drafting ---- */
+.rust-count {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 1px 6px;
+  border: 1px solid rgba(243, 184, 92, 0.25);
+  border-radius: 99px;
+  background: rgba(243, 184, 92, 0.08);
+  color: #e6b667;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 700;
+  vertical-align: 2px;
+  white-space: nowrap;
+}
+.outreach-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 13px 14px;
+  border: 1px solid rgba(155, 135, 245, 0.18);
+  border-radius: 10px;
+  background: rgba(155, 135, 245, 0.05);
+}
+.outreach-panel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.outreach-panel > header > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.outreach-panel > header b {
+  color: #d9cffb;
+  font-size: 11px;
+}
+.outreach-panel > header small,
+.outreach-empty {
+  color: #7a849a;
+  font-size: 9px;
+  line-height: 1.5;
+}
+.outreach-panel > header select {
+  flex: 0 0 auto;
+  height: 32px;
+  max-width: 180px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0b1119;
+  color: #c4cfda;
+  padding: 0 24px 0 9px;
+  font-size: 10px;
+  color-scheme: dark;
+}
+.outreach-panel textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #080c12;
+  color: #cfd8e3;
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  outline: none;
+}
+.outreach-panel textarea:focus {
+  border-color: rgba(155, 135, 245, 0.45);
+}
+.outreach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.outreach-actions .btn {
+  height: 34px;
+  padding: 0 11px;
+  font-size: 11px;
+}
+.outreach-actions .btn svg {
+  width: 13px;
+  height: 13px;
+}
+.outreach-empty {
+  margin: 0;
+}
+.outreach-templates .outreach-placeholders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 0 4px;
+}
+.outreach-templates .outreach-placeholders span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  color: #7e8a9c;
+  font-size: 8px;
+}
+.outreach-templates .outreach-placeholders code {
+  color: #c3a6ff;
+  font-size: 9px;
+}
+.outreach-templates .outreach-template {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.outreach-templates .outreach-template input,
+.outreach-templates .outreach-template textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #080c12;
+  color: #cfd8e3;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 11px;
+  outline: none;
+}
+.outreach-templates .outreach-template input {
+  height: 36px;
+  font-weight: 600;
+}
+.outreach-templates .outreach-template textarea {
+  min-height: 110px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.outreach-templates .outreach-template-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 10px;
+}
+.outreach-templates .outreach-template-actions .btn {
+  height: 34px;
+  font-size: 11px;
 }
