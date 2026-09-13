@@ -3825,6 +3825,28 @@ code {
   writing-mode: vertical-rl;
   transform: rotate(180deg);
 }
+.kanban-column-chevron {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  opacity: 0.55;
+  transition: transform 160ms ease;
+}
+.kanban-column.is-collapsed .kanban-column-chevron {
+  transform: rotate(-90deg);
+}
+.kanban-column.is-collapsed.has-leads {
+  border-color: color-mix(in srgb, var(--stage, #6f7c8e) 40%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--stage, #6f7c8e) 6%,
+    rgba(9, 13, 19, 0.62)
+  );
+}
+.kanban-column.is-collapsed.has-leads .kanban-column-toggle b {
+  background: color-mix(in srgb, var(--stage, #6f7c8e) 22%, #141d29);
+  color: #e4edf8;
+}
 .kanban-column-body {
   flex: 1;
   min-height: 0;
@@ -4044,4 +4066,30 @@ code {
 .outreach-templates .outreach-template-actions .btn {
   height: 34px;
   font-size: 11px;
+}
+
+/* ---- Scrollbars: thin and translucent so they sit inside the dark panels ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.22) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 99px;
+  background: rgba(148, 163, 184, 0.22);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.38);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }

@@ -98,6 +98,7 @@ const shortDate = (value: string) =>
     day: "numeric",
   });
 type SortKey = "lead" | "status" | "priority" | "updated";
+const COLUMN_STATE_KEY = "fgp.leads.board-columns.v1";
 /** Short relative age for table rows: "now", "12m", "3h", "5d", then a date. */
 const relativeTime = (value: string) => {
   const minutes = Math.round((Date.now() - new Date(value).getTime()) / 60_000);
@@ -185,12 +186,27 @@ export default function LeadsPage({
     dir: "desc",
   });
   const [highlightedColumn, setHighlightedColumn] = useState<string>();
-  const [expandedEmpty, setExpandedEmpty] = useState<Set<string>>(new Set());
-  const toggleEmptyColumn = (leadStatus: string) =>
-    setExpandedEmpty((current) => {
-      const next = new Set(current);
-      if (next.has(leadStatus)) next.delete(leadStatus);
-      else next.add(leadStatus);
+  // Per-stage collapse choices for the board. Empty stages start collapsed,
+  // stages with leads start open, and any choice is remembered in this browser.
+  const [columnOverrides, setColumnOverrides] = useState<
+    Record<string, boolean>
+  >(() => {
+    try {
+      const saved = localStorage.getItem(COLUMN_STATE_KEY);
+      const parsed = saved ? JSON.parse(saved) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
+  const setColumnCollapsed = (leadStatus: string, value: boolean) =>
+    setColumnOverrides((current) => {
+      const next = { ...current, [leadStatus]: value };
+      try {
+        localStorage.setItem(COLUMN_STATE_KEY, JSON.stringify(next));
+      } catch {
+        // Browser storage is a convenience only.
+      }
       return next;
     });
   const [templates, setTemplates] = useState<OutreachTemplate[]>([]);
@@ -215,6 +231,7 @@ export default function LeadsPage({
         : { key, dir: key === "updated" ? "desc" : "asc" },
     );
   const jumpToColumn = (leadStatus: string) => {
+    setColumnCollapsed(leadStatus, false);
     columnRefs.current.get(leadStatus)?.scrollIntoView({
       behavior: "smooth",
       block: "nearest",
@@ -1189,10 +1206,9 @@ export default function LeadsPage({
           {leadStatuses.map((leadStatus) => {
             const column = leadsByStatus.get(leadStatus) ?? [];
             const collapsed =
-              column.length === 0 &&
               !draggingId &&
               dropStatus !== leadStatus &&
-              !expandedEmpty.has(leadStatus);
+              (columnOverrides[leadStatus] ?? column.length === 0);
             return (
               <section
                 key={leadStatus}
@@ -1201,7 +1217,7 @@ export default function LeadsPage({
                   else columnRefs.current.delete(leadStatus);
                 }}
                 data-stage={stageSlug(leadStatus)}
-                className={`kanban-column${dropStatus === leadStatus ? " is-drop-target" : ""}${highlightedColumn === leadStatus ? " is-highlighted" : ""}${collapsed ? " is-collapsed" : ""}`}
+                className={`kanban-column${dropStatus === leadStatus ? " is-drop-target" : ""}${highlightedColumn === leadStatus ? " is-highlighted" : ""}${collapsed ? " is-collapsed" : ""}${column.length ? " has-leads" : ""}`}
                 onDragEnter={() => {
                   if (draggingId) setDropStatus(leadStatus);
                 }}
@@ -1228,29 +1244,26 @@ export default function LeadsPage({
                   if (id) void moveLead(id, leadStatus);
                 }}
               >
-                {column.length === 0 ? (
-                  <button
-                    type="button"
-                    className="kanban-column-toggle"
-                    aria-expanded={!collapsed}
-                    title={
-                      collapsed
-                        ? `Expand ${leadStatus}`
-                        : `Collapse ${leadStatus}`
-                    }
-                    onClick={() => toggleEmptyColumn(leadStatus)}
-                  >
-                    <i className="stage-dot" aria-hidden="true" />
-                    <span>{leadStatus}</span>
-                    <b>0</b>
-                  </button>
-                ) : (
-                  <header>
-                    <i className="stage-dot" aria-hidden="true" />
-                    <span>{leadStatus}</span>
-                    <b>{column.length}</b>
-                  </header>
-                )}
+                <button
+                  type="button"
+                  className="kanban-column-toggle"
+                  aria-expanded={!collapsed}
+                  aria-label={`${collapsed ? "Expand" : "Collapse"} ${leadStatus} (${column.length} lead${column.length === 1 ? "" : "s"})`}
+                  title={
+                    collapsed
+                      ? `Expand ${leadStatus}`
+                      : `Collapse ${leadStatus}`
+                  }
+                  onClick={() => setColumnCollapsed(leadStatus, !collapsed)}
+                >
+                  <i className="stage-dot" aria-hidden="true" />
+                  <span>{leadStatus}</span>
+                  <b>{column.length}</b>
+                  <ChevronDown
+                    className="kanban-column-chevron"
+                    aria-hidden="true"
+                  />
+                </button>
                 {!collapsed && (
                   <div className="kanban-column-body">
                     {column.length === 0 && (
